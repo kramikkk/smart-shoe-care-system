@@ -17,7 +17,7 @@ import { ArrowLeftRight, Cpu, LayoutDashboard,  } from "lucide-react";
 const menu = [
   { title: "Overview", url: "/admin", icon: LayoutDashboard },
   { title: "Transactions", url: "/admin/transactions", icon: ArrowLeftRight },
-  { title: "Sensors", url: "/student/sensors", icon: Cpu },
+  { title: "Sensors", url: "/admin/sensors", icon: Cpu },
 ]
 
 const SideBar = () => {
@@ -27,7 +27,7 @@ const SideBar = () => {
             <SidebarMenu>
             <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                    <Link href="/admiN">
+                    <Link href="/admin">
                     <Image src="/globe.svg" alt="Logo" width={20} height={20} />
                     <span className=" text-base font-bold">Smart Shoe Care</span>
                     </Link>

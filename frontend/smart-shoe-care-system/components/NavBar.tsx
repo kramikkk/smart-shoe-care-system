@@ -15,24 +15,24 @@ import { SidebarTrigger } from "./ui/sidebar"
 const NavBar = () => {
   return (
     <nav className="p-4 flex items-center justify-between">
-      <div>
+      <div className="flex items-center gap-4">
         <SidebarTrigger />
+        <Link href="/admin"className="text-base font-bold"> Admin Dashboard </Link>
       </div>
       <div className="flex items-center gap-4">
-        <Link href="/admin"> Dashboard </Link>
         <ModeToggle/>
         <DropdownMenu>
           <DropdownMenuTrigger>
             <Avatar>
               <AvatarImage src="https://github.com/shadcn.png" />
-              <AvatarFallback>CN</AvatarFallback>
+              <AvatarFallback> CN </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel> My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem> <User/> Profile</DropdownMenuItem>
-            <DropdownMenuItem variant="destructive"> <LogOut/> Logout</DropdownMenuItem>
+            <DropdownMenuItem> <User/> Profile </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive"> <LogOut/> Logout </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
