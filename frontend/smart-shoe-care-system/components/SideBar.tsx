@@ -9,6 +9,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import Link from "next/link";
 import Image from "next/image";
@@ -23,7 +24,7 @@ const menu = [
 const SideBar = () => {
   return (
     <Sidebar collapsible="offcanvas" variant="sidebar">
-        <SidebarHeader className="py-4">
+        <SidebarHeader className="pb-0">
             <SidebarMenu>
             <SidebarMenuItem>
                 <SidebarMenuButton asChild>
@@ -37,6 +38,7 @@ const SideBar = () => {
         </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup>
+                <SidebarSeparator className="w-full mx-auto "/>
                 <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
                     <SidebarGroupContent>
                     <SidebarMenu>
