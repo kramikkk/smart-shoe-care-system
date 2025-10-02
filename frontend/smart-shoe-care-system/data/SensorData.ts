@@ -5,7 +5,7 @@ import {
   Gauge
 } from "lucide-react"
 
-export const sensorData = {
+export const SensorData = {
   temperature: {
     name: "Temperature",
     value: "32°C",

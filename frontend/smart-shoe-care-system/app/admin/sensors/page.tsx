@@ -1,4 +1,4 @@
-import SensCard from "@/components/SensCard"
+import SensCard from "@/components/SensorCard"
 
 const SensorsPage = () => {
   return (

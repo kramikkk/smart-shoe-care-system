@@ -1,4 +1,4 @@
-export const statsData = {
+export const StatsData = {
   totalTransactions: {
     title: "Total Transactions",
     value: "150",

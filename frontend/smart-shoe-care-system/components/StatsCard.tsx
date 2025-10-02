@@ -9,10 +9,10 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-import { statsData } from "@/data/statConfig"
+import { StatsData } from "@/data/StatsData"
 
-const StatsCard = ({ id }: { id: keyof typeof statsData }) => {
-  const stat = statsData[id]
+const StatsCard = ({ id }: { id: keyof typeof StatsData }) => {
+  const stat = StatsData[id]
   const TrendIcon = stat.isPositive ? TrendingUp : TrendingDown
 
   return (

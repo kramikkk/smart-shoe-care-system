@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Progress } from "./ui/progress"
 import { Badge } from "./ui/badge"
-import { sensorData } from "@/data/SensConfig"
+import { SensorData } from "@/data/SensorData"
 
-const SensorCard = ({ id }: { id: keyof typeof sensorData }) => {
-  const sensor = sensorData[id]
+const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
+  const sensor = SensorData[id]
   const Icon = sensor.icon
   
   const getBadgeClass = (status: string) => {
