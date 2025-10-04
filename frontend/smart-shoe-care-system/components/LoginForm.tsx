@@ -63,8 +63,8 @@ export function LoginForm({
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        <p className="text-sm">SSCM Admin Dashboard v1</p>
-        <p className="text-sm">© 2025 Smart Shoe Care Machine. All rights reserved.</p>
+        <span className="text-sm">SSCM Admin Dashboard v1</span>
+        <span className="text-sm">© 2025 Smart Shoe Care Machine. All rights reserved.</span>
       </FieldDescription>
     </div>
   )
