@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/sidebar"
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeftRight, Cpu, LayoutDashboard,  } from "lucide-react";
+import { ArrowLeftRight, ChartLine, Cpu, LayoutDashboard,  } from "lucide-react";
 
 const menu = [
   { title: "Overview", url: "/admin", icon: LayoutDashboard },
   { title: "Transactions", url: "/admin/transactions", icon: ArrowLeftRight },
+  { title: "Analytics", url: "/admin/analytics", icon: ChartLine },
   { title: "Sensors", url: "/admin/sensors", icon: Cpu },
 ]
 
