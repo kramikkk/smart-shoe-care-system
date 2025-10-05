@@ -10,7 +10,7 @@ export type Transaction = {
   paymentMethod: "Cash" | "Online"
   serviceType: "Cleaning" | "Drying" | "Sterilizing" | "Package"
   amount: number
-  status: "pending" | "processing" | "success" | "failed"
+  status: "Pending" | "Success" | "Failed"
 }
 
 export const columns: ColumnDef<Transaction>[] = [
