@@ -4,7 +4,7 @@ export type Transaction = {
   paymentMethod: "Cash" | "Online"
   serviceType: "Cleaning" | "Drying" | "Sterilizing" | "Package"
   amount: number
-  status: "pending" | "processing" | "success" | "failed"
+  status: "Pending" | "Success" | "Failed"
 }
 
 export const transactions: Transaction[] = [
@@ -14,7 +14,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Cleaning",
     amount: 150,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1002",
@@ -22,7 +22,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Drying",
     amount: 80,
-    status: "processing",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1003",
@@ -30,7 +30,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Sterilizing",
     amount: 120,
-    status: "pending",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1004",
@@ -38,7 +38,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Package",
     amount: 300,
-    status: "failed",
+    status: "Failed",
   },
   {
     transactionId: "TXN-1005",
@@ -46,7 +46,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Cleaning",
     amount: 100,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1006",
@@ -54,7 +54,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Sterilizing",
     amount: 200,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1007",
@@ -62,7 +62,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Drying",
     amount: 90,
-    status: "pending",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1008",
@@ -70,7 +70,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Package",
     amount: 400,
-    status: "processing",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1009",
@@ -78,7 +78,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Cleaning",
     amount: 110,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1010",
@@ -86,7 +86,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Sterilizing",
     amount: 250,
-    status: "failed",
+    status: "Failed",
   },
   {
     transactionId: "TXN-1011",
@@ -94,7 +94,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Drying",
     amount: 95,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1012",
@@ -102,7 +102,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Cleaning",
     amount: 130,
-    status: "processing",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1013",
@@ -110,7 +110,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Package",
     amount: 350,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1014",
@@ -118,7 +118,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Sterilizing",
     amount: 220,
-    status: "pending",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1015",
@@ -126,7 +126,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Drying",
     amount: 85,
-    status: "failed",
+    status: "Failed",
   },
   {
     transactionId: "TXN-1016",
@@ -134,7 +134,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Cleaning",
     amount: 140,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1017",
@@ -142,7 +142,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Package",
     amount: 380,
-    status: "processing",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1018",
@@ -150,7 +150,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Drying",
     amount: 100,
-    status: "pending",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1019",
@@ -158,7 +158,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Sterilizing",
     amount: 230,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1020",
@@ -166,7 +166,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Cleaning",
     amount: 160,
-    status: "failed",
+    status: "Failed",
   },
   {
     transactionId: "TXN-1021",
@@ -174,7 +174,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Drying",
     amount: 75,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1022",
@@ -182,7 +182,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Sterilizing",
     amount: 210,
-    status: "processing",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1023",
@@ -190,7 +190,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Package",
     amount: 420,
-    status: "pending",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1024",
@@ -198,7 +198,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Cleaning",
     amount: 135,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1025",
@@ -206,7 +206,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Sterilizing",
     amount: 260,
-    status: "failed",
+    status: "Failed",
   },
   {
     transactionId: "TXN-1026",
@@ -214,7 +214,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Drying",
     amount: 105,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1027",
@@ -222,7 +222,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Package",
     amount: 390,
-    status: "processing",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1028",
@@ -230,7 +230,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Cleaning",
     amount: 145,
-    status: "pending",
+    status: "Pending",
   },
   {
     transactionId: "TXN-1029",
@@ -238,7 +238,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Online",
     serviceType: "Drying",
     amount: 95,
-    status: "success",
+    status: "Success",
   },
   {
     transactionId: "TXN-1030",
@@ -246,7 +246,7 @@ export const transactions: Transaction[] = [
     paymentMethod: "Cash",
     serviceType: "Sterilizing",
     amount: 240,
-    status: "processing",
+    status: "Failed",
   },
 ]
 
