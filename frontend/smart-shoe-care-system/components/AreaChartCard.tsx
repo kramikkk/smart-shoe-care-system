@@ -139,7 +139,7 @@ const chartConfig = {
 
 export default function AreaChartCard() {
   const [timeRange, setTimeRange] = React.useState("7d")
-  const [dataView, setDataView] = React.useState("both")
+  const [dataView, setDataView] = React.useState("all")
 
   const filteredData = chartData.filter((item) => {
     const date = new Date(item.date)
@@ -161,25 +161,25 @@ export default function AreaChartCard() {
         <div className="grid flex-1 gap-1">
           <CardTitle>Transaction + Revenue Chart</CardTitle>
           <CardDescription>
-            Showing total transactions and revenue for the last 3 months
+            Daily
           </CardDescription>
         </div>
         <Select value={dataView} onValueChange={setDataView}>
           <SelectTrigger
-            className="w-[160px] rounded-lg"
+            className="w-[130px] rounded-lg"
             aria-label="Select data view"
           >
-            <SelectValue placeholder="Show both" />
+            <SelectValue placeholder="Show all" />
           </SelectTrigger>
           <SelectContent className="rounded-xl">
-            <SelectItem value="both" className="rounded-lg">
-              Both
+            <SelectItem value="all" className="rounded-lg">
+              All
             </SelectItem>
             <SelectItem value="revenue" className="rounded-lg">
-              Revenue Only
+              Revenue
             </SelectItem>
             <SelectItem value="transactions" className="rounded-lg">
-              Transactions Only
+              Transactions
             </SelectItem>
           </SelectContent>
         </Select>
@@ -245,7 +245,7 @@ export default function AreaChartCard() {
                 />
               }
             />
-            {(dataView === "transactions" || dataView === "both") && (
+            {(dataView === "transactions" || dataView === "all") && (
               <Area
                 dataKey="transactions"
                 type="natural"
@@ -254,7 +254,7 @@ export default function AreaChartCard() {
                 stackId="a"
               />
             )}
-            {(dataView === "revenue" || dataView === "both") && (
+            {(dataView === "revenue" || dataView === "all") && (
               <Area
                 dataKey="revenue"
                 type="natural"

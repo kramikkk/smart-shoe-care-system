@@ -73,7 +73,7 @@ export function PieChartCard() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
         <div className="grid gap-1">
           <CardTitle>Service Type Distribution</CardTitle>
-          <CardDescription>Monthly</CardDescription>
+          <CardDescription>Daily</CardDescription>
         </div>
         <Select value={activeService} onValueChange={setActiveService}>
           <SelectTrigger

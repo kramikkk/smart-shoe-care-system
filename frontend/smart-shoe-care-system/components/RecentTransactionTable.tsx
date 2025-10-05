@@ -6,9 +6,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { transactions } from "@/data/TransactionData"
 import { Badge } from "./ui/badge"
+import { Receipt, ArrowRight, ArrowLeftRight } from "lucide-react"
+import Link from "next/link"
 
 const RecentTransactionTable = () => {
   const recentTransactions = transactions.slice(-5).reverse()
@@ -30,8 +32,19 @@ const RecentTransactionTable = () => {
     <div>
         <Card>
             <CardHeader>
-                <CardTitle>Recent Transactions</CardTitle>
-                <CardDescription>Showing (5) most recent transactions</CardDescription>
+                <div className="flex items-center gap-2">
+                  <ArrowLeftRight className="text-purple-500" />
+                  <CardTitle>Recent Transactions</CardTitle>
+                </div>
+                <CardAction>
+                  <Link 
+                    href="/admin/transactions" 
+                    className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                  >
+                    View All
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </CardAction>
             </CardHeader>
             <CardContent>
                 <Table>

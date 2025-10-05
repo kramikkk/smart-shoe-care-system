@@ -4,9 +4,9 @@ import {
   Card,
   CardAction,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
+  CardContent
 } from "@/components/ui/card"
 
 import { StatsData } from "@/data/StatsData"
@@ -14,30 +14,40 @@ import { StatsData } from "@/data/StatsData"
 const StatsCard = ({ id }: { id: keyof typeof StatsData }) => {
   const stat = StatsData[id]
   const TrendIcon = stat.isPositive ? TrendingUp : TrendingDown
+  const Icon = stat.icon
 
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardDescription>{stat.title}</CardDescription>
-        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-          {stat.value}
-        </CardTitle>
+        <div className="flex items-center gap-2">
+          <Icon className={`size-5 ${stat.iconColor}`} />
+          <CardTitle className="text-md">{stat.title}</CardTitle>
+        </div>
         <CardAction>
-          <Badge variant="outline" className="flex items-center gap-1">
+          <Badge 
+            variant="outline" 
+            className={`flex items-center gap-1 ${
+              stat.isPositive ? "text-green-400" : "text-red-400"
+            }`}
+          >
             <TrendIcon className="size-4" />
             {stat.isPositive ? "+" : ""}
             {stat.trendValue}%
           </Badge>
         </CardAction>
       </CardHeader>
-
-      <CardFooter className="flex-col items-start gap-1.5 text-sm">
-        <div className="flex gap-2 font-medium line-clamp-1">
-          {stat.footerLabel}
-          <TrendIcon className="size-4 shrink-0" />
+      <CardContent>
+        <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl pb-1">
+          {stat.value}
+        </CardTitle>
+        <div 
+          className={`text-sm font-medium ${
+            stat.isPositive ? "text-green-400" : "text-red-400"
+          }`}
+        >
+          {stat.footerDescription}
         </div>
-        <div className="text-muted-foreground">{stat.footerDescription}</div>
-      </CardFooter>
+      </CardContent>
     </Card>
   )
 }

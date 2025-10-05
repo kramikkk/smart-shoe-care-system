@@ -12,9 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CalendarIcon, CloudCheck, Coins, Footprints, Search } from "lucide-react"
+import { CalendarIcon, CloudCheck, Coins, Footprints, Search, Receipt, ArrowLeftRight, FileClock } from "lucide-react"
 import { TransactionDataTable } from "@/components/TransactionDataTable"
-import { Transaction, columns } from "@/components/TransactionColumns"
+import { columns } from "@/components/TransactionColumns"
 import { transactions } from "@/data/TransactionData"
 
 export default function TransactionPage() {
@@ -22,6 +22,8 @@ export default function TransactionPage() {
   const [paymentFilter, setPaymentFilter] = useState<string>("all")
   const [serviceFilter, setServiceFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 15
 
   const filteredData = useMemo(() => {
     return transactions.filter((tx) => {
@@ -42,15 +44,20 @@ export default function TransactionPage() {
     })
   }, [search, paymentFilter, serviceFilter, statusFilter])
 
+  const totalPages = Math.ceil(filteredData.length / pageSize)
+
   return (
     <div>
       <Card className="pb-2">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Transaction History</CardTitle>
+              <div className="flex items-center gap-2">
+                <FileClock className="size-5 text-purple-500" />
+                <CardTitle>Transaction History</CardTitle>
+              </div>
               <p className="text-sm text-muted-foreground mt-1">
-                Showing {filteredData.length} Transactions
+                Showing {filteredData.length} transaction{filteredData.length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
