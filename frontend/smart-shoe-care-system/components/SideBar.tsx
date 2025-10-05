@@ -18,7 +18,6 @@ import { ArrowLeftRight, ChartLine, Cpu, LayoutDashboard,  } from "lucide-react"
 const menu = [
   { title: "Overview", url: "/admin", icon: LayoutDashboard },
   { title: "Transactions", url: "/admin/transactions", icon: ArrowLeftRight },
-  { title: "Analytics", url: "/admin/analytics", icon: ChartLine },
   { title: "Sensors", url: "/admin/sensors", icon: Cpu },
 ]
 
