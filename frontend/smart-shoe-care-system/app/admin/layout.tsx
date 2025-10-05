@@ -2,14 +2,18 @@ import SideBar from "@/components/SideBar";
 import NavBar from "@/components/NavBar";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { cookies } from "next/dist/server/request/cookies";
 
-export default function AdminLayout({
+export default async function AdminLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
+    const cookieStore = await cookies()
+    const defaultOpen = cookieStore.get("sidebar_state")?.value === "true"
+
     return (
-        <SidebarProvider>
+        <SidebarProvider defaultOpen={defaultOpen}>
             <SideBar/>
             <main className="w-full">
                 <NavBar/>
