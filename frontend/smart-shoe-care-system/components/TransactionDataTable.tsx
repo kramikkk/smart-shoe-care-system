@@ -18,6 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { TransactionPagination } from "./TransactionPagination"
+import { 
+  Empty,
+  EmptyDescription, 
+  EmptyHeader, 
+  EmptyMedia, 
+  EmptyTitle
+} from "./ui/empty"
+import { FileClock } from "lucide-react"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -79,7 +87,19 @@ export function TransactionDataTable<TData, TValue>({
           ) : (
             <TableRow>
               <TableCell colSpan={columns.length} className="h-24 text-center">
-                No results.
+                <Empty>
+                  <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                      <FileClock />
+                      </EmptyMedia>
+                      <EmptyTitle>
+                        No Transactions Found
+                      </EmptyTitle>
+                      <EmptyDescription>
+                        Try adjusting your search or filter to find what you're looking for.
+                      </EmptyDescription>
+                  </EmptyHeader>
+                  </Empty>
               </TableCell>
             </TableRow>
           )}
