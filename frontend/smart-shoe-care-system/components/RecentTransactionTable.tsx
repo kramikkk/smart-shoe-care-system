@@ -39,8 +39,8 @@ const RecentTransactionTable = () => {
                         <TableRow>
                         <TableHead>Transaction ID</TableHead>
                         <TableHead>Date & Time</TableHead>
-                        <TableHead>Service Type</TableHead>
                         <TableHead>Method</TableHead>
+                        <TableHead>Service Type</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead>Status</TableHead>
                         </TableRow>
@@ -50,8 +50,8 @@ const RecentTransactionTable = () => {
                           <TableRow key={transaction.transactionId}>
                             <TableCell className="font-medium">{transaction.transactionId}</TableCell>
                             <TableCell>{transaction.dateTime}</TableCell>
-                            <TableCell>{transaction.serviceType}</TableCell>
                             <TableCell>{transaction.paymentMethod}</TableCell>
+                            <TableCell>{transaction.serviceType}</TableCell>
                             <TableCell>
                               {new Intl.NumberFormat("en-US", {
                                 style: "currency",
