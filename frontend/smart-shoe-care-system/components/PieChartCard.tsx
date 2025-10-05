@@ -29,10 +29,10 @@ import {
 } from "@/components/ui/select"
 
 const serviceData = [
-  { type: "cleaning", service: 46, fill: "var(--color-cleaning)" },
-  { type: "drying", service: 27, fill: "var(--color-drying)" },
-  { type: "sterilizing", service: 34, fill: "var(--color-sterilizing)" },
-  { type: "all", service: 23, fill: "var(--color-all)" },
+  { type: "cleaning", service: 46, revenue: 1840, fill: "var(--color-cleaning)" },
+  { type: "drying", service: 27, revenue: 1080, fill: "var(--color-drying)" },
+  { type: "sterilizing", service: 34, revenue: 1360, fill: "var(--color-sterilizing)" },
+  { type: "all", service: 23, revenue: 920, fill: "var(--color-all)" },
 ]
 
 const chartConfig = {
@@ -66,6 +66,11 @@ export function PieChartCard() {
     [activeService]
   )
   const services = React.useMemo(() => serviceData.map((item) => item.type), [])
+  
+  const totalServices = React.useMemo(
+    () => serviceData.reduce((acc, curr) => acc + curr.service, 0),
+    []
+  )
 
   return (
     <Card data-chart={id} className="flex flex-col">
@@ -120,7 +125,47 @@ export function PieChartCard() {
           <PieChart>
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent hideLabel />}
+              content={({ active, payload }) => {
+                if (!active || !payload || !payload.length) return null
+                const data = payload[0].payload
+                const percentage = ((data.service / totalServices) * 100).toFixed(1)
+                const formattedRevenue = new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "PHP",
+                }).format(data.revenue)
+                
+                return (
+                  <div className="rounded-lg border bg-background p-2 shadow-sm">
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: data.fill }}
+                          />
+                          <span className="text-sm font-medium capitalize">
+                            {chartConfig[data.type as keyof typeof chartConfig]?.label}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid gap-1">
+                        <div className="flex items-center justify-between gap-8">
+                          <span className="text-xs text-muted-foreground">Services:</span>
+                          <span className="text-sm font-bold">{data.service}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-8">
+                          <span className="text-xs text-muted-foreground">Percentage:</span>
+                          <span className="text-sm font-bold">{percentage}%</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-8">
+                          <span className="text-xs text-muted-foreground">Revenue:</span>
+                          <span className="text-sm font-bold">{formattedRevenue}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }}
             />
             <Pie
               data={serviceData}
