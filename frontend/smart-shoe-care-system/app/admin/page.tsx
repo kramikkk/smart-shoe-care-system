@@ -11,9 +11,8 @@ const DashboardPage = () => {
             <StatsCard id="totalTransactions" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <AreaChartCard id="revenue"/>
+            <AreaChartCard/>
             <PieChartCard/>
-            <AreaChartCard id="transactions"/>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <RecentTransactionTable />
