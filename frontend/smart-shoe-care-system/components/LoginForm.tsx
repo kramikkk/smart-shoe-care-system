@@ -1,12 +1,6 @@
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Field,
   FieldDescription,
@@ -22,16 +16,21 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle className="text-xl">SSCM Admin Dashboard</CardTitle>
-          <CardDescription>
-            Login with your admin account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form>
+      <Card className="overflow-hidden p-0">
+        <CardContent className="grid p-0 md:grid-cols-2">
+          <form className="p-6 md:p-8">
             <FieldGroup>
+              <div className="flex flex-col items-center gap-2 text-center">
+                <img
+                  src="/SSCMLogoCircle.png"
+                  alt="SSCMLogoCircle"
+                  className="w-25 h-25"
+                />
+                <h1 className="text-2xl font-bold">Welcome back</h1>
+                <p className="text-muted-foreground text-balance">
+                  Login to your SSCM admin account
+                </p>
+              </div>
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
@@ -46,25 +45,37 @@ export function LoginForm({
                   <FieldLabel htmlFor="password">Password</FieldLabel>
                   <a
                     href="#"
-                    className="ml-auto text-sm underline-offset-4 hover:underline"
+                    className="ml-auto text-sm underline-offset-2 hover:underline"
                   >
                     Forgot your password?
                   </a>
                 </div>
-                <Input id="password" type="password" required placeholder=" Enter your password" />
+                <Input id="password" type="password" placeholder="Enter your password" required />
               </Field>
               <Field>
                 <Button type="submit">Login</Button>
-                <FieldDescription className="text-center">
-                </FieldDescription>
               </Field>
+              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
+                Admin Dashboard
+              </FieldSeparator>
+              <FieldDescription className="text-center">
+                Only admins can access the dashboard
+              </FieldDescription>
             </FieldGroup>
           </form>
+          <div className="bg-muted relative hidden md:block">
+            <img
+              src="/SSCMlogo.png"
+              alt="Image"
+              /*className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"*/
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        <span className="text-sm">SSCM Admin Dashboard v1</span>
-        <span className="text-sm">© 2025 Smart Shoe Care Machine. All rights reserved.</span>
+        <span>SSCM Admin Dashboard v1.0. © 2025 Smart Shoe Care Machine. All rights reserved.</span>
+
       </FieldDescription>
     </div>
   )
