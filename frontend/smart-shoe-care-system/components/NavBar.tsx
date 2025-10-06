@@ -24,8 +24,8 @@ const NavBar = () => {
         <DropdownMenu>
           <DropdownMenuTrigger>
             <Avatar>
-              <AvatarImage src="https://github.com/shadcn.png" />
-              <AvatarFallback> CN </AvatarFallback>
+              <AvatarImage src="/SSCMlogo.png" />
+              <AvatarFallback> AD </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent>

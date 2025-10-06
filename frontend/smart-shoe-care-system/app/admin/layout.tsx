@@ -1,7 +1,7 @@
 import SideBar from "@/components/SideBar";
 import NavBar from "@/components/NavBar";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cookies } from "next/dist/server/request/cookies";
 
 export default async function AdminLayout({
@@ -15,6 +15,7 @@ export default async function AdminLayout({
     return (
         <SidebarProvider defaultOpen={defaultOpen}>
             <SideBar/>
+            <SidebarInset>
             <main className="w-full">
                 <NavBar/>
                 <div className="px-4 pb-4">
@@ -27,6 +28,7 @@ export default async function AdminLayout({
                     {children}
                 </div>
             </main>
+            </SidebarInset>
         </SidebarProvider>
     );
 }

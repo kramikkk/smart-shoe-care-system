@@ -2,7 +2,7 @@ import AreaChartCard from "@/components/AreaChartCard"
 import { PieChartCard } from "@/components/PieChartCard"
 import StatsCard from "@/components/StatsCard"
 import RecentTransactionTable from "@/components/RecentTransactionTable"
-import NotificationCard from "@/components/NotificationCard"
+import SystemAlertCard from "@/components/SystemAlertCard"
 import SensorCard from "@/components/SensorCard"
 
 const DashboardPage = () => {
@@ -21,9 +21,11 @@ const DashboardPage = () => {
             </div>
             <PieChartCard/>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <RecentTransactionTable />
-            <NotificationCard />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+                <RecentTransactionTable />
+            </div>
+            <SystemAlertCard />
         </div>
         </div>
     )

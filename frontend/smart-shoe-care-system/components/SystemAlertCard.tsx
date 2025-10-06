@@ -10,7 +10,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 
-const NotificationCard = () => {
+const SystemAlertCard = () => {
   return (
     <div>
         <Card className="@container/card h-full">
@@ -26,7 +26,7 @@ const NotificationCard = () => {
                     <EmptyMedia variant="icon">
                     <Bell />
                     </EmptyMedia>
-                    <EmptyTitle>No Notifications Yet</EmptyTitle>
+                    <EmptyTitle>No Alerts Yet</EmptyTitle>
                     <EmptyDescription>
                     All systems are running smoothly.
                     </EmptyDescription>
@@ -38,4 +38,4 @@ const NotificationCard = () => {
   )
 }
 
-export default NotificationCard
+export default SystemAlertCard

@@ -1,3 +1,5 @@
+"use client"
+
 import {
   Sidebar,
   SidebarContent,
@@ -14,6 +16,8 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeftRight, ChartLine, Cpu, LayoutDashboard,  } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { SideBarUser } from "./SideBarUser";
 
 const menu = [
   { title: "Overview", url: "/admin", icon: LayoutDashboard },
@@ -22,14 +26,23 @@ const menu = [
 ]
 
 const SideBar = () => {
+  const pathname = usePathname();
+
+  const isActive = (url: string) => {
+    if (url === "/admin") {
+      return pathname === url;
+    }
+    return pathname.startsWith(url);
+  };
+
   return (
-    <Sidebar collapsible="offcanvas" variant="sidebar">
-        <SidebarHeader className="pb-0">
+    <Sidebar collapsible="offcanvas" variant="inset">
+        <SidebarHeader className="pt-4">
             <SidebarMenu>
             <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                     <Link href="/admin">
-                    <Image src="/globe.svg" alt="Logo" width={20} height={20} />
+                    <Image src="/SSCMLogoCircle.png" alt="Logo" width={30} height={20} />
                     <span className=" text-base font-bold">Smart Shoe Care</span>
                     </Link>
                 </SidebarMenuButton>
@@ -44,13 +57,14 @@ const SideBar = () => {
                     <SidebarMenu>
                         {menu.map((item) => {
                         const Icon = item.icon;
+                        const active = isActive(item.url);
                         return (
                             <SidebarMenuItem key={item.title}>
-                            <SidebarMenuButton asChild>
-                                <a href={item.url} className="flex items-center gap-2">
+                            <SidebarMenuButton asChild isActive={active}>
+                                <Link href={item.url} className="flex items-center gap-2">
                                 <Icon className="w-5 h-5" />
                                 <span>{item.title}</span>
-                                </a>
+                                </Link>
                             </SidebarMenuButton>
                             </SidebarMenuItem>
                         );
@@ -59,6 +73,9 @@ const SideBar = () => {
                     </SidebarGroupContent>
                 </SidebarGroup>
             </SidebarContent>
+            <SidebarFooter>
+                <SideBarUser user={{ name: "Admin", email: "admin@example.com", avatar: "/SSCMlogo.png" }} />
+            </SidebarFooter>
     </Sidebar>
   )
 }

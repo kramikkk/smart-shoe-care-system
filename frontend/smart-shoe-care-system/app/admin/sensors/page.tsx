@@ -1,4 +1,4 @@
-import NotificationCard from "@/components/NotificationCard"
+import NotificationCard from "@/components/SystemAlertCard"
 import SensCard from "@/components/SensorCard"
 import { Sen } from "next/font/google"
 
