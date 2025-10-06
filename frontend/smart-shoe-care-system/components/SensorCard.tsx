@@ -33,7 +33,7 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex justify-between items-center">
-          <span className="text-2xl font-semibold">{sensor.value}</span>
+          <span className="text-2xl font-bold">{sensor.value}</span>
           <span className="text-xs text-muted-foreground">{sensor.range}</span>
         </div>
         <Progress value={sensor.percentage} className="h-3" />

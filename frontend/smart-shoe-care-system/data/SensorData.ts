@@ -41,5 +41,14 @@ export const SensorData = {
     color: "text-purple-600",
     range: "On/Off",
     status: "Active"
-  }
+  },
+    systemStatus: {
+    name: "System Status",
+    value: "Idle",
+    percentage: 0,
+    icon: Zap,
+    color: "text-yellow-600",
+    range: "Timer: 00:00",
+    status: "Idle"
+  },
 } as const

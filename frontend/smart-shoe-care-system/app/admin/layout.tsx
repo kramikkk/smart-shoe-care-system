@@ -17,7 +17,7 @@ export default async function AdminLayout({
             <SideBar/>
             <main className="w-full">
                 <NavBar/>
-                <div className="px-4">
+                <div className="px-4 pb-4">
                     <ThemeProvider
                     attribute="class"
                     defaultTheme="system"
