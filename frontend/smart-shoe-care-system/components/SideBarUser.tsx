@@ -1,11 +1,10 @@
 "use client"
 
 import {
-  CreditCard,
-  Ellipsis,
   LogOut,
   Bell,
   UserCircle,
+  EllipsisVertical,
 } from "lucide-react"
 
 import {
@@ -28,6 +27,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import Link from "next/link"
 
 export function SideBarUser({
   user,
@@ -59,7 +59,7 @@ export function SideBarUser({
                   {user.email}
                 </span>
               </div>
-              <Ellipsis className="ml-auto size-4" />
+              <EllipsisVertical className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -94,9 +94,11 @@ export function SideBarUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">
-              <LogOut />
-              Log out
+            <DropdownMenuItem variant="destructive" asChild>
+              <Link href="/" className="flex items-center gap-2">
+                <LogOut />
+                Log out
+              </Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

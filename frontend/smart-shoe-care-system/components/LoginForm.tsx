@@ -9,6 +9,7 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import Link from "next/link"
 
 export function LoginForm({
   className,
@@ -53,7 +54,9 @@ export function LoginForm({
                 <Input id="password" type="password" placeholder="Enter your password" required />
               </Field>
               <Field>
-                <Button type="submit">Login</Button>
+                <Button type="submit" asChild>
+                  <Link href="/admin">Login</Link>
+                </Button>
               </Field>
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Admin Dashboard

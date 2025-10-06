@@ -32,7 +32,9 @@ const NavBar = () => {
             <DropdownMenuLabel> My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem> <User/> Profile </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive"> <LogOut/> Logout </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" asChild> 
+              <Link href="/"> <LogOut/> Logout </Link>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
