@@ -22,7 +22,7 @@ import { SideBarUser } from "./SideBarUser";
 const menu = [
   { title: "Overview", url: "/admin", icon: LayoutDashboard },
   { title: "Transactions", url: "/admin/transactions", icon: ArrowLeftRight },
-  { title: "Sensors", url: "/admin/sensors", icon: Cpu },
+  { title: "System", url: "/admin/system", icon: Cpu },
 ]
 
 const SideBar = () => {

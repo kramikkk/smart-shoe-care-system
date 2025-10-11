@@ -1,8 +1,7 @@
 import NotificationCard from "@/components/SystemAlertCard"
 import SensCard from "@/components/SensorCard"
-import { Sen } from "next/font/google"
 
-const SensorsPage = () => {
+const SystemPage = () => {
   return (
     <div className="space-y-4">
       <div>
@@ -24,4 +23,4 @@ const SensorsPage = () => {
   )
 }
 
-export default SensorsPage
+export default SystemPage
