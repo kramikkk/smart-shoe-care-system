@@ -3,11 +3,12 @@
 import { Droplets, ShieldCheck, Wind } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
 import { Progress } from "@/components/ui/progress"
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 const CustomProgress = () => {
   const searchParams = useSearchParams()
   const service = searchParams.get('service') || 'cleaning'
+  const router = useRouter()
   
   // Different durations for each service
   const getServiceDuration = (serviceType: string) => {
@@ -41,6 +42,12 @@ const CustomProgress = () => {
 
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (timeRemaining === 0) {
+      router.push(`/user/success/service?service=${service}`)
+    }
+  }, [timeRemaining, router, service])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)

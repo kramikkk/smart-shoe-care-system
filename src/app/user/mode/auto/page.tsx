@@ -4,11 +4,13 @@ import { Droplets, ShieldCheck, Wind } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
 import { Progress } from "@/components/ui/progress"
 import { Item } from '@/components/ui/item'
+import { useRouter } from 'next/navigation'
 
 const Auto = () => {
   const totalTime = 300 // 5 minutes in seconds
   const [timeRemaining, setTimeRemaining] = useState(totalTime)
   const [currentStage, setCurrentStage] = useState<'cleaning' | 'drying' | 'sterilizing'>('cleaning')
+  const router = useRouter()
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
 
@@ -40,6 +42,12 @@ const Auto = () => {
 
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (timeRemaining === 0) {
+      router.push('/user/success/service?mode=auto')
+    }
+  }, [timeRemaining, router])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)

@@ -20,10 +20,10 @@ const Offline = () => {
   // Determine the redirect URL after payment
   const getRedirectUrl = () => {
     if (mode === 'auto') {
-      return '/user/mode/auto'
+      return '/user/success/payment?mode=auto'
     }
     if (service) {
-      return `/user/mode/custom/progress?service=${service}`
+      return `/user/success/payment?service=${service}`
     }
     return '/user/mode/custom'
   }
