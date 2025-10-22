@@ -1,15 +1,32 @@
+'use client'
+
 import { Button } from '@/components/ui/button'
 import { QrCode, Banknote } from 'lucide-react'
 import { Item, ItemContent, ItemHeader } from '@/components/ui/item'
 import Link from 'next/link'
 import React from 'react'
+import { useSearchParams } from 'next/navigation'
 
-const payment = () => {
+const Payment = () => {
+  const searchParams = useSearchParams()
+  const mode = searchParams.get('mode')
+  const service = searchParams.get('service')
+  
+  // Determine service display name
+  const getServiceName = () => {
+    if (mode === 'auto') return 'Auto Mode'
+    if (service) return service.charAt(0).toUpperCase() + service.slice(1)
+    return 'Auto'
+  }
+
   const summaryData = [
     { label: 'Shoe Type', value: 'Rubber' },
-    { label: 'Service', value: 'Auto' },
-    { label: 'Total', value: 'P100' },
+    { label: 'Service', value: getServiceName() },
+    { label: 'Total', value: '₱100' },
   ]
+
+  // Build query string for payment links
+  const queryString = mode ? `mode=${mode}` : service ? `service=${service}` : ''
 
   const paymentMethods = [
     {
@@ -19,7 +36,7 @@ const payment = () => {
         'Insert coins or bills into the machine',
         'Accepts: ₱1, ₱5, ₱10, ₱20, ₱50, ₱100',
       ],
-      link: '/user/payment/offline',
+      link: `/user/payment/offline${queryString ? `?${queryString}` : ''}`,
     },
     {
       icon: <QrCode className="w-16 h-16 text-cyan-600" />,
@@ -28,7 +45,7 @@ const payment = () => {
         'Scan QR code with your mobile device',
         'Supports GCash, PayMaya, and GoTyme',
       ],
-      link: '/user/payment/online',
+      link: `/user/payment/online${queryString ? `?${queryString}` : ''}`,
     },
   ]
 
@@ -83,4 +100,4 @@ const payment = () => {
   )
 }
 
-export default payment
+export default Payment

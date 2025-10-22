@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react'
 import { Progress } from "@/components/ui/progress"
 import { Item } from '@/components/ui/item'
 
-const auto = () => {
+const Auto = () => {
   const totalTime = 300 // 5 minutes in seconds
   const [timeRemaining, setTimeRemaining] = useState(totalTime)
   const [currentStage, setCurrentStage] = useState<'cleaning' | 'drying' | 'sterilizing'>('cleaning')
@@ -22,7 +22,10 @@ const auto = () => {
         
         const newTime = prev - 1
         
-        // Update stage based on time
+        // Update stage based on time remaining
+        // Cleaning: 300-180 (2 minutes)
+        // Drying: 181-61 (1 minutes)
+        // Sterilizing: 120-0 (2 minutes)
         if (newTime > 180) {
           setCurrentStage('cleaning')
         } else if (newTime > 120) {
@@ -111,4 +114,4 @@ const auto = () => {
   )
 }
 
-export default auto
+export default Auto

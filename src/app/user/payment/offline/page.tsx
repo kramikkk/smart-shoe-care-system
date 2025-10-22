@@ -6,11 +6,27 @@ import { Item, ItemContent } from '@/components/ui/item'
 import Link from 'next/link'
 import React, { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 
-const offline = () => {
+const Offline = () => {
+  const searchParams = useSearchParams()
+  const mode = searchParams.get('mode')
+  const service = searchParams.get('service')
+  
   const amountDue = 100
   const [amountInserted, setAmountInserted] = useState(0)
   const amountRemaining = Math.max(0, amountDue - amountInserted)
+  
+  // Determine the redirect URL after payment
+  const getRedirectUrl = () => {
+    if (mode === 'auto') {
+      return '/user/mode/auto'
+    }
+    if (service) {
+      return `/user/mode/custom/progress?service=${service}`
+    }
+    return '/user/mode/custom'
+  }
 
   return (
     <div className="px-8 py-6">
@@ -51,7 +67,7 @@ const offline = () => {
                 <p className="text-3xl font-bold text-red-600">₱{amountRemaining.toFixed(2)}</p>
               </div>
             </div>
-            <Link href="/user/mode/custom" className="mt-6">
+            <Link href={getRedirectUrl()} className="mt-6">
               <Button className="w-full px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
                 <p className='text-lg font-bold'>Proceed</p>
               </Button>
@@ -92,4 +108,4 @@ const offline = () => {
   )
 }
 
-export default offline
+export default Offline
