@@ -20,16 +20,16 @@ import { usePathname } from "next/navigation";
 import { SideBarUser } from "./SideBarUser";
 
 const menu = [
-  { title: "Overview", url: "/admin", icon: LayoutDashboard },
-  { title: "Transactions", url: "/admin/transactions", icon: ArrowLeftRight },
-  { title: "System", url: "/admin/system", icon: Cpu },
+  { title: "Overview", url: "/admin/dashboard", icon: LayoutDashboard },
+  { title: "Transactions", url: "/admin/dashboard/transactions", icon: ArrowLeftRight },
+  { title: "System", url: "/admin/dashboard/system", icon: Cpu },
 ]
 
 const SideBar = () => {
   const pathname = usePathname();
 
   const isActive = (url: string) => {
-    if (url === "/admin") {
+    if (url === "/admin/dashboard") {
       return pathname === url;
     }
     return pathname.startsWith(url);
@@ -41,7 +41,7 @@ const SideBar = () => {
             <SidebarMenu>
             <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                    <Link href="/admin">
+                    <Link href="/admin/dashboard">
                     <Image src="/SSCMLogoCircle.png" alt="Logo" width={30} height={20} />
                     <span className=" text-base font-bold">Smart Shoe Care</span>
                     </Link>

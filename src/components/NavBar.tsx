@@ -17,7 +17,7 @@ const NavBar = () => {
     <nav className="p-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
         <SidebarTrigger />
-        <Link href="/admin"className="text-base font-bold"> Admin Dashboard </Link>
+        <Link href="/admin/dashboard" className="text-base font-bold"> Admin Dashboard </Link>
       </div>
       <div className="flex items-center gap-4">
         <ModeToggle/>
@@ -33,7 +33,7 @@ const NavBar = () => {
             <DropdownMenuSeparator />
             <DropdownMenuItem> <User/> Profile </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" asChild> 
-              <Link href="/"> <LogOut/> Logout </Link>
+              <Link href="/admin/login"> <LogOut/> Logout </Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

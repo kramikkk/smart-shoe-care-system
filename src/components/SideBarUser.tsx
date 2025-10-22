@@ -95,7 +95,7 @@ export function SideBarUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" asChild>
-              <Link href="/" className="flex items-center gap-2">
+              <Link href="/admin/login" className="flex items-center gap-2">
                 <LogOut />
                 Log out
               </Link>

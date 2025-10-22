@@ -80,7 +80,7 @@ export function LoginForm({
               </Field>
               <Field>
                 <Button type="submit" asChild>
-                  <Link href="/admin">Login</Link>
+                  <Link href="/admin/dashboard">Login</Link>
                 </Button>
               </Field>
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
