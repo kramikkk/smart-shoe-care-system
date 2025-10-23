@@ -45,7 +45,7 @@ export function LoginForm({
       }
 
       // Successful login - redirect to dashboard
-      router.push("/admin/dashboard")
+      router.replace("/admin/dashboard")
     } catch (err) {
       setError("An error occurred. Please try again.")
       setLoading(false)
