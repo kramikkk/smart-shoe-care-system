@@ -11,20 +11,52 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import Link from "next/link"
 import { useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
+import { signIn } from "@/lib/auth-client"
+import { useRouter } from "next/navigation"
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    try {
+      const result = await signIn.email({
+        email,
+        password,
+      })
+
+      if (result.error) {
+        setError(result.error.message || "Invalid email or password")
+        setLoading(false)
+        return
+      }
+
+      // Successful login - redirect to dashboard
+      router.push("/admin/dashboard")
+    } catch (err) {
+      setError("An error occurred. Please try again.")
+      setLoading(false)
+    }
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8">
+          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
             <FieldGroup>
               <div className="flex flex-col items-center gap-2 text-center">
                 <img
@@ -37,12 +69,21 @@ export function LoginForm({
                   Login to your SSCM admin account
                 </p>
               </div>
+              
+              {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  {error}
+                </div>
+              )}
+              
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
                   id="email"
                   type="email"
                   placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </Field>
@@ -62,6 +103,8 @@ export function LoginForm({
                     type={showPassword ? "text" : "password"} 
                     placeholder="Enter your password" 
                     className="pr-10"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     required 
                   />
                   <button
@@ -79,8 +122,8 @@ export function LoginForm({
                 </div>
               </Field>
               <Field>
-                <Button type="submit" asChild>
-                  <Link href="/admin/dashboard">Login</Link>
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? "Logging in..." : "Login"}
                 </Button>
               </Field>
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">

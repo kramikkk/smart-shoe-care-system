@@ -21,22 +21,6 @@ const NavBar = () => {
       </div>
       <div className="flex items-center gap-4">
         <ModeToggle/>
-        <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Avatar>
-              <AvatarImage src="/SSCMlogo.png" />
-              <AvatarFallback> AD </AvatarFallback>
-            </Avatar>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuLabel> My Account</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem> <User/> Profile </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" asChild> 
-              <Link href="/admin/login"> <LogOut/> Logout </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </nav>
   )

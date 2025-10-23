@@ -28,6 +28,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import Link from "next/link"
+import { signOut } from "@/lib/actions/auth-action"
+import { useRouter } from "next/navigation"
 
 export function SideBarUser({
   user,
@@ -38,8 +40,18 @@ export function SideBarUser({
     avatar: string
   }
 }) {
+  const router = useRouter()
   const { isMobile } = useSidebar()
-
+  
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      router.push("/admin/login");
+    } catch (error) {
+      console.error("Sign out error:", error);
+    }
+  };
+  
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -95,10 +107,10 @@ export function SideBarUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" asChild>
-              <Link href="/admin/login" className="flex items-center gap-2">
+              <button onClick={handleSignOut} className="flex w-full items-center gap-2">
                 <LogOut />
                 Log out
-              </Link>
+              </button>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

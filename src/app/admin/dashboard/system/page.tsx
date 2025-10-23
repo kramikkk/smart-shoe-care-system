@@ -1,7 +1,16 @@
 import NotificationCard from "@/components/SystemAlertCard"
 import SensCard from "@/components/SensorCard"
+import { headers } from "next/headers"
+import { auth } from "@/lib/auth"
+import { redirect } from "next/navigation";
 
-const SystemPage = () => {
+export default async function SystemPage() {
+  const session = await auth.api.getSession({
+      headers: await headers(), // you need to pass the headers object.
+    });
+    if (!session) {
+      redirect("/admin/login");
+    }
   return (
     <div className="space-y-4">
       <div>
@@ -22,5 +31,3 @@ const SystemPage = () => {
 
   )
 }
-
-export default SystemPage
