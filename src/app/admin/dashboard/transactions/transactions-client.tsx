@@ -101,167 +101,135 @@ export default function TransactionPage() {
         <CardContent>
           <div className="space-y-4">
             {/* Search + Filters */}
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-stretch md:items-end">
-                {/* Filters */}
-                <div className="flex flex-wrap gap-3 flex-1 items-end">
-                {/* Search Bar */}
-                <div className="flex flex-col gap-1.5 w-full lg:w-240">
-                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                    <Search className="size-3.5"/>
-                    Search Bar
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
-                    <Input
-                      placeholder="Search transactions..."
-                      className="pl-10 pr-10 h-10 border-2"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                    {search && (
-                      <button
-                        onClick={() => setSearch("")}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label="Clear search"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
-                    )}
+            <div className="flex flex-col gap-3">
+              {/* Search Bar */}
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                <Input
+                  placeholder="Search by ID, service, amount..."
+                  className="pl-10 pr-10 h-11 border-2"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filters Row */}
+              <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+                {/* Left Side - Filter Selects */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {/* Payment Method Filter */}
+                  <div className="w-full sm:flex-1 lg:min-w-[140px] lg:w-auto">
+                    <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                      <SelectTrigger className="h-10 border-2 w-full">
+                        <SelectValue placeholder="All Payments" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Payments</SelectItem>
+                        <SelectItem value="Cash">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-green-500"></div>
+                            Cash
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Online">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-blue-500"></div>
+                            Online
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Service Filter */}
+                  <div className="w-full sm:flex-1 lg:min-w-[140px] lg:w-auto">
+                    <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                      <SelectTrigger className="h-10 border-2 w-full">
+                        <SelectValue placeholder="All Services" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Services</SelectItem>
+                        <SelectItem value="Cleaning">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-blue-500"></div>
+                            Cleaning
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Drying">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-orange-500"></div>
+                            Drying
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Sterilizing">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-purple-500"></div>
+                            Sterilizing
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Package">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-pink-500"></div>
+                            Package
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Status Filter */}
+                  <div className="w-full sm:flex-1 lg:min-w-[140px] lg:w-auto">
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="h-10 border-2 w-full">
+                        <SelectValue placeholder="All Statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="Success">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-green-500"></div>
+                            Success
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Pending">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-yellow-500"></div>
+                            Pending
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Failed">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-red-500"></div>
+                            Failed
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                
-                {/* Payment Method Filter */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                    <Coins className="size-3.5"/>
-                    Payment
-                  </label>
-                  <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                    <SelectTrigger className="h-10 border-2">
-                      <SelectValue placeholder="All Methods" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Methods</SelectItem>
-                      <SelectItem value="Cash">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-green-500"></div>
-                          Cash
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Online">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-blue-500"></div>
-                          Online
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
 
-                {/* Service Filter */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                    <Footprints className="size-3.5"/>
-                    Service
-                  </label>
-                  <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                    <SelectTrigger className="h-10 border-2">
-                      <SelectValue placeholder="All Services" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Services</SelectItem>
-                      <SelectItem value="Cleaning">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-blue-500"></div>
-                          Cleaning
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Drying">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-orange-500"></div>
-                          Drying
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Sterilizing">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-purple-500"></div>
-                          Sterilizing
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Package">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-pink-500"></div>
-                          Package
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Status Filter */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                    <CloudCheck className="size-3.5"/>
-                    Status
-                  </label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-10 border-2">
-                      <SelectValue placeholder="All Statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="Success">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-green-500"></div>
-                          Success
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Pending">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-yellow-500"></div>
-                          Pending
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Failed">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-red-500"></div>
-                          Failed
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {/* Date Range Filter */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                    <CalendarIcon className="size-3.5"/>
-                    Date Range
-                  </label>
-                  <div className="flex gap-2">
+                {/* Right Side - Date Range + Clear Button */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {/* Date Range Filter */}
+                  <div className="flex gap-2 flex-1 sm:flex-initial">
                     {/* From Date */}
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={`h-10 flex-1 justify-start text-left font-normal border-2 ${!dateFrom && "text-muted-foreground"}`}
+                          className={`h-10 flex-1 sm:w-[130px] justify-start text-left font-normal border-2 ${!dateFrom && "text-muted-foreground"}`}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateFrom ? format(dateFrom, "MMM dd") : "Start date"}
+                          {dateFrom ? format(dateFrom, "MMM dd") : "Start"}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
@@ -279,10 +247,10 @@ export default function TransactionPage() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={`h-10 flex-1 justify-start text-left font-normal border-2 ${!dateTo && "text-muted-foreground"}`}
+                          className={`h-10 flex-1 sm:w-[130px] justify-start text-left font-normal border-2 ${!dateTo && "text-muted-foreground"}`}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateTo ? format(dateTo, "MMM dd") : "End date"}
+                          {dateTo ? format(dateTo, "MMM dd") : "End"}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
@@ -296,41 +264,26 @@ export default function TransactionPage() {
                       </PopoverContent>
                     </Popover>
                   </div>
-                </div>
 
-                {/* Clear Filters Button */}
-                <button
-                  onClick={() => {
-                    setPaymentFilter("all")
-                    setServiceFilter("all")
-                    setStatusFilter("all")
-                    setDateFrom(undefined)
-                    setDateTo(undefined)
-                  }}
-                  disabled={paymentFilter === "all" && serviceFilter === "all" && statusFilter === "all" && !dateFrom && !dateTo}
-                  className="h-10 px-4 rounded-md border-2 border-muted-foreground/20 bg-secondary hover:bg-secondary/80 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-secondary"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                  {/* Clear Filters Button */}
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setPaymentFilter("all")
+                      setServiceFilter("all")
+                      setStatusFilter("all")
+                      setDateFrom(undefined)
+                      setDateTo(undefined)
+                    }}
+                    disabled={paymentFilter === "all" && serviceFilter === "all" && statusFilter === "all" && !dateFrom && !dateTo}
+                    className="h-10 px-4 border-2 gap-2 w-full sm:flex-1 lg:w-auto"
                   >
-                    <path d="M3 6h18" />
-                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                    <line x1="10" x2="10" y1="11" y2="17" />
-                    <line x1="14" x2="14" y1="11" y2="17" />
-                  </svg>
-                  Clear Filters
-                </button>
+                    <X className="size-4" />
+                    <span className="sm:hidden lg:inline">Clear All Filters</span>
+                    <span className="hidden sm:inline lg:hidden">Clear</span>
+                  </Button>
+                </div>
               </div>
-            </div>
             </div>
 
             {/* Table */}
