@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, useEffect, useMemo } from 'react'
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -47,6 +47,11 @@ const OnlinePayment = () => {
   const router = useRouter()
   const selectedService = searchParams.get('service') as ServiceType || 'cleaning'
 
+  // Ref to prevent multiple payment creations
+  const isCreatingPayment = useRef(false)
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   // Get selected service data
   const selectedServiceData = useMemo(() => {
     return services.find(s => s.id === selectedService) || services[0]
@@ -85,24 +90,40 @@ const OnlinePayment = () => {
   }, [router, selectedService])
 
   const startPolling = useCallback((intentId: string) => {
+    // Clear any existing intervals
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+
     const pollInterval = setInterval(async () => {
       const isComplete = await checkPaymentStatus(intentId)
       if (isComplete) {
         clearInterval(pollInterval)
+        pollIntervalRef.current = null
       }
     }, 3000) // Check every 3 seconds
 
+    pollIntervalRef.current = pollInterval
+
     // Cleanup after 30 minutes (QR expiry time)
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       clearInterval(pollInterval)
+      pollIntervalRef.current = null
       setPaymentState('failed')
       setError('QR code expired. Please try again.')
     }, 1800000) // 30 minutes
 
+    timeoutRef.current = timeout
   }, [checkPaymentStatus])
 
   const handlePayment = useCallback(async () => {
+    // Prevent multiple payment creations
+    if (isCreatingPayment.current) {
+      console.log('Payment creation already in progress, skipping...')
+      return
+    }
+
     try {
+      isCreatingPayment.current = true
       setPaymentState('creating')
       setError(null)
 
@@ -134,17 +155,37 @@ const OnlinePayment = () => {
       console.error('Payment error:', err)
       setError(err.message)
       setPaymentState('failed')
+      isCreatingPayment.current = false
     }
   }, [selectedServiceData, startPolling])
 
-  // Auto-generate QR on page load
+  // Auto-generate QR on page load - only once
   useEffect(() => {
-    if (selectedService && paymentState === 'idle') {
+    if (selectedService && paymentState === 'idle' && !isCreatingPayment.current) {
       handlePayment()
     }
   }, [selectedService, paymentState, handlePayment])
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      isCreatingPayment.current = false
+    }
+  }, [])
+
   const handleCancel = () => {
+    // Stop polling
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    
+    // Reset refs
+    pollIntervalRef.current = null
+    timeoutRef.current = null
+    isCreatingPayment.current = false
+    
+    // Navigate back
     router.push('/user/payment')
   }
 
