@@ -4,7 +4,7 @@ import { useCallback, useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, CheckCircle2, XCircle, ArrowLeft } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, ArrowLeft, TestTube } from 'lucide-react'
 
 type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
 
@@ -70,11 +70,8 @@ const OnlinePayment = () => {
 
       if (data.success) {
         if (data.status === 'succeeded') {
-          setPaymentState('success')
-          // Redirect to success page after 2 seconds
-          setTimeout(() => {
-            router.push(`/user/success/payment?service=${selectedService}`)
-          }, 2000)
+          // Redirect immediately to success page
+          router.push(`/user/success/payment?service=${selectedService}`)
           return true
         } else if (data.status === 'failed') {
           setPaymentState('failed')
@@ -205,17 +202,39 @@ const OnlinePayment = () => {
     router.back()
   }
 
+  // TEST ONLY: Simulate successful payment
+  const handleTestSuccess = async () => {
+    console.log('🧪 TEST: Simulating payment success')
+    // Stop polling
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    
+    // Cancel the payment intent to void the QR code
+    if (paymentIntentId) {
+      try {
+        console.log('🧪 TEST: Cancelling payment intent:', paymentIntentId)
+        await fetch('/api/payment/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentIntentId })
+        })
+        console.log('🧪 TEST: Payment intent cancelled (QR code voided)')
+      } catch (error) {
+        console.error('Failed to cancel payment intent:', error)
+        // Continue to redirect anyway
+      }
+    }
+    
+    // Redirect immediately to success page
+    router.push(`/user/success/payment?service=${selectedService}`)
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <Card className="bg-white/80 backdrop-blur-md shadow-2xl border border-white/50">
         <CardHeader className="border-white/30">
           <CardTitle className="text-2xl flex items-center justify-center gap-2 text-gray-800">
-            {paymentState === 'success' ? (
-              <>
-                <CheckCircle2 className="w-6 h-6 text-green-500" />
-                Payment Successful!
-              </>
-            ) : paymentState === 'failed' ? (
+            {paymentState === 'failed' ? (
               <>
                 <XCircle className="w-6 h-6 text-red-500" />
                 Payment Failed
@@ -300,6 +319,18 @@ const OnlinePayment = () => {
                   <ArrowLeft className="w-4 h-4 mr-2 text-white-800" />
                   Cancel Payment
                 </Button>
+
+                {/* TEST BUTTON - Only visible when enabled */}
+                {process.env.NEXT_PUBLIC_ENABLE_PAYMENT_TEST === 'true' && (
+                  <Button
+                    onClick={handleTestSuccess}
+                    variant="outline"
+                    className="w-full bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300 flex items-center justify-center gap-2"
+                  >
+                    <TestTube className="w-4 h-4" />
+                    Test Success
+                  </Button>
+                )}
               </div>
 
               {/* Right Side - QR Code */}
@@ -324,16 +355,6 @@ const OnlinePayment = () => {
               <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-white/40">
                 <Loader2 className="w-12 h-12 animate-spin mx-auto text-blue-600 mb-4" />
                 <p className="text-lg font-medium text-gray-800">Verifying payment...</p>
-              </div>
-            </div>
-          )}
-
-          {paymentState === 'success' && (
-            <div className="text-center py-8">
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-green-200/50">
-                <CheckCircle2 className="w-16 h-16 mx-auto text-green-500 mb-4" />
-                <p className="text-lg font-medium text-gray-800">Payment completed successfully!</p>
-                <p className="text-sm text-gray-600 mt-2">Redirecting...</p>
               </div>
             </div>
           )}
