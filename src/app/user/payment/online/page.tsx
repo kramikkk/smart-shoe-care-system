@@ -20,19 +20,19 @@ const services: Service[] = [
     id: 'cleaning',
     name: 'Cleaning',
     description: 'Professional shoe cleaning',
-    price: 50
+    price: 45
   },
   {
     id: 'drying',
     name: 'Drying',
     description: 'Quick and effective drying',
-    price: 30
+    price: 45
   },
   {
     id: 'sterilizing',
     name: 'Sterilizing',
     description: 'UV sterilization treatment',
-    price: 40
+    price: 25
   },
   {
     id: 'package',
@@ -175,7 +175,7 @@ const OnlinePayment = () => {
     }
   }, [])
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     // Stop polling
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -185,8 +185,24 @@ const OnlinePayment = () => {
     timeoutRef.current = null
     isCreatingPayment.current = false
     
-    // Navigate back
-    router.push('/user/payment')
+    // Cancel the payment intent on PayMongo if it exists
+    if (paymentIntentId) {
+      try {
+        console.log('Cancelling payment intent:', paymentIntentId)
+        await fetch('/api/payment/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentIntentId })
+        })
+        console.log('Payment intent cancelled successfully')
+      } catch (error) {
+        console.error('Failed to cancel payment intent:', error)
+        // Still navigate back even if cancellation fails
+      }
+    }
+    
+    // Navigate back to previous page
+    router.back()
   }
 
   return (
@@ -329,9 +345,26 @@ const OnlinePayment = () => {
                 <p className="text-lg font-medium text-red-600">{error || 'Payment failed'}</p>
               </div>
               <Button
-                onClick={() => {
+                onClick={async () => {
+                  // Cancel old payment intent first
+                  if (paymentIntentId) {
+                    try {
+                      await fetch('/api/payment/cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ paymentIntentId })
+                      })
+                    } catch (err) {
+                      console.error('Failed to cancel old payment:', err)
+                    }
+                  }
+                  
+                  // Reset state and create new payment
+                  setPaymentIntentId(null)
+                  setQrImageUrl(null)
                   setPaymentState('idle')
                   setError(null)
+                  isCreatingPayment.current = false
                   handlePayment()
                 }}
                 className="bg-blue-600 hover:bg-blue-700"

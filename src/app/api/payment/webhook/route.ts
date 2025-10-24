@@ -1,9 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+
+// PayMongo webhook signature verification
+function verifyWebhookSignature(payload: string, signature: string): boolean {
+  const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET
+  
+  if (!webhookSecret) {
+    console.error('PAYMONGO_WEBHOOK_SECRET not configured')
+    return false
+  }
+
+  const expectedSignature = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(payload, 'utf8')
+    .digest('hex')
+
+  return signature === expectedSignature
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Get raw body for signature verification
+    const rawBody = await request.text()
+    const body = JSON.parse(rawBody)
     
+    // Verify webhook signature (IMPORTANT for security!)
+    const signature = request.headers.get('paymongo-signature')
+    
+    if (!signature || !verifyWebhookSignature(rawBody, signature)) {
+      console.error('⚠️ Invalid webhook signature')
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      )
+    }
+
+    console.log('✅ Webhook signature verified')
     console.log('Webhook received:', body)
 
     // PayMongo sends these events:

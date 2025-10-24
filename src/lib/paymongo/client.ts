@@ -140,6 +140,7 @@ export class PayMongoClient {
       {
         method: 'GET',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Basic ${authToken}`,
         },
       }
@@ -151,5 +152,35 @@ export class PayMongoClient {
     }
 
     return await response.json()
+  }
+
+  /**
+   * Cancel/Void a Payment Intent
+   * This prevents the QR code from being used after user cancels
+   */
+  async cancelPaymentIntent(paymentIntentId: string) {
+    console.log('Cancelling Payment Intent:', paymentIntentId)
+
+    const response = await fetch(
+      `${PAYMONGO_API_URL}/payment_intents/${paymentIntentId}/cancel`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${authToken}`,
+        },
+      }
+    )
+
+    if (!response.ok) {
+      const error = await response.json()
+      console.error('PayMongo Cancel Payment Intent Error:', error)
+      throw new Error(error.errors?.[0]?.detail || 'Failed to cancel payment intent')
+    }
+
+    const result = await response.json()
+    console.log('Payment Intent Cancelled:', result.data.attributes.status)
+    
+    return result
   }
 }
