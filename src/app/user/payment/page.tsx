@@ -9,14 +9,13 @@ import { useSearchParams } from 'next/navigation'
 
 const Payment = () => {
   const searchParams = useSearchParams()
-  const mode = searchParams.get('mode')
   const service = searchParams.get('service')
   
   // Determine service display name
   const getServiceName = () => {
-    if (mode === 'auto') return 'Auto Mode'
+    if (service === 'package') return 'Package'
     if (service) return service.charAt(0).toUpperCase() + service.slice(1)
-    return 'Auto'
+    return 'Package'
   }
 
   const summaryData = [
@@ -26,7 +25,7 @@ const Payment = () => {
   ]
 
   // Build query string for payment links
-  const queryString = mode ? `mode=${mode}` : service ? `service=${service}` : ''
+  const queryString = service ? `service=${service}` : ''
 
   const paymentMethods = [
     {

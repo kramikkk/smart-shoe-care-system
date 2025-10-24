@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 
 export default function PaymentSuccess() {
   const searchParams = useSearchParams();
-  const mode = searchParams.get('mode');
   const service = searchParams.get('service');
   const router = useRouter();
   const [countdown, setCountdown] = useState(3);
@@ -26,8 +25,8 @@ export default function PaymentSuccess() {
 
   useEffect(() => {
     if (countdown === 0) {
-      // Redirect based on mode or service
-      if (mode === 'auto') {
+      // Redirect based on service
+      if (service === 'package') {
         router.push('/user/mode/auto');
       } else if (service) {
         router.push(`/user/mode/custom/progress?service=${service}`);
@@ -35,10 +34,10 @@ export default function PaymentSuccess() {
         router.push('/user');
       }
     }
-  }, [countdown, mode, service, router]);
+  }, [countdown, service, router]);
 
   const getMessage = () => {
-    if (mode === 'auto') {
+    if (service === 'package') {
       return "Full automatic cleaning process will begin shortly.";
     }
     if (service === 'cleaning') {

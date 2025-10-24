@@ -10,7 +10,6 @@ import { useSearchParams } from 'next/navigation'
 
 const Offline = () => {
   const searchParams = useSearchParams()
-  const mode = searchParams.get('mode')
   const service = searchParams.get('service')
   
   const amountDue = 100
@@ -19,13 +18,10 @@ const Offline = () => {
   
   // Determine the redirect URL after payment
   const getRedirectUrl = () => {
-    if (mode === 'auto') {
-      return '/user/success/payment?mode=auto'
-    }
     if (service) {
       return `/user/success/payment?service=${service}`
     }
-    return '/user/mode/custom'
+    return '/user/success/payment?service=package'
   }
 
   return (

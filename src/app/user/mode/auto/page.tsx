@@ -45,7 +45,7 @@ const Auto = () => {
 
   useEffect(() => {
     if (timeRemaining === 0) {
-      router.push('/user/success/service?mode=auto')
+      router.push('/user/success/service?service=package')
     }
   }, [timeRemaining, router])
 

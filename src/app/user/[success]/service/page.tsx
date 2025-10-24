@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 
 export default function ProcessSuccess() {
   const searchParams = useSearchParams();
-  const mode = searchParams.get('mode');
   const service = searchParams.get('service');
   const router = useRouter();
   const [countdown, setCountdown] = useState(3);
@@ -33,7 +32,7 @@ export default function ProcessSuccess() {
   }, [countdown, router]);
 
   const getMessage = () => {
-    if (mode === 'auto') {
+    if (service === 'package') {
       return "Automatic cleaning, drying, and sterilizing completed successfully!";
     }
     if (service === 'cleaning') {
