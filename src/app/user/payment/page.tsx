@@ -42,7 +42,7 @@ const Payment = () => {
       title: 'Online Payment',
       descriptions: [
         'Scan QR code with your mobile device',
-        'Supports GCash, PayMaya, and GoTyme',
+        'Supports GCash, PayMaya, and GrabPay',
       ],
       link: `/user/payment/online${queryString ? `?${queryString}` : ''}`,
     },
