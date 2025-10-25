@@ -17,3 +17,6 @@ async function createAdminUser() {
 }
 
 createAdminUser();
+
+// Run this script with the following command:
+// npx tsx scripts/create-admin.ts
