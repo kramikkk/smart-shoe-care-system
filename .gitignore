@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# uploaded files
+/public/avatars/*
+!/public/avatars/.gitkeep
+
 # debug
 npm-debug.log*
 yarn-debug.log*
