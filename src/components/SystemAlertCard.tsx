@@ -12,15 +12,15 @@ import {
 
 const SystemAlertCard = () => {
   return (
-    <div>
-        <Card className="@container/card h-full">
+    <div className="flex flex-col h-full">
+        <Card className="@container/card flex-1 flex flex-col">
             <CardHeader>
                 <div className="flex items-center gap-2">
                   <AlertCircle className="text-red-500" />
                   <CardTitle>System Alerts</CardTitle>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 flex items-center justify-center">
                 <Empty>
                 <EmptyHeader>
                     <EmptyMedia variant="icon">

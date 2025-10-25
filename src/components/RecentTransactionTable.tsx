@@ -29,8 +29,8 @@ const RecentTransactionTable = () => {
 }
 
   return (
-    <div>
-        <Card>
+    <div className="flex flex-col h-full">
+        <Card className="flex-1 flex flex-col">
             <CardHeader>
                 <div className="flex items-center gap-2">
                   <ArrowLeftRight className="text-purple-500" />
@@ -46,7 +46,7 @@ const RecentTransactionTable = () => {
                   </Link>
                 </CardAction>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 overflow-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -54,6 +54,8 @@ const RecentTransactionTable = () => {
                         <TableHead>Date & Time</TableHead>
                         <TableHead>Method</TableHead>
                         <TableHead>Service Type</TableHead>
+                        <TableHead>Shoe Type</TableHead>
+                        <TableHead>Care Type</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead>Status</TableHead>
                         </TableRow>
@@ -65,6 +67,8 @@ const RecentTransactionTable = () => {
                             <TableCell>{transaction.dateTime}</TableCell>
                             <TableCell>{transaction.paymentMethod}</TableCell>
                             <TableCell>{transaction.serviceType}</TableCell>
+                            <TableCell>{transaction.shoeType}</TableCell>
+                            <TableCell>{transaction.careType}</TableCell>
                             <TableCell>
                               {new Intl.NumberFormat("en-US", {
                                 style: "currency",

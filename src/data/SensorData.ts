@@ -15,13 +15,13 @@ export const SensorData = {
     range: "18-30°C",
     status: "Warning"
   },
-  humidity: {
-    name: "Humidity",
-    value: "45%",
-    percentage: 45,
+  foamLevel: {
+    name: "Foam Level",
+    value: "65%",
+    percentage: 65,
     icon: Droplets,
     color: "text-blue-600",
-    range: "40-70%",
+    range: "0-100%",
     status: "Normal"
   },
   atomizerLevel: {
