@@ -24,6 +24,8 @@ export default function TransactionPage() {
   const [search, setSearch] = useState("")
   const [paymentFilter, setPaymentFilter] = useState<string>("all")
   const [serviceFilter, setServiceFilter] = useState<string>("all")
+  const [shoeTypeFilter, setShoeTypeFilter] = useState<string>("all")
+  const [careTypeFilter, setCareTypeFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
@@ -47,6 +49,12 @@ export default function TransactionPage() {
 
       const matchesService =
         serviceFilter === "all" || tx.serviceType === serviceFilter
+
+      const matchesShoeType =
+        shoeTypeFilter === "all" || tx.shoeType === shoeTypeFilter
+
+      const matchesCareType =
+        careTypeFilter === "all" || tx.careType === careTypeFilter
 
       const matchesStatus =
         statusFilter === "all" || tx.status === statusFilter
@@ -76,9 +84,9 @@ export default function TransactionPage() {
         return true
       })()
 
-      return matchesSearch && matchesPayment && matchesService && matchesStatus && matchesDate
+      return matchesSearch && matchesPayment && matchesService && matchesShoeType && matchesCareType && matchesStatus && matchesDate
     })
-  }, [search, paymentFilter, serviceFilter, statusFilter, dateFrom, dateTo])
+  }, [search, paymentFilter, serviceFilter, shoeTypeFilter, careTypeFilter, statusFilter, dateFrom, dateTo])
 
   const totalPages = Math.ceil(filteredData.length / pageSize)
 
@@ -127,13 +135,13 @@ export default function TransactionPage() {
                 {/* Left Side - Filter Selects */}
                 <div className="flex flex-col sm:flex-row gap-3">
                   {/* Payment Method Filter */}
-                  <div className="w-full sm:flex-1 lg:min-w-[140px] lg:w-auto">
+                  <div className="w-full sm:w-auto lg:min-w-[140px]">
                     <Select value={paymentFilter} onValueChange={setPaymentFilter}>
                       <SelectTrigger className="h-10 border-2 w-full">
-                        <SelectValue placeholder="All Payments" />
+                        <SelectValue placeholder="Payment" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Payments</SelectItem>
+                        <SelectItem value="all">Payment</SelectItem>
                         <SelectItem value="Cash">
                           <div className="flex items-center gap-2">
                             <div className="size-2 rounded-full bg-green-500"></div>
@@ -151,13 +159,13 @@ export default function TransactionPage() {
                   </div>
 
                   {/* Service Filter */}
-                  <div className="w-full sm:flex-1 lg:min-w-[140px] lg:w-auto">
+                  <div className="w-full sm:w-auto lg:min-w-[140px]">
                     <Select value={serviceFilter} onValueChange={setServiceFilter}>
                       <SelectTrigger className="h-10 border-2 w-full">
-                        <SelectValue placeholder="All Services" />
+                        <SelectValue placeholder="Service" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Services</SelectItem>
+                        <SelectItem value="all">Service</SelectItem>
                         <SelectItem value="Cleaning">
                           <div className="flex items-center gap-2">
                             <div className="size-2 rounded-full bg-blue-500"></div>
@@ -187,13 +195,13 @@ export default function TransactionPage() {
                   </div>
 
                   {/* Status Filter */}
-                  <div className="w-full sm:flex-1 lg:min-w-[140px] lg:w-auto">
+                  <div className="w-full sm:w-auto lg:min-w-[140px]">
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
                       <SelectTrigger className="h-10 border-2 w-full">
-                        <SelectValue placeholder="All Statuses" />
+                        <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="all">Status</SelectItem>
                         <SelectItem value="Success">
                           <div className="flex items-center gap-2">
                             <div className="size-2 rounded-full bg-green-500"></div>
@@ -210,6 +218,66 @@ export default function TransactionPage() {
                           <div className="flex items-center gap-2">
                             <div className="size-2 rounded-full bg-red-500"></div>
                             Failed
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Shoe Type Filter */}
+                  <div className="w-full sm:w-auto lg:min-w-[140px]">
+                    <Select value={shoeTypeFilter} onValueChange={setShoeTypeFilter}>
+                      <SelectTrigger className="h-10 border-2 w-full">
+                        <SelectValue placeholder="Shoe Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Shoe Type</SelectItem>
+                        <SelectItem value="Canvas">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-amber-500"></div>
+                            Canvas
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Rubber">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-slate-500"></div>
+                            Rubber
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Mesh">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-cyan-500"></div>
+                            Mesh
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Care Type Filter */}
+                  <div className="w-full sm:w-auto lg:min-w-[140px]">
+                    <Select value={careTypeFilter} onValueChange={setCareTypeFilter}>
+                      <SelectTrigger className="h-10 border-2 w-full">
+                        <SelectValue placeholder="Care Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Care Type</SelectItem>
+                        <SelectItem value="Gentle">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-green-500"></div>
+                            Gentle
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Normal">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-blue-500"></div>
+                            Normal
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Strong">
+                          <div className="flex items-center gap-2">
+                            <div className="size-2 rounded-full bg-red-500"></div>
+                            Strong
                           </div>
                         </SelectItem>
                       </SelectContent>
@@ -271,15 +339,17 @@ export default function TransactionPage() {
                     onClick={() => {
                       setPaymentFilter("all")
                       setServiceFilter("all")
+                      setShoeTypeFilter("all")
+                      setCareTypeFilter("all")
                       setStatusFilter("all")
                       setDateFrom(undefined)
                       setDateTo(undefined)
                     }}
-                    disabled={paymentFilter === "all" && serviceFilter === "all" && statusFilter === "all" && !dateFrom && !dateTo}
-                    className="h-10 px-4 border-2 gap-2 w-full sm:flex-1 lg:w-auto"
+                    disabled={paymentFilter === "all" && serviceFilter === "all" && shoeTypeFilter === "all" && careTypeFilter === "all" && statusFilter === "all" && !dateFrom && !dateTo}
+                    className="h-10 px-4 border-2 gap-2 w-full sm:w-auto"
                   >
                     <X className="size-4" />
-                    <span className="sm:hidden lg:inline">Clear All Filters</span>
+                    <span className="sm:hidden lg:inline">Clear Filters</span>
                     <span className="hidden sm:inline lg:hidden">Clear</span>
                   </Button>
                 </div>

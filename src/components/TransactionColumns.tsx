@@ -8,6 +8,8 @@ export type Transaction = {
   dateTime: string
   paymentMethod: "Cash" | "Online"
   serviceType: "Cleaning" | "Drying" | "Sterilizing" | "Package"
+  shoeType: "Canvas" | "Rubber" | "Mesh"
+  careType: "Gentle" | "Normal" | "Strong"
   amount: number
   status: "Pending" | "Success" | "Failed"
 }
@@ -41,6 +43,14 @@ export const columns: ColumnDef<Transaction>[] = [
   {
     accessorKey: "serviceType",
     header: "Service Type",
+  },
+  {
+    accessorKey: "shoeType",
+    header: "Shoe Type",
+  },
+  {
+    accessorKey: "careType",
+    header: "Care Type",
   },
   {
     accessorKey: "amount",
