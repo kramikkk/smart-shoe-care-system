@@ -18,6 +18,8 @@ import Image from "next/image";
 import { ArrowLeftRight, ChartLine, Cpu, LayoutDashboard,  } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SideBarUser } from "./SideBarUser";
+import { useEffect, useState } from "react";
+import { getSession } from "@/lib/actions/auth-action";
 
 const menu = [
   { title: "Overview", url: "/admin/dashboard", icon: LayoutDashboard },
@@ -27,6 +29,28 @@ const menu = [
 
 const SideBar = () => {
   const pathname = usePathname();
+  const [user, setUser] = useState<{ name: string; email: string; avatar: string } | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const session = await getSession();
+      if (session?.user) {
+        setUser({
+          name: session.user.name || "User",
+          email: session.user.email || "user@example.com",
+          avatar: session.user.image || "/SSCMlogo.png"
+        });
+      } else {
+        // Fallback to default user if no session
+        setUser({
+          name: "Admin",
+          email: "admin@example.com",
+          avatar: "/SSCMlogo.png"
+        });
+      }
+    };
+    fetchUser();
+  }, []);
 
   const isActive = (url: string) => {
     if (url === "/admin/dashboard") {
@@ -74,7 +98,7 @@ const SideBar = () => {
                 </SidebarGroup>
             </SidebarContent>
             <SidebarFooter>
-                <SideBarUser user={{ name: "Admin", email: "admin@example.com", avatar: "/SSCMlogo.png" }} />
+                {user && <SideBarUser user={user} />}
             </SidebarFooter>
     </Sidebar>
   )

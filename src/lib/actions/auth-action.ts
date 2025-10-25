@@ -16,3 +16,8 @@ export const signOut = async () => {
     const result = await auth.api.signOut({headers: await headers()});
     return result;
 };
+
+export const getSession = async () => {
+    const session = await auth.api.getSession({headers: await headers()});
+    return session;
+};
