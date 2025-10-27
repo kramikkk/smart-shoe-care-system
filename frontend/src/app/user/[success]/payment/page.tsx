@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 export default function PaymentSuccess() {
   const searchParams = useSearchParams();
   const service = searchParams.get('service');
+  const care = searchParams.get('care');
   const router = useRouter();
   const [countdown, setCountdown] = useState(3);
 
@@ -25,16 +26,16 @@ export default function PaymentSuccess() {
 
   useEffect(() => {
     if (countdown === 0) {
-      // Redirect based on service
+      // Redirect based on service and care
       if (service === 'package') {
-        router.push('/user/mode/auto');
+        router.push(`/user/mode/auto?care=${care || 'normal'}`);
       } else if (service) {
-        router.push(`/user/mode/custom/progress?service=${service}`);
+        router.push(`/user/mode/custom/progress?service=${service}&care=${care || 'normal'}`);
       } else {
         router.push('/user');
       }
     }
-  }, [countdown, service, router]);
+  }, [countdown, service, care, router]);
 
   const getMessage = () => {
     if (service === 'package') {

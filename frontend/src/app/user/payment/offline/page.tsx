@@ -42,6 +42,7 @@ const services: Service[] = [
 const Offline = () => {
   const searchParams = useSearchParams()
   const service = searchParams.get('service') as ServiceType || 'package'
+  const care = searchParams.get('care') || 'normal'
   
   // Get the service details based on the service parameter
   const selectedService = useMemo(() => {
@@ -54,7 +55,7 @@ const Offline = () => {
   
   // Determine the redirect URL after payment
   const getRedirectUrl = () => {
-    return `/user/success/payment?service=${service}`
+    return `/user/success/payment?service=${service}&care=${care}`
   }
 
   return (

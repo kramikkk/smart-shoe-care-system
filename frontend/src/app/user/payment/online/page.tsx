@@ -46,6 +46,7 @@ const OnlinePayment = () => {
   const searchParams = useSearchParams()
   const router = useRouter()
   const selectedService = searchParams.get('service') as ServiceType || 'cleaning'
+  const selectedCare = searchParams.get('care') || 'normal'
 
   // Ref to prevent multiple payment creations
   const isCreatingPayment = useRef(false)
@@ -70,8 +71,8 @@ const OnlinePayment = () => {
 
       if (data.success) {
         if (data.status === 'succeeded') {
-          // Redirect immediately to success page
-          router.push(`/user/success/payment?service=${selectedService}`)
+          // Redirect immediately to success page with service and care
+          router.push(`/user/success/payment?service=${selectedService}&care=${selectedCare}`)
           return true
         } else if (data.status === 'failed') {
           setPaymentState('failed')
@@ -84,7 +85,7 @@ const OnlinePayment = () => {
       console.error('Status check error:', error)
       return false
     }
-  }, [router, selectedService])
+  }, [router, selectedService, selectedCare])
 
   const startPolling = useCallback((intentId: string) => {
     // Clear any existing intervals
@@ -225,8 +226,8 @@ const OnlinePayment = () => {
       }
     }
     
-    // Redirect immediately to success page
-    router.push(`/user/success/payment?service=${selectedService}`)
+    // Redirect immediately to success page with service and care
+    router.push(`/user/success/payment?service=${selectedService}&care=${selectedCare}`)
   }
 
   return (
@@ -275,16 +276,16 @@ const OnlinePayment = () => {
                 </div>
 
                 {/* Instructions */}
-                <div className="bg-white/50 backdrop-blur-sm rounded-xl p-5 border border-white/40">
+                <div className="bg-white/70 backdrop-blur-sm p-5 rounded-xl border border-white/40 shadow-sm">
                   <h4 className="font-semibold text-base text-gray-800 mb-3">Payment Instructions</h4>
                   <div className="space-y-3 text-sm text-gray-600">
                     <div className="flex items-start gap-2">
                       <span className="font-bold text-blue-600">1.</span>
-                      <p>Open your GCash, PayMaya, or GrabPay app</p>
+                      <p>Open your GCash, PayMaya, or any QRPH supported app</p>
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="font-bold text-blue-600">2.</span>
-                      <p>Scan the QR code on the right</p>
+                      <p>Scan the QR code on the right side</p>
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="font-bold text-blue-600">3.</span>
@@ -298,7 +299,7 @@ const OnlinePayment = () => {
                 </div>
 
                 {/* Status */}
-                <div className="bg-white/50 backdrop-blur-sm rounded-xl p-4 border border-white/40">
+                <div className="bg-white/70 backdrop-blur-sm p-5 rounded-xl border border-white/40 shadow-sm">
                   <div className="flex items-center justify-center gap-2 mb-2">
                     <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
                     <p className="text-sm text-gray-600 font-medium">
@@ -324,8 +325,8 @@ const OnlinePayment = () => {
                 {process.env.NEXT_PUBLIC_ENABLE_PAYMENT_TEST === 'true' && (
                   <Button
                     onClick={handleTestSuccess}
-                    variant="outline"
-                    className="w-full bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300 flex items-center justify-center gap-2"
+                    variant="default"
+                    className="w-full bg-yellow-400 hover:bg-yellow-200 text-yellow-800 border-yellow-300 flex items-center justify-center gap-2"
                   >
                     <TestTube className="w-4 h-4" />
                     Test Success
@@ -335,7 +336,7 @@ const OnlinePayment = () => {
 
               {/* Right Side - QR Code */}
               <div className="flex items-center justify-center">
-                <div className="border border-white/40 rounded-xl p-8 bg-white/70 backdrop-blur-sm shadow-md">
+                <div className="border border-white/40 rounded-xl p-8 bg-white/70 backdrop-blur-sm shadow-md h-full flex flex-col justify-center items-center">
                   <img 
                     src={qrImageUrl} 
                     alt="QRPH Payment QR Code" 

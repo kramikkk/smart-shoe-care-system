@@ -15,29 +15,35 @@ const CustomProgress = () => {
   const getServiceDuration = (serviceType: string, careType: string) => {
     const durations: Record<string, Record<string, number>> = {
       cleaning: {
-        gentle: 180, // 3 minutes
-        normal: 120, // 2 minutes
-        strong: 90   // 1.5 minutes
+        gentle: 180,
+        normal: 180,
+        strong: 180 
       },
       drying: {
-        gentle: 90,  // 1.5 minutes (45-60 min in production)
-        normal: 60,  // 1 minute (30-40 min in production)
-        strong: 45   // 45 seconds (20-30 min in production)
+        gentle: 60, 
+        normal: 120, 
+        strong: 180
       },
       sterilizing: {
-        gentle: 90,  // 1.5 minutes (15 min in production)
-        normal: 60,  // 1 minute (10 min in production)
-        strong: 120  // 2 minutes (20 min in production)
+        gentle: 60,
+        normal: 120, 
+        strong: 180 
       }
     }
 
     return durations[serviceType.toLowerCase()]?.[careType.toLowerCase()] || 120
   }
 
+  const [timeRemaining, setTimeRemaining] = useState(() => getServiceDuration(service, care))
   const totalTime = getServiceDuration(service, care)
-  const [timeRemaining, setTimeRemaining] = useState(totalTime)
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
+
+  // Reset timer when service or care parameters change
+  useEffect(() => {
+    const newDuration = getServiceDuration(service, care)
+    setTimeRemaining(newDuration)
+  }, [service, care])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -51,7 +57,7 @@ const CustomProgress = () => {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [])
+  }, [service, care])
 
   useEffect(() => {
     if (timeRemaining === 0) {
@@ -112,7 +118,7 @@ const CustomProgress = () => {
         {serviceConfig.name} - {getCareTypeName()}
       </h2>
       <p className="text-center text-gray-600 mt-4">
-        Please wait while we {serviceConfig.name.toLowerCase()} your shoes with {care} care. You will be notified once the process is complete.
+        Please wait while we {serviceConfig.name.toLowerCase()} your shoes with {care} care.
       </p>
       <p className="text-center text-4xl font-bold text-gray-600 mt-4">
         Time Remaining: {formatTime(timeRemaining)}
