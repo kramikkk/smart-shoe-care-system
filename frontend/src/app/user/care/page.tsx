@@ -12,99 +12,27 @@ function CareContent() {
   const service = searchParams.get('service') || 'cleaning'
 
   // Service-specific descriptions for each care type
-  const getDescriptions = (careId: string) => {
-    const descriptions: Record<string, Record<string, { main: string; details: string[] }>> = {
+  const getDescription = (careId: string) => {
+    const descriptions: Record<string, Record<string, string>> = {
       cleaning: {
-        gentle: {
-          main: 'Soft brushing for delicate shoe materials',
-          details: [
-            'Light pressure & slow rotation',
-            'Ideal for delicate shoes',
-          ]
-        },
-        normal: {
-          main: 'Standard cleaning for everyday shoes',
-          details: [
-            'Balanced pressure & rotation',
-            'Ideal for most shoe types',
-          ]
-        },
-        strong: {
-          main: 'Hard cleaning for heavily stained shoes',
-          details: [
-            'Strong pressure & fast rotation',
-            'Ideal for tough shoes'
-          ]
-        }
+        gentle: 'Soft brushing with light pressure and slow rotation, ideal for delicate shoe materials',
+        normal: 'Standard cleaning with balanced pressure and rotation, suitable for everyday shoes',
+        strong: 'Strong cleaning with strong pressure and fast rotation, perfect for heavily stained shoes'
       },
       drying: {
-        gentle: {
-          main: 'Mild drying',
-          details: [
-            'Shortened cycle (1 min)',
-          ]
-        },
-        normal: {
-          main: 'Standard drying',
-          details: [
-            'Standard cycle (3 min)',
-          ]
-        },
-        strong: {
-          main: 'Strong drying',
-          details: [
-            'Extended cycle (5 min)',
-          ]
-        }
+        gentle: 'Mild drying cycle (1 minute)',
+        normal: 'Standard drying cycle (3 minutes)',
+        strong: 'Extended drying cycle (5 minutes)'
       },
       sterilizing: {
-        gentle: {
-          main: 'Mild UV sterilization & deodorization',
-          details: [
-            'Standard cycle (1 min)'
-          ]
-        },
-        normal: {
-          main: 'Standard UV sterilization & deodorization',
-          details: [
-            'Standard cycle (3 min)'
-          ]
-        },
-        strong: {
-          main: 'Maximum UV sterilization & deodorization',
-          details: [
-            'Extended cycle (5 min)'
-          ]
-        }
+        gentle: 'Mild UV sterilization and deodorization (1 minute)',
+        normal: 'Standard UV sterilization and deodorization (3 minutes)',
+        strong: 'Maximum UV sterilization and deodorization (5 minutes)'
       },
       package: {
-        gentle: {
-          main: 'Complete care with gentle settings',
-          details: [
-            'Soft cleaning + Low-heat drying + Mild UV',
-            'Perfect for delicate shoes',
-            'Total time: ~90 minutes',
-            'Safest complete treatment'
-          ]
-        },
-        normal: {
-          main: 'Complete care with standard settings',
-          details: [
-            'Standard cleaning + Moderate drying + Normal UV',
-            'Suitable for most shoe types',
-            'Total time: ~60 minutes',
-            'Balanced complete treatment'
-          ]
-        },
-        strong: {
-          main: 'Complete care with maximum power',
-          details: [
-            'Deep cleaning + Fast drying + Maximum UV',
-            'Best for heavily soiled shoes',
-            'Total time: ~45 minutes',
-            'Most powerful treatment'
-          ]
-        }
+        gentle: 'Complete care with gentle settings: Soft cleaning + Low-heat drying + Mild UV. Perfect for delicate shoes (~90 min)',
+        normal: 'Complete care with standard settings: Standard cleaning + Moderate drying + Normal UV. Suitable for most shoes (~60 min)',
+        strong: 'Complete care with maximum power: Strong cleaning + Fast drying + Maximum UV. Best for heavily soiled shoes (~45 min)'
       }
     }
 
@@ -140,22 +68,14 @@ function CareContent() {
       <div className='flex gap-8 justify-center'>
         {careTypes.map((care) => {
           const Icon = care.icon
-          const desc = getDescriptions(care.id)
+          const desc = getDescription(care.id)
           
           return (
             <Item key={care.id} className='text-center bg-white/50 p-8 rounded-lg shadow-lg w-80 flex flex-col items-center hover:shadow-xl transition-shadow'>
               <Icon className={`w-16 h-16 ${care.color}`} />
               <ItemContent className="flex flex-col items-center">
                 <h2 className="text-2xl font-bold mb-2">{care.name}</h2>
-                <p className="text-lg text-gray-700 font-medium mb-4">{desc.main}</p>
-                <ul className="text-left space-y-2 mb-6 w-full px-4">
-                  {desc.details.map((detail, idx) => (
-                    <li key={idx} className="text-sm text-gray-600 flex items-start">
-                      <span className="mr-2 text-cyan-600">•</span>
-                      <span>{detail}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-xl text-gray-700 mb-6 px-2">{desc}</p>
                 <Link href={`/user/payment?service=${service}&care=${care.id}`}>
                   <Button className="px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
                     <p className='text-lg font-bold'>Select {care.name}</p>
