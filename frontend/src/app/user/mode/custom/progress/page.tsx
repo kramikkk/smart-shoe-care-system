@@ -8,23 +8,33 @@ import { useSearchParams, useRouter } from 'next/navigation'
 const CustomProgress = () => {
   const searchParams = useSearchParams()
   const service = searchParams.get('service') || 'cleaning'
+  const care = searchParams.get('care') || 'normal'
   const router = useRouter()
   
-  // Different durations for each service
-  const getServiceDuration = (serviceType: string) => {
-    switch (serviceType.toLowerCase()) {
-      case 'cleaning':
-        return 120 // 2 minutes
-      case 'drying':
-        return 60 // 1 minute
-      case 'sterilizing':
-        return 120 // 2 minutes
-      default:
-        return 180
+  // Different durations for each service and care type combination
+  const getServiceDuration = (serviceType: string, careType: string) => {
+    const durations: Record<string, Record<string, number>> = {
+      cleaning: {
+        gentle: 180, // 3 minutes
+        normal: 120, // 2 minutes
+        strong: 90   // 1.5 minutes
+      },
+      drying: {
+        gentle: 90,  // 1.5 minutes (45-60 min in production)
+        normal: 60,  // 1 minute (30-40 min in production)
+        strong: 45   // 45 seconds (20-30 min in production)
+      },
+      sterilizing: {
+        gentle: 90,  // 1.5 minutes (15 min in production)
+        normal: 60,  // 1 minute (10 min in production)
+        strong: 120  // 2 minutes (20 min in production)
+      }
     }
+
+    return durations[serviceType.toLowerCase()]?.[careType.toLowerCase()] || 120
   }
 
-  const totalTime = getServiceDuration(service)
+  const totalTime = getServiceDuration(service, care)
   const [timeRemaining, setTimeRemaining] = useState(totalTime)
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
@@ -45,9 +55,9 @@ const CustomProgress = () => {
 
   useEffect(() => {
     if (timeRemaining === 0) {
-      router.push(`/user/success/service?service=${service}`)
+      router.push(`/user/success/service?service=${service}&care=${care}`)
     }
-  }, [timeRemaining, router, service])
+  }, [timeRemaining, router, service, care])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -84,6 +94,10 @@ const CustomProgress = () => {
     }
   }
 
+  const getCareTypeName = () => {
+    return care.charAt(0).toUpperCase() + care.slice(1)
+  }
+
   const serviceConfig = getServiceConfig()
 
   return (
@@ -95,10 +109,10 @@ const CustomProgress = () => {
         {serviceConfig.icon}
       </div>
       <h2 className="text-4xl font-bold text-center mt-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-        {serviceConfig.name}
+        {serviceConfig.name} - {getCareTypeName()}
       </h2>
       <p className="text-center text-gray-600 mt-4">
-        Please wait while we {serviceConfig.name.toLowerCase()} your shoes. You will be notified once the process is complete.
+        Please wait while we {serviceConfig.name.toLowerCase()} your shoes with {care} care. You will be notified once the process is complete.
       </p>
       <p className="text-center text-4xl font-bold text-gray-600 mt-4">
         Time Remaining: {formatTime(timeRemaining)}

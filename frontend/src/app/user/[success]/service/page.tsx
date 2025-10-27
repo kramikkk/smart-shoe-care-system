@@ -9,7 +9,7 @@ export default function ProcessSuccess() {
   const searchParams = useSearchParams();
   const service = searchParams.get('service');
   const router = useRouter();
-  const [countdown, setCountdown] = useState(3);
+  const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
     const countdownInterval = setInterval(() => {
@@ -51,7 +51,8 @@ export default function ProcessSuccess() {
     <div className="flex flex-col items-center justify-center min-h-screen text-center">
       <div className="bg-white/50 py-10 px-30 rounded-2xl shadow-xl backdrop-blur-sm">
         <PartyPopper className="w-16 h-16 text-green-600 mx-auto mb-4" />
-        <h1 className="text-4xl font-bold text-green-600">Process Completed</h1>
+        <h1 className="text-6xl font-bold text-green-600">Thank you!</h1>
+        <h1 className="text-3xl font-bold text-green-600">Process Completed</h1>
         <p className="mt-3 text-lg">{getMessage()}</p>
         <p className="mt-2 text-gray-600">Redirecting to home in {countdown} seconds...</p>
         <Link href="/user" className="text-blue-600 mt-2 underline">

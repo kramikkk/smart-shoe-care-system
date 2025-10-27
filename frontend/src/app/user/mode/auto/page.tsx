@@ -4,15 +4,54 @@ import { Droplets, ShieldCheck, Wind } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
 import { Progress } from "@/components/ui/progress"
 import { Item } from '@/components/ui/item'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 const Auto = () => {
-  const totalTime = 300 // 5 minutes in seconds
-  const [timeRemaining, setTimeRemaining] = useState(totalTime)
-  const [currentStage, setCurrentStage] = useState<'cleaning' | 'drying' | 'sterilizing'>('cleaning')
+  const searchParams = useSearchParams()
+  const care = searchParams.get('care') || 'normal'
   const router = useRouter()
 
+  // Different durations for package based on care type
+  const getPackageDuration = (careType: string) => {
+    const durations: Record<string, number> = {
+      gentle: 360, // 6 minutes (~90 min in production)
+      normal: 240, // 4 minutes (~60 min in production)
+      strong: 180  // 3 minutes (~45 min in production)
+    }
+    return durations[careType.toLowerCase()] || 240
+  }
+
+  const totalTime = getPackageDuration(care)
+  const [timeRemaining, setTimeRemaining] = useState(totalTime)
+  const [currentStage, setCurrentStage] = useState<'cleaning' | 'drying' | 'sterilizing'>('cleaning')
+
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
+
+  // Calculate stage durations based on care type
+  const getStageDurations = () => {
+    switch (care.toLowerCase()) {
+      case 'gentle':
+        return {
+          cleaning: 180, // 3 minutes (first half)
+          drying: 90,    // 1.5 minutes (middle)
+          sterilizing: 90 // 1.5 minutes (last)
+        }
+      case 'strong':
+        return {
+          cleaning: 90,  // 1.5 minutes
+          drying: 45,    // 45 seconds
+          sterilizing: 45 // 45 seconds
+        }
+      default: // normal
+        return {
+          cleaning: 120, // 2 minutes
+          drying: 60,    // 1 minute
+          sterilizing: 60 // 1 minute
+        }
+    }
+  }
+
+  const stageDurations = getStageDurations()
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -24,13 +63,13 @@ const Auto = () => {
         
         const newTime = prev - 1
         
-        // Update stage based on time remaining
-        // Cleaning: 300-180 (2 minutes)
-        // Drying: 181-61 (1 minutes)
-        // Sterilizing: 120-0 (2 minutes)
-        if (newTime > 180) {
+        // Update stage based on time remaining and care type
+        const cleaningEnd = totalTime - stageDurations.cleaning
+        const dryingEnd = cleaningEnd - stageDurations.drying
+        
+        if (newTime > cleaningEnd) {
           setCurrentStage('cleaning')
-        } else if (newTime > 120) {
+        } else if (newTime > dryingEnd) {
           setCurrentStage('drying')
         } else {
           setCurrentStage('sterilizing')
@@ -41,13 +80,13 @@ const Auto = () => {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [])
+  }, [totalTime, stageDurations])
 
   useEffect(() => {
     if (timeRemaining === 0) {
-      router.push('/user/success/service?service=package')
+      router.push(`/user/success/service?service=package&care=${care}`)
     }
-  }, [timeRemaining, router])
+  }, [timeRemaining, router, care])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -77,6 +116,10 @@ const Auto = () => {
     }
   }
 
+  const getCareTypeName = () => {
+    return care.charAt(0).toUpperCase() + care.slice(1)
+  }
+
   return (
     <div>
       <h1 className="text-5xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
@@ -86,10 +129,10 @@ const Auto = () => {
         {getStageIcon()}
       </div>
       <h2 className="text-4xl font-bold text-center mt-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-        {getStageName()}
+        {getStageName()} - {getCareTypeName()} Care
       </h2>
       <p className="text-center text-gray-600 mt-4">
-        Please wait while we take care of your shoes. You will be notified once the process is complete.
+        Please wait while we take care of your shoes with {care} care settings. You will be notified once the process is complete.
       </p>
       <p className="text-center text-4xl font-bold text-gray-600 mt-4">
         Time Remaining: {formatTime(timeRemaining)}
