@@ -232,10 +232,10 @@ const OnlinePayment = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <Card className="bg-white/80 backdrop-blur-md shadow-2xl border border-white/50">
-        <CardHeader className="border-white/30">
-          <CardTitle className="text-2xl flex items-center justify-center gap-2 text-gray-800">
+    <div className="container mx-auto px-4 py-6 max-w-4xl">
+      <Card className="bg-white/80 backdrop-blur-md shadow-2xl border border-white/50 gap-0">
+        <CardHeader className="border-white/30 pb-0">
+          <CardTitle className="text-2xl font-bold flex items-center justify-center text-gray-800">
             {paymentState === 'failed' ? (
               <>
                 <XCircle className="w-6 h-6 text-red-500" />
@@ -247,39 +247,39 @@ const OnlinePayment = () => {
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="px-6">
+        <CardContent className="px-4 py-4">
           {/* Payment States */}
           {paymentState === 'creating' && (
-            <div className="text-center py-8">
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-white/40">
-                <Loader2 className="w-12 h-12 animate-spin mx-auto text-blue-600 mb-4" />
-                <p className="text-lg font-medium text-gray-800">Generating QR code...</p>
+            <div className="text-center py-6 max-w-md mx-auto">
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl border border-white/40">
+                <Loader2 className="w-10 h-10 animate-spin mx-auto text-blue-600 mb-3" />
+                <p className="text-xl font-medium text-gray-800">Generating QR code...</p>
               </div>
             </div>
           )}
 
           {paymentState === 'awaiting_payment' && qrImageUrl && (
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-4">
               {/* Left Side - Service Details & Instructions */}
-              <div className="space-y-6">
+              <div className="space-y-4 flex flex-col h-full">
                 {/* Service Details */}
-                <div className="bg-white/70 backdrop-blur-sm p-5 rounded-xl border border-white/40 shadow-sm">
-                  <div className="space-y-3">
+                <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl border border-white/40 shadow-sm">
+                  <div className="space-y-2">
                     <div>
-                      <h3 className="font-bold text-lg text-gray-800">{selectedServiceData.name}</h3>
-                      <p className="text-sm text-gray-600">{selectedServiceData.description}</p>
+                      <h3 className="font-bold text-xl text-gray-800">{selectedServiceData.name}</h3>
+                      <p className="text-md text-gray-600">{selectedServiceData.description}</p>
                     </div>
                     <div className="pt-2 border-t border-gray-200">
-                      <p className="text-3xl font-bold text-blue-600">₱{selectedServiceData.price}</p>
-                      <p className="text-xs text-gray-600 mt-1">Total Amount</p>
+                      <p className="text-4xl font-bold text-blue-600">₱{selectedServiceData.price}</p>
+                      <p className="text-md text-gray-600 mt-1">Total Amount</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Instructions */}
-                <div className="bg-white/70 backdrop-blur-sm p-5 rounded-xl border border-white/40 shadow-sm">
-                  <h4 className="font-semibold text-base text-gray-800 mb-3">Payment Instructions</h4>
-                  <div className="space-y-3 text-sm text-gray-600">
+                <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl border border-white/40 shadow-sm">
+                  <h4 className="font-semibold text-md text-gray-800 mb-2">Payment Instructions</h4>
+                  <div className="space-y-2 text-md text-gray-600">
                     <div className="flex items-start gap-2">
                       <span className="font-bold text-blue-600">1.</span>
                       <p>Open your GCash, PayMaya, or any QRPH supported app</p>
@@ -299,27 +299,14 @@ const OnlinePayment = () => {
                   </div>
                 </div>
 
-                {/* Status */}
-                <div className="bg-white/70 backdrop-blur-sm p-5 rounded-xl border border-white/40 shadow-sm">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                    <p className="text-sm text-gray-600 font-medium">
-                      Waiting for payment confirmation...
-                    </p>
-                  </div>
-                  <p className="text-xs text-yellow-600 font-medium text-center">
-                    ⏱️ QR code expires in 30 minutes
-                  </p>
-                </div>
-
                 {/* Cancel Button */}
                 <Button
                   onClick={handleCancel}
                   variant="default"
-                  className="w-full hover:bg-red-400 text-white-800 bg-red-500 backdrop-blur-sm border shadow-md flex items-center justify-center"
+                  className="w-full h-[72px] hover:bg-red-400 text-white-800 bg-red-500 backdrop-blur-sm border shadow-md flex items-center justify-center"
                 >
-                  <ArrowLeft className="w-4 h-4 mr-2 text-white-800" />
-                  Cancel Payment
+                  <ArrowLeft className="w-8 h-8 mr-3 text-white-800" />
+                  <p className="text-xl font-bold">Cancel Payment</p>
                 </Button>
 
                 {/* TEST BUTTON - Only visible when enabled */}
@@ -327,7 +314,7 @@ const OnlinePayment = () => {
                   <Button
                     onClick={handleTestSuccess}
                     variant="default"
-                    className="w-full bg-yellow-400 hover:bg-yellow-200 text-yellow-800 border-yellow-300 flex items-center justify-center gap-2"
+                    className="w-full h-[72px] bg-yellow-400 hover:bg-yellow-200 text-yellow-800 border-yellow-300 flex items-center justify-center gap-2"
                   >
                     <TestTube className="w-4 h-4" />
                     Test Success
@@ -336,16 +323,29 @@ const OnlinePayment = () => {
               </div>
 
               {/* Right Side - QR Code */}
-              <div className="flex items-center justify-center">
-                <div className="border border-white/40 rounded-xl p-8 bg-white/70 backdrop-blur-sm shadow-md h-full flex flex-col justify-center items-center">
+              <div className="space-y-4 flex flex-col h-full">
+                <div className="border border-white/40 rounded-xl p-6 bg-white/70 backdrop-blur-sm shadow-md flex flex-col justify-center items-center flex-grow">
                   <img 
                     src={qrImageUrl} 
                     alt="QRPH Payment QR Code" 
                     className="max-w-full h-auto"
-                    style={{ maxWidth: '400px' }}
+                    style={{ maxWidth: '320px' }}
                   />
-                  <p className="text-center text-sm text-gray-600 mt-4 font-medium">
+                  <p className="text-center text-xs text-gray-600 mt-3 font-medium">
                     Secure and verified by QRPH with PayMongo API
+                  </p>
+                </div>
+
+                {/* Status */}
+                <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl border border-white/40 shadow-sm">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    <p className="text-xs text-gray-600 font-medium">
+                      Waiting for payment confirmation...
+                    </p>
+                  </div>
+                  <p className="text-xs text-yellow-600 font-medium text-center">
+                    ⏱️ QR code expires in 30 minutes
                   </p>
                 </div>
               </div>
@@ -353,19 +353,19 @@ const OnlinePayment = () => {
           )}
 
           {paymentState === 'checking' && (
-            <div className="text-center py-8">
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-white/40">
-                <Loader2 className="w-12 h-12 animate-spin mx-auto text-blue-600 mb-4" />
-                <p className="text-lg font-medium text-gray-800">Verifying payment...</p>
+            <div className="text-center py-6">
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 border border-white/40">
+                <Loader2 className="w-10 h-10 animate-spin mx-auto text-blue-600 mb-3" />
+                <p className="text-base font-medium text-gray-800">Verifying payment...</p>
               </div>
             </div>
           )}
 
           {paymentState === 'failed' && (
-            <div className="text-center py-8 space-y-4">
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-red-200/50">
-                <XCircle className="w-16 h-16 mx-auto text-red-500 mb-4" />
-                <p className="text-lg font-medium text-red-600">{error || 'Payment failed'}</p>
+            <div className="text-center py-6 space-y-3">
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 border border-red-200/50">
+                <XCircle className="w-12 h-12 mx-auto text-red-500 mb-3" />
+                <p className="text-base font-medium text-red-600">{error || 'Payment failed'}</p>
               </div>
               <Button
                 onClick={async () => {
