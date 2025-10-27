@@ -16,7 +16,7 @@ const custom = () => {
           <ItemContent>
             <h2 className="text-2xl font-bold mb-4">Cleaning</h2>
             <p className="text-xl text-gray-600">Surface clean your shoes</p>
-            <Link href="/user/payment?service=cleaning">
+            <Link href="/user/care?service=cleaning">
               <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
                 <p className='text-lg font-bold'>Select Cleaning</p>
               </Button>
@@ -28,7 +28,7 @@ const custom = () => {
           <ItemContent>
             <h2 className="text-2xl font-bold mb-4">Drying</h2>
             <p className="text-xl text-gray-600">Quick dry your shoes</p>
-            <Link href="/user/payment?service=drying">
+            <Link href="/user/care?service=drying">
               <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
                 <p className='text-lg font-bold'>Select Drying</p>
               </Button>
@@ -40,7 +40,7 @@ const custom = () => {
           <ItemContent>
             <h2 className="text-2xl font-bold mb-4">Sterilizing</h2>
             <p className="text-xl text-gray-600">Sanitize your shoes</p>
-            <Link href="/user/payment?service=sterilizing">
+            <Link href="/user/care?service=sterilizing">
               <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
                 <p className='text-lg font-bold'>Select Sterilizing</p>
               </Button>
