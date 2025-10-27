@@ -41,6 +41,7 @@ const services: Service[] = [
 
 const Offline = () => {
   const searchParams = useSearchParams()
+  const shoe = searchParams.get('shoe') || 'mesh'
   const service = searchParams.get('service') as ServiceType || 'package'
   const care = searchParams.get('care') || 'normal'
   
@@ -55,7 +56,7 @@ const Offline = () => {
   
   // Determine the redirect URL after payment
   const getRedirectUrl = () => {
-    return `/user/success/payment?service=${service}&care=${care}`
+    return `/user/success/payment?shoe=${shoe}&service=${service}&care=${care}`
   }
 
   return (

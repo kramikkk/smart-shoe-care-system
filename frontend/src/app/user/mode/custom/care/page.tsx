@@ -10,6 +10,7 @@ import { Suspense } from 'react'
 function CareContent() {
   const searchParams = useSearchParams()
   const service = searchParams.get('service') || 'cleaning'
+  const shoe = searchParams.get('shoe') || 'mesh'
 
   // Service-specific descriptions for each care type
   const getDescription = (careId: string) => {
@@ -76,7 +77,7 @@ function CareContent() {
               <ItemContent className="flex flex-col items-center">
                 <h2 className="text-2xl font-bold mb-2">{care.name}</h2>
                 <p className="text-xl text-gray-700 mb-6 px-2">{desc}</p>
-                <Link href={`/user/payment?service=${service}&care=${care.id}`}>
+                <Link href={`/user/payment?shoe=${shoe}&service=${service}&care=${care.id}`}>
                   <Button className="px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
                     <p className='text-lg font-bold'>Select {care.name}</p>
                   </Button>

@@ -45,6 +45,7 @@ const services: Service[] = [
 const OnlinePayment = () => {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const selectedShoe = searchParams.get('shoe') || 'mesh'
   const selectedService = searchParams.get('service') as ServiceType || 'cleaning'
   const selectedCare = searchParams.get('care') || 'normal'
 
@@ -72,7 +73,7 @@ const OnlinePayment = () => {
       if (data.success) {
         if (data.status === 'succeeded') {
           // Redirect immediately to success page with service and care
-          router.push(`/user/success/payment?service=${selectedService}&care=${selectedCare}`)
+          router.push(`/user/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
           return true
         } else if (data.status === 'failed') {
           setPaymentState('failed')

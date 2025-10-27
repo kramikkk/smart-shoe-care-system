@@ -40,6 +40,7 @@ const services: Service[] = [
 
 const Payment = () => {
   const searchParams = useSearchParams()
+  const shoe = searchParams.get('shoe') || 'N/A'
   const service = searchParams.get('service')
   const care = searchParams.get('care')
   
@@ -50,7 +51,12 @@ const Payment = () => {
   }
 
   const serviceDetails = getServiceDetails()
-  
+
+  // Get shoe display name
+  const getShoeName = () => {
+    return shoe.charAt(0).toUpperCase() + shoe.slice(1)
+  }
+
   // Determine service display name
   const getServiceName = () => {
     return serviceDetails.name
@@ -68,7 +74,7 @@ const Payment = () => {
   }
 
   const summaryData = [
-    { label: 'Shoe Type', value: 'Rubber' },
+    { label: 'Shoe Type', value: getShoeName() },
     { label: 'Service', value: getServiceName() },
     { label: 'Care Type', value: getCareName() },
     { label: 'Total', value: getTotalPrice() },

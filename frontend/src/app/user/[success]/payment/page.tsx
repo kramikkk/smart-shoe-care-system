@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 export default function PaymentSuccess() {
   const searchParams = useSearchParams();
+  const shoe = searchParams.get('shoe') || 'mesh';
   const service = searchParams.get('service');
   const care = searchParams.get('care');
   const router = useRouter();
@@ -26,16 +27,16 @@ export default function PaymentSuccess() {
 
   useEffect(() => {
     if (countdown === 0) {
-      // Redirect based on service and care
+      // Redirect based on shoe, service and care
       if (service === 'package') {
-        router.push(`/user/mode/auto?care=${care || 'normal'}`);
+        router.push(`/user/mode/auto?shoe=${shoe}&care=${care || 'normal'}`);
       } else if (service) {
-        router.push(`/user/mode/custom/progress?service=${service}&care=${care || 'normal'}`);
+        router.push(`/user/mode/custom/progress?shoe=${shoe}&service=${service}&care=${care || 'normal'}`);
       } else {
         router.push('/user');
       }
     }
-  }, [countdown, service, care, router]);
+  }, [countdown, shoe, service, care, router]);
 
   const getMessage = () => {
     if (service === 'package') {

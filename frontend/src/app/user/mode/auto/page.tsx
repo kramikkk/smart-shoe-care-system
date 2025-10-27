@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 
 const Auto = () => {
   const searchParams = useSearchParams()
+  const shoe = searchParams.get('shoe') || 'mesh'
   const care = searchParams.get('care') || 'normal'
   const router = useRouter()
 
@@ -84,9 +85,9 @@ const Auto = () => {
 
   useEffect(() => {
     if (timeRemaining === 0) {
-      router.push(`/user/success/service?service=package&care=${care}`)
+      router.push(`/user/success/service?shoe=${shoe}&service=package&care=${care}`)
     }
-  }, [timeRemaining, router, care])
+  }, [timeRemaining, router, shoe, care])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)

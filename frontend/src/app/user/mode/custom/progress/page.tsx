@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 
 const CustomProgress = () => {
   const searchParams = useSearchParams()
+  const shoe = searchParams.get('shoe') || 'mesh'
   const service = searchParams.get('service') || 'cleaning'
   const care = searchParams.get('care') || 'normal'
   const router = useRouter()
@@ -61,9 +62,9 @@ const CustomProgress = () => {
 
   useEffect(() => {
     if (timeRemaining === 0) {
-      router.push(`/user/success/service?service=${service}&care=${care}`)
+      router.push(`/user/success/service?shoe=${shoe}&service=${service}&care=${care}`)
     }
-  }, [timeRemaining, router, service, care])
+  }, [timeRemaining, router, shoe, service, care])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
