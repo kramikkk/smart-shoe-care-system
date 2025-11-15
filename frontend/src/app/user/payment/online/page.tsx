@@ -232,7 +232,7 @@ const OnlinePayment = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
+    <div className="container mx-auto px-4 h-screen flex flex-col justify-center max-w-4xl">
       <Card className="bg-white/80 backdrop-blur-md shadow-2xl border border-white/50 gap-0">
         <CardHeader className="border-white/30 pb-0">
           <CardTitle className="text-2xl font-bold flex items-center justify-center text-gray-800">
@@ -261,7 +261,7 @@ const OnlinePayment = () => {
           {paymentState === 'awaiting_payment' && qrImageUrl && (
             <div className="grid grid-cols-2 gap-4">
               {/* Left Side - Service Details & Instructions */}
-              <div className="space-y-4 flex flex-col h-full">
+              <div className="space-y-4 flex flex-col flex-1">
                 {/* Service Details */}
                 <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl border border-white/40 shadow-sm">
                   <div className="space-y-2">
@@ -277,7 +277,7 @@ const OnlinePayment = () => {
                 </div>
 
                 {/* Instructions */}
-                <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl border border-white/40 shadow-sm">
+                <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl border border-white/40 shadow-sm flex-grow">
                   <h4 className="font-semibold text-md text-gray-800 mb-2">Payment Instructions</h4>
                   <div className="space-y-2 text-md text-gray-600">
                     <div className="flex items-start gap-2">
@@ -303,10 +303,10 @@ const OnlinePayment = () => {
                 <Button
                   onClick={handleCancel}
                   variant="default"
-                  className="w-full h-[72px] hover:bg-red-400 text-white-800 bg-red-500 backdrop-blur-sm border shadow-md flex items-center justify-center"
+                  className="w-full py-4 hover:bg-red-400 text-white-800 bg-red-500 backdrop-blur-sm border shadow-md flex items-center justify-center"
                 >
-                  <ArrowLeft className="w-8 h-8 mr-3 text-white-800" />
-                  <p className="text-xl font-bold">Cancel Payment</p>
+                  <ArrowLeft className="w-5 h-5 mr-2 text-white-800" />
+                  <p className="text-base font-bold">Cancel Payment</p>
                 </Button>
 
                 {/* TEST BUTTON - Only visible when enabled */}
@@ -314,22 +314,22 @@ const OnlinePayment = () => {
                   <Button
                     onClick={handleTestSuccess}
                     variant="default"
-                    className="w-full h-[72px] bg-yellow-400 hover:bg-yellow-200 text-yellow-800 border-yellow-300 flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-yellow-400 hover:bg-yellow-200 text-yellow-800 border-yellow-300 flex items-center justify-center gap-2"
                   >
-                    <TestTube className="w-4 h-4" />
-                    Test Success
+                    <TestTube className="w-5 h-5" />
+                    <span className="text-base font-bold">Test Success</span>
                   </Button>
                 )}
               </div>
 
               {/* Right Side - QR Code */}
-              <div className="space-y-4 flex flex-col h-full">
-                <div className="border border-white/40 rounded-xl p-6 bg-white/70 backdrop-blur-sm shadow-md flex flex-col justify-center items-center flex-grow">
+              <div className="space-y-4 flex flex-col flex-1">
+                <div className="border border-white/40 rounded-xl p-6 bg-white/70 backdrop-blur-sm shadow-md flex flex-col justify-center items-center flex-grow overflow-hidden">
                   <img 
                     src={qrImageUrl} 
                     alt="QRPH Payment QR Code" 
-                    className="max-w-full h-auto"
-                    style={{ maxWidth: '320px' }}
+                    className="w-full h-auto object-contain"
+                    style={{ maxWidth: '280px', maxHeight: '280px' }}
                   />
                   <p className="text-center text-xs text-gray-600 mt-3 font-medium">
                     Secure and verified by QRPH with PayMongo API
