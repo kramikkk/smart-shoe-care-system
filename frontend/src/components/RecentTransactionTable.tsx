@@ -38,7 +38,7 @@ const RecentTransactionTable = () => {
                 </div>
                 <CardAction>
                   <Link 
-                    href="/admin/transactions" 
+                    href="/admin/dashboard/transactions" 
                     className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                   >
                     View All
