@@ -91,213 +91,60 @@ export default function TransactionPage() {
   const totalPages = Math.ceil(filteredData.length / pageSize)
 
   return (
-    <div>
+    <div className="w-full">
       <Card className="pb-2">
-        <CardHeader>
+        <CardHeader className="px-4 sm:px-6">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <FileClock className="size-5 text-purple-500" />
-                <CardTitle>Transaction History</CardTitle>
+                <FileClock className="size-4 sm:size-5 text-purple-500" />
+                <CardTitle className="text-lg sm:text-xl">Transaction History</CardTitle>
               </div>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 Showing {filteredData.length} transaction{filteredData.length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="px-4 sm:px-6">
+          <div className="space-y-3 sm:space-y-4">
             {/* Search + Filters */}
             <div className="flex flex-col gap-3">
-              {/* Search Bar */}
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
-                <Input
-                  placeholder="Search by ID, service, amount..."
-                  className="pl-10 pr-10 h-11 border-2"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Clear search"
-                  >
-                    <X className="size-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Filters Row */}
-              <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
-                {/* Left Side - Filter Selects */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {/* Payment Method Filter */}
-                  <div className="w-full sm:w-auto lg:min-w-[140px]">
-                    <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                      <SelectTrigger className="h-10 border-2 w-full">
-                        <SelectValue placeholder="Payment" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Payment</SelectItem>
-                        <SelectItem value="Cash">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-green-500"></div>
-                            Cash
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Online">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-blue-500"></div>
-                            Online
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Service Filter */}
-                  <div className="w-full sm:w-auto lg:min-w-[140px]">
-                    <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                      <SelectTrigger className="h-10 border-2 w-full">
-                        <SelectValue placeholder="Service" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Service</SelectItem>
-                        <SelectItem value="Cleaning">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-blue-500"></div>
-                            Cleaning
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Drying">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-orange-500"></div>
-                            Drying
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Sterilizing">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-purple-500"></div>
-                            Sterilizing
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Package">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-pink-500"></div>
-                            Package
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Status Filter */}
-                  <div className="w-full sm:w-auto lg:min-w-[140px]">
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="h-10 border-2 w-full">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Status</SelectItem>
-                        <SelectItem value="Success">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-green-500"></div>
-                            Success
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Pending">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-yellow-500"></div>
-                            Pending
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Failed">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-red-500"></div>
-                            Failed
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Shoe Type Filter */}
-                  <div className="w-full sm:w-auto lg:min-w-[140px]">
-                    <Select value={shoeTypeFilter} onValueChange={setShoeTypeFilter}>
-                      <SelectTrigger className="h-10 border-2 w-full">
-                        <SelectValue placeholder="Shoe Type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Shoe Type</SelectItem>
-                        <SelectItem value="Canvas">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-amber-500"></div>
-                            Canvas
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Rubber">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-slate-500"></div>
-                            Rubber
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Mesh">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-cyan-500"></div>
-                            Mesh
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Care Type Filter */}
-                  <div className="w-full sm:w-auto lg:min-w-[140px]">
-                    <Select value={careTypeFilter} onValueChange={setCareTypeFilter}>
-                      <SelectTrigger className="h-10 border-2 w-full">
-                        <SelectValue placeholder="Care Type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Care Type</SelectItem>
-                        <SelectItem value="Gentle">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-green-500"></div>
-                            Gentle
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Normal">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-blue-500"></div>
-                            Normal
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Strong">
-                          <div className="flex items-center gap-2">
-                            <div className="size-2 rounded-full bg-red-500"></div>
-                            Strong
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {/* Top Row - Search Bar + Date Range + Clear Button */}
+              <div className="flex flex-col lg:flex-row gap-3">
+                {/* Search Bar */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                  <Input
+                    placeholder="Search by ID, service, amount..."
+                    className="pl-10 pr-10 h-10 sm:h-11 border-2 text-sm sm:text-base"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Clear search"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  )}
                 </div>
 
-                {/* Right Side - Date Range + Clear Button */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {/* Date Range Filter */}
-                  <div className="flex gap-2 flex-1 sm:flex-initial">
+                {/* Date Range + Clear Button Group */}
+                <div className="flex flex-col gap-2 lg:flex-row lg:flex-shrink-0">
+                  {/* Date Range Container */}
+                  <div className="flex gap-2">
                     {/* From Date */}
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={`h-10 flex-1 sm:w-[130px] justify-start text-left font-normal border-2 ${!dateFrom && "text-muted-foreground"}`}
+                          className={`h-10 sm:h-11 flex-1 lg:w-[140px] lg:flex-initial justify-start text-left font-normal border-2 text-sm ${!dateFrom && "text-muted-foreground"}`}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateFrom ? format(dateFrom, "MMM dd") : "Start"}
+                          <CalendarIcon className="mr-1 sm:mr-2 h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">{dateFrom ? format(dateFrom, "MMM dd") : "From"}</span>
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
@@ -315,10 +162,10 @@ export default function TransactionPage() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={`h-10 flex-1 sm:w-[130px] justify-start text-left font-normal border-2 ${!dateTo && "text-muted-foreground"}`}
+                          className={`h-10 sm:h-11 flex-1 lg:w-[140px] lg:flex-initial justify-start text-left font-normal border-2 text-sm ${!dateTo && "text-muted-foreground"}`}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateTo ? format(dateTo, "MMM dd") : "End"}
+                          <CalendarIcon className="mr-1 sm:mr-2 h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">{dateTo ? format(dateTo, "MMM dd") : "To"}</span>
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
@@ -346,12 +193,156 @@ export default function TransactionPage() {
                       setDateTo(undefined)
                     }}
                     disabled={paymentFilter === "all" && serviceFilter === "all" && shoeTypeFilter === "all" && careTypeFilter === "all" && statusFilter === "all" && !dateFrom && !dateTo}
-                    className="h-10 px-4 border-2 gap-2 w-full sm:w-auto"
+                    className="h-10 sm:h-11 px-3 sm:px-4 border-2 gap-2 w-full lg:w-auto text-sm"
                   >
                     <X className="size-4" />
-                    <span className="sm:hidden lg:inline">Clear Filters</span>
-                    <span className="hidden sm:inline lg:hidden">Clear</span>
+                    <span>Clear</span>
                   </Button>
+                </div>
+              </div>
+
+              {/* Bottom Row - Filter Selects (Full Width) */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+                {/* Payment Method Filter */}
+                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                  <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
+                    <SelectValue placeholder="Payment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Payment</SelectItem>
+                    <SelectItem value="Cash">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-green-500"></div>
+                        Cash
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Online">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-blue-500"></div>
+                        Online
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Service Filter */}
+                <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                  <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
+                    <SelectValue placeholder="Service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Service</SelectItem>
+                    <SelectItem value="Cleaning">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-blue-500"></div>
+                        Cleaning
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Drying">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-orange-500"></div>
+                        Drying
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Sterilizing">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-purple-500"></div>
+                        Sterilizing
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Package">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-pink-500"></div>
+                        Package
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Status Filter */}
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Status</SelectItem>
+                    <SelectItem value="Success">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-green-500"></div>
+                        Success
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Pending">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-yellow-500"></div>
+                        Pending
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Failed">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-red-500"></div>
+                        Failed
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Shoe Type Filter */}
+                <Select value={shoeTypeFilter} onValueChange={setShoeTypeFilter}>
+                  <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
+                    <SelectValue placeholder="Shoe Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Shoe Type</SelectItem>
+                    <SelectItem value="Canvas">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-amber-500"></div>
+                        Canvas
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Rubber">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-slate-500"></div>
+                        Rubber
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Mesh">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-cyan-500"></div>
+                        Mesh
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Care Type Filter */}
+                <div className="col-span-2 sm:col-span-2 md:col-span-1">
+                  <Select value={careTypeFilter} onValueChange={setCareTypeFilter}>
+                    <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
+                      <SelectValue placeholder="Care Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Care Type</SelectItem>
+                      <SelectItem value="Gentle">
+                        <div className="flex items-center gap-2">
+                          <div className="size-2 rounded-full bg-green-500"></div>
+                          Gentle
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="Normal">
+                        <div className="flex items-center gap-2">
+                          <div className="size-2 rounded-full bg-blue-500"></div>
+                          Normal
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="Strong">
+                        <div className="flex items-center gap-2">
+                          <div className="size-2 rounded-full bg-red-500"></div>
+                          Strong
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
