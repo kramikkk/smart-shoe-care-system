@@ -16,25 +16,34 @@ export default async function DashboardPage() {
         redirect("/admin/login");
         }
     return (
-        <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
+        <div className="flex flex-col gap-4 w-full overflow-x-hidden overflow-y-scroll">
+        {/* Stats and Sensor Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             <StatsCard id="totalRevenue" />
             <StatsCard id="totalTransactions" />
-            <div className="">
+            <div className="sm:col-span-2 xl:col-span-1">
                 <SensorCard id="systemStatus"/>
             </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
+        
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="xl:col-span-2">
                 <AreaChartCard/>
             </div>
-            <PieChartCard/>
+            <div className="xl:col-span-1">
+                <PieChartCard/>
+            </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
+        
+        {/* Transactions and Alerts Section */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="xl:col-span-2">
                 <RecentTransactionTable />
             </div>
-            <SystemAlertCard />
+            <div className="xl:col-span-1">
+                <SystemAlertCard />
+            </div>
         </div>
         </div>
     )

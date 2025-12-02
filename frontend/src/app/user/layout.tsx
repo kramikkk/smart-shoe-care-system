@@ -1,3 +1,5 @@
+import './kiosk.css'
+
 export default function UserLayout({
     children,
 }: Readonly<{
@@ -5,7 +7,7 @@ export default function UserLayout({
 }>) {
 
     return (
-        <div className="min-h-screen bg-gradient-to-r from-green-200 via-cyan-200 to-blue-400 text-gray-900 flex items-center justify-center">
+        <div className="h-screen w-screen bg-gradient-to-r from-green-200 via-cyan-200 to-blue-400 text-gray-900 flex items-center justify-center">
             {children}
         </div>
     );

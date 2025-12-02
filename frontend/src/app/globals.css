@@ -4,16 +4,6 @@
 @custom-variant dark (&:is(.dark *));
 
 
-/* Kiosk tablet optimization for 7-inch display */
-html, body {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-  position: fixed;
-  font-size: 12px; /* Reduce base font size for tablet */
-}
-
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

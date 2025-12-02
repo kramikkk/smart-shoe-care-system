@@ -15,10 +15,10 @@ export default async function AdminLayout({
     return (
         <SidebarProvider defaultOpen={defaultOpen}>
             <SideBar/>
-            <SidebarInset className="flex flex-col">
-            <main className="w-full flex flex-col flex-1">
+            <SidebarInset className="flex flex-col h-screen">
+            <main className="w-full flex flex-col flex-1 overflow-hidden">
                 <NavBar/>
-                <div className="px-4 pb-4 flex-1 flex flex-col">
+                <div className="px-4 pb-4 flex-1 flex flex-col overflow-y-auto">
                     <ThemeProvider
                     attribute="class"
                     defaultTheme="system"
