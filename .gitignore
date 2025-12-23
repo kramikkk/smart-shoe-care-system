@@ -46,6 +46,9 @@ backend/.env*
 *.tsbuildinfo
 next-env.d.ts
 
+# Prisma generated files
+frontend/src/generated/
+
 # avatars
 frontend/public/avatars
 
