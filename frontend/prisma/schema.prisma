@@ -73,3 +73,19 @@ model Verification {
 
   @@map("verification")
 }
+
+model Transaction {
+  id            String   @id @default(cuid())
+  transactionId String   @unique
+  dateTime      DateTime @default(now())
+  paymentMethod String   // "Cash" or "Online"
+  serviceType   String   // "Cleaning", "Drying", "Sterilizing", "Package"
+  shoeType      String   // "Canvas", "Rubber", "Mesh"
+  careType      String   // "Gentle", "Normal", "Strong"
+  amount        Float
+  status        String   @default("Success") // "Pending", "Success", "Failed"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("transaction")
+}

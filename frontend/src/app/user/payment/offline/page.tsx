@@ -3,10 +3,9 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Item, ItemContent } from '@/components/ui/item'
-import Link from 'next/link'
 import React, { useState, useMemo } from 'react'
-import { AlertTriangle } from 'lucide-react'
-import { useSearchParams } from 'next/navigation'
+import { AlertTriangle, Loader2 } from 'lucide-react'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
 
@@ -41,22 +40,54 @@ const services: Service[] = [
 
 const Offline = () => {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const shoe = searchParams.get('shoe') || 'mesh'
   const service = searchParams.get('service') as ServiceType || 'package'
   const care = searchParams.get('care') || 'normal'
-  
+
   // Get the service details based on the service parameter
   const selectedService = useMemo(() => {
     return services.find(s => s.id === service) || services[3] // default to package
   }, [service])
-  
+
   const amountDue = selectedService.price
   const [amountInserted, setAmountInserted] = useState(0)
   const amountRemaining = Math.max(0, amountDue - amountInserted)
-  
-  // Determine the redirect URL after payment
-  const getRedirectUrl = () => {
-    return `/user/success/payment?shoe=${shoe}&service=${service}&care=${care}`
+  const [isSaving, setIsSaving] = useState(false)
+
+  // STEP 3A: Handle payment proceed - save transaction and redirect
+  const handleProceed = async () => {
+    setIsSaving(true)
+
+    try {
+      // Save transaction to database
+      const response = await fetch('/api/transaction/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethod: 'Cash',
+          serviceType: service.charAt(0).toUpperCase() + service.slice(1), // Capitalize first letter
+          shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
+          careType: care.charAt(0).toUpperCase() + care.slice(1),
+          amount: selectedService.price,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        console.log('✅ Transaction saved:', data.transaction.transactionId)
+      } else {
+        console.error('❌ Failed to save transaction:', data.error)
+      }
+    } catch (error) {
+      console.error('❌ Transaction save error:', error)
+      // Continue to success page even if transaction save fails
+    } finally {
+      setIsSaving(false)
+      // Redirect to success page
+      router.push(`/user/success/payment?shoe=${shoe}&service=${service}&care=${care}`)
+    }
   }
 
   return (
@@ -103,11 +134,20 @@ const Offline = () => {
                 <p className="text-2xl font-bold text-red-600">₱{amountRemaining.toFixed(2)}</p>
               </div>
             </div>
-            <Link href={getRedirectUrl()} className="mt-4">
-              <Button className="w-full px-4 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
+            <Button
+              onClick={handleProceed}
+              disabled={isSaving}
+              className="w-full mt-4 px-4 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <p className='text-base font-bold'>Processing...</p>
+                </>
+              ) : (
                 <p className='text-base font-bold'>Proceed</p>
-              </Button>
-            </Link>
+              )}
+            </Button>
           </ItemContent>
         </Item>
 

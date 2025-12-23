@@ -72,7 +72,34 @@ const OnlinePayment = () => {
 
       if (data.success) {
         if (data.status === 'succeeded') {
-          // Redirect immediately to success page with service and care
+          // STEP 2A: Save transaction to database when payment succeeds
+          try {
+            const transactionResponse = await fetch('/api/transaction/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                paymentMethod: 'Online',
+                serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1), // Capitalize first letter
+                shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
+                careType: selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
+                amount: selectedServiceData.price,
+              }),
+            })
+
+            const transactionData = await transactionResponse.json()
+
+            if (transactionData.success) {
+              console.log('✅ Transaction saved:', transactionData.transaction.transactionId)
+            } else {
+              console.error('❌ Failed to save transaction:', transactionData.error)
+            }
+          } catch (error) {
+            console.error('❌ Transaction save error:', error)
+            // Continue to success page even if transaction save fails
+            // This ensures user experience isn't blocked
+          }
+
+          // Redirect to success page
           router.push(`/user/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
           return true
         } else if (data.status === 'failed') {
@@ -86,7 +113,7 @@ const OnlinePayment = () => {
       console.error('Status check error:', error)
       return false
     }
-  }, [router, selectedService, selectedCare])
+  }, [router, selectedService, selectedCare, selectedShoe, selectedServiceData])
 
   const startPolling = useCallback((intentId: string) => {
     // Clear any existing intervals
@@ -210,7 +237,7 @@ const OnlinePayment = () => {
     // Stop polling
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    
+
     // Cancel the payment intent to void the QR code
     if (paymentIntentId) {
       try {
@@ -226,9 +253,36 @@ const OnlinePayment = () => {
         // Continue to redirect anyway
       }
     }
-    
+
+    // 🧪 TEST: Save transaction to database (same as real payment)
+    try {
+      console.log('🧪 TEST: Saving transaction to database...')
+      const transactionResponse = await fetch('/api/transaction/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethod: 'Online',
+          serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1),
+          shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
+          careType: selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
+          amount: selectedServiceData.price,
+        }),
+      })
+
+      const transactionData = await transactionResponse.json()
+
+      if (transactionData.success) {
+        console.log('🧪 TEST: ✅ Transaction saved:', transactionData.transaction.transactionId)
+      } else {
+        console.error('🧪 TEST: ❌ Failed to save transaction:', transactionData.error)
+      }
+    } catch (error) {
+      console.error('🧪 TEST: ❌ Transaction save error:', error)
+      // Continue to success page even if transaction save fails
+    }
+
     // Redirect immediately to success page with service and care
-    router.push(`/user/success/payment?service=${selectedService}&care=${selectedCare}`)
+    router.push(`/user/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
   }
 
   return (
