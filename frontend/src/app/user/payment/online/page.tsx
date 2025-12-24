@@ -56,6 +56,7 @@ const OnlinePayment = () => {
 
   // State for services with default fallback
   const [services, setServices] = useState<Service[]>(defaultServices)
+  const [isPricingLoaded, setIsPricingLoaded] = useState(false)
 
   // Fetch pricing from database
   useEffect(() => {
@@ -72,9 +73,11 @@ const OnlinePayment = () => {
             price: item.price,
           }))
           setServices(fetchedServices)
+          setIsPricingLoaded(true)
         }
       } catch (error) {
         console.error('Error fetching pricing, using defaults:', error)
+        setIsPricingLoaded(true) // Use defaults if fetch fails
       }
     }
 
@@ -180,6 +183,11 @@ const OnlinePayment = () => {
       setPaymentState('creating')
       setError(null)
 
+      // PayMongo requires minimum amount of ₱1.00
+      if (selectedServiceData.price < 1) {
+        throw new Error('Payment amount must be at least ₱1.00 for online payments. Please use offline payment for amounts less than ₱1.')
+      }
+
       // Call your API to create payment
       const response = await fetch('/api/payment/create', {
         method: 'POST',
@@ -212,12 +220,12 @@ const OnlinePayment = () => {
     }
   }, [selectedServiceData, startPolling])
 
-  // Auto-generate QR on page load - only once
+  // Auto-generate QR on page load - only once, but wait for pricing to load
   useEffect(() => {
-    if (selectedService && paymentState === 'idle' && !isCreatingPayment.current) {
+    if (selectedService && paymentState === 'idle' && !isCreatingPayment.current && isPricingLoaded) {
       handlePayment()
     }
-  }, [selectedService, paymentState, handlePayment])
+  }, [selectedService, paymentState, handlePayment, isPricingLoaded, selectedServiceData.price])
 
   // Cleanup on unmount
   useEffect(() => {
