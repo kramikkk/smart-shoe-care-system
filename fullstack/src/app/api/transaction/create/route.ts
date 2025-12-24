@@ -21,13 +21,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Generate a unique transaction ID
-    // Format: TXN-YYYYMMDD-HHMMSS-RANDOM
+    // Generate a simple auto-incrementing transaction ID
+    // Format: TXN-1, TXN-2, TXN-3, etc.
     const now = new Date()
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '') // YYYYMMDD
-    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '') // HHMMSS
-    const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase() // 4 random chars
-    const transactionId = `TXN-${dateStr}-${timeStr}-${randomStr}`
+
+    // Get the count of existing transactions to determine the next ID
+    const transactionCount = await prisma.transaction.count()
+    const nextNumber = transactionCount + 1
+    const transactionId = `TXN-${nextNumber}`
 
     // Save the transaction to the database using Prisma
     const transaction = await prisma.transaction.create({
