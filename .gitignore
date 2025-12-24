@@ -3,9 +3,7 @@
 # dependencies
 node_modules/
 /node_modules
-frontend/node_modules
-backend/node_modules
-shared/node_modules
+fullstack/node_modules
 /.pnp
 .pnp.js
 .yarn/install-state.gz
@@ -14,15 +12,14 @@ shared/node_modules
 /coverage
 
 # next.js
-frontend/.next/
-frontend/out/
+fullstack/.next/
+fullstack/out/
 /.next/
 /out/
 
 # production
 /build
-frontend/build
-backend/dist
+fullstack/build
 
 # misc
 .DS_Store
@@ -36,8 +33,11 @@ yarn-clerror.log*
 # local env files
 .env*.local
 .env
-frontend/.env*
-backend/.env*
+fullstack/.env
+fullstack/.env.local
+fullstack/.env.*.local
+# Allow .env.example to be committed
+!fullstack/.env.example
 
 # vercel
 .vercel
@@ -47,10 +47,10 @@ backend/.env*
 next-env.d.ts
 
 # Prisma generated files
-frontend/src/generated/
+fullstack/src/generated/
 
 # avatars
-frontend/public/avatars
+fullstack/public/avatars
 
 # IDE
 .vscode/
