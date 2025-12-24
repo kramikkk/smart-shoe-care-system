@@ -231,10 +231,21 @@ export default function SettingsClient() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {pricing.map((item) => (
+            {pricing.map((item) => {
+              const iconColor = serviceIcons[item.serviceType as keyof typeof serviceIcons].color
+              return (
               <div
                 key={item.id}
-                className="border rounded-lg p-4 space-y-4 hover:border-purple-500 transition-colors"
+                className="border rounded-lg p-4 space-y-4 transition-colors"
+                style={{
+                  ['--hover-border-color' as any]: iconColor
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = iconColor
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = ''
+                }}
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -294,7 +305,8 @@ export default function SettingsClient() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -337,10 +349,18 @@ export default function SettingsClient() {
                 <p className="text-sm text-muted-foreground">Click "Pair New Device" to get started</p>
               </div>
             ) : (
-              devices.map((device) => (
+              devices.map((device) => {
+                const statusColor = device.status === 'connected' ? '#22c55e' : device.status === 'pairing' ? '#f59e0b' : '#6b7280'
+                return (
                 <div
                   key={device.id}
-                  className="border rounded-lg p-4 hover:border-purple-500 transition-colors"
+                  className="border rounded-lg p-4 transition-colors"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = statusColor
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = ''
+                  }}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                     <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -406,7 +426,8 @@ export default function SettingsClient() {
                     </Button>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </CardContent>
