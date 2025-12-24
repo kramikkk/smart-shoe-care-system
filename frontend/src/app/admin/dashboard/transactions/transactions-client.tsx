@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,17 +10,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CalendarIcon, CloudCheck, Coins, Footprints, Search, Receipt, ArrowLeftRight, FileClock, X } from "lucide-react"
+import { CalendarIcon, FileClock, X, Search } from "lucide-react"
 import { TransactionDataTable } from "@/components/TransactionDataTable"
-import { columns } from "@/components/TransactionColumns"
-import { transactions } from "@/data/TransactionData"
+import { columns, Transaction } from "@/components/TransactionColumns"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
 
 export default function TransactionPage() {
-
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [paymentFilter, setPaymentFilter] = useState<string>("all")
   const [serviceFilter, setServiceFilter] = useState<string>("all")
@@ -31,6 +31,39 @@ export default function TransactionPage() {
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 15
+
+  // Fetch transactions from database
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const response = await fetch('/api/transaction/list')
+        const data = await response.json()
+
+        if (data.success) {
+          const formattedTransactions = data.transactions.map((tx: any) => ({
+            ...tx,
+            dateTime: new Date(tx.dateTime).toLocaleString('en-US', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            }).replace(',', ''),
+          }))
+          setTransactions(formattedTransactions as any)
+        } else {
+          console.error('Failed to fetch transactions:', data.error)
+        }
+      } catch (error) {
+        console.error('Error fetching transactions:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchTransactions()
+  }, [])
 
   const filteredData = useMemo(() => {
     return transactions.filter((tx) => {
@@ -62,31 +95,35 @@ export default function TransactionPage() {
       // Date filtering
       const matchesDate = (() => {
         if (!dateFrom && !dateTo) return true
-        
+
         const txDate = new Date(tx.dateTime)
-        
+
         if (dateFrom && dateTo) {
-          const from = new Date(dateFrom.setHours(0, 0, 0, 0))
-          const to = new Date(dateTo.setHours(23, 59, 59, 999))
+          const from = new Date(dateFrom)
+          from.setHours(0, 0, 0, 0)
+          const to = new Date(dateTo)
+          to.setHours(23, 59, 59, 999)
           return txDate >= from && txDate <= to
         }
-        
+
         if (dateFrom) {
-          const from = new Date(dateFrom.setHours(0, 0, 0, 0))
+          const from = new Date(dateFrom)
+          from.setHours(0, 0, 0, 0)
           return txDate >= from
         }
-        
+
         if (dateTo) {
-          const to = new Date(dateTo.setHours(23, 59, 59, 999))
+          const to = new Date(dateTo)
+          to.setHours(23, 59, 59, 999)
           return txDate <= to
         }
-        
+
         return true
       })()
 
       return matchesSearch && matchesPayment && matchesService && matchesShoeType && matchesCareType && matchesStatus && matchesDate
     })
-  }, [search, paymentFilter, serviceFilter, shoeTypeFilter, careTypeFilter, statusFilter, dateFrom, dateTo])
+  }, [transactions, search, paymentFilter, serviceFilter, shoeTypeFilter, careTypeFilter, statusFilter, dateFrom, dateTo])
 
   const totalPages = Math.ceil(filteredData.length / pageSize)
 

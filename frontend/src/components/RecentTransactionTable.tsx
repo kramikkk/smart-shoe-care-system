@@ -1,3 +1,5 @@
+'use client'
+
 import {
   Table,
   TableBody,
@@ -6,27 +8,73 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { transactions } from "@/data/TransactionData"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "./ui/badge"
-import { Receipt, ArrowRight, ArrowLeftRight } from "lucide-react"
+import { ArrowRight, ArrowLeftRight } from "lucide-react"
 import Link from "next/link"
+import { useEffect, useState } from "react"
+
+type Transaction = {
+  transactionId: string
+  dateTime: string
+  paymentMethod: string
+  serviceType: string
+  shoeType: string
+  careType: string
+  amount: number
+  status: string
+}
 
 const RecentTransactionTable = () => {
-  const recentTransactions = transactions.slice(-5).reverse()
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch recent transactions from API
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const response = await fetch('/api/transaction/list')
+        const data = await response.json()
+
+        if (data.success) {
+          // Get last 5 transactions and format dateTime
+          const recent = data.transactions.slice(0, 5).map((tx: any) => ({
+            ...tx,
+            dateTime: new Date(tx.dateTime).toLocaleString('en-US', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            }).replace(',', ''),
+          }))
+          setRecentTransactions(recent)
+        } else {
+          console.error('Failed to fetch transactions:', data.error)
+        }
+      } catch (error) {
+        console.error('Error fetching transactions:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchTransactions()
+  }, [])
 
   const getStatusBadge = (status: string) => {
-  switch (status.toLowerCase()) {
-    case "success":
-      return <Badge className="bg-green-200 text-green-800 hover:bg-green-100">Success</Badge>
-    case "pending":
-      return <Badge className="bg-yellow-200 text-yellow-800 hover:bg-yellow-100">Pending</Badge>
-    case "failed":
-      return <Badge className="bg-red-200 text-red-800 hover:bg-red-100">Failed</Badge>
-    default:
-      return <Badge>{status}</Badge>
+    switch (status.toLowerCase()) {
+      case "success":
+        return <Badge className="bg-green-200 text-green-800 hover:bg-green-100">Success</Badge>
+      case "pending":
+        return <Badge className="bg-yellow-200 text-yellow-800 hover:bg-yellow-100">Pending</Badge>
+      case "failed":
+        return <Badge className="bg-red-200 text-red-800 hover:bg-red-100">Failed</Badge>
+      default:
+        return <Badge>{status}</Badge>
+    }
   }
-}
 
   return (
     <div className="flex flex-col h-full">
@@ -47,6 +95,15 @@ const RecentTransactionTable = () => {
                 </CardAction>
             </CardHeader>
             <CardContent className="flex-1 overflow-auto">
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-40">
+                    <div className="text-muted-foreground">Loading transactions...</div>
+                  </div>
+                ) : recentTransactions.length === 0 ? (
+                  <div className="flex items-center justify-center h-40">
+                    <div className="text-muted-foreground">No transactions yet</div>
+                  </div>
+                ) : (
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -81,6 +138,7 @@ const RecentTransactionTable = () => {
                         ))}
                     </TableBody>
                 </Table>
+                )}
             </CardContent>
         </Card>
     </div>

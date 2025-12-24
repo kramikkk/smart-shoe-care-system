@@ -28,12 +28,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-const serviceData = [
-  { type: "cleaning", service: 46, revenue: 1840, fill: "var(--color-cleaning)" },
-  { type: "drying", service: 27, revenue: 1080, fill: "var(--color-drying)" },
-  { type: "sterilizing", service: 34, revenue: 1360, fill: "var(--color-sterilizing)" },
-  { type: "all", service: 23, revenue: 920, fill: "var(--color-all)" },
-]
+type ServiceData = {
+  type: string
+  service: number
+  revenue: number
+  fill: string
+}
 
 const chartConfig = {
   service: {
@@ -51,26 +51,79 @@ const chartConfig = {
     label: "Sterilizing",
     color: "var(--chart-3)",
   },
-  all: {
-    label: "All",
+  package: {
+    label: "Package",
     color: "var(--chart-4)",
   },
 } satisfies ChartConfig
 
 export function PieChartCard() {
   const id = "pie-interactive"
-  const [activeService, setActiveService] = React.useState(serviceData[0].type)
+  const [serviceData, setServiceData] = React.useState<ServiceData[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [activeService, setActiveService] = React.useState("")
+
+  // Fetch service distribution data
+  React.useEffect(() => {
+    const fetchDistribution = async () => {
+      try {
+        const response = await fetch('/api/transaction/distribution')
+        const data = await response.json()
+
+        if (data.success && data.serviceData.length > 0) {
+          setServiceData(data.serviceData)
+          setActiveService(data.serviceData[0].type)
+        } else {
+          console.error('Failed to fetch distribution:', data.error)
+        }
+      } catch (error) {
+        console.error('Error fetching distribution:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchDistribution()
+  }, [])
 
   const activeIndex = React.useMemo(
-    () => serviceData.findIndex((item) => item.type === activeService),
-    [activeService]
+    () => serviceData.findIndex((item: ServiceData) => item.type === activeService),
+    [activeService, serviceData]
   )
-  const services = React.useMemo(() => serviceData.map((item) => item.type), [])
-  
+  const services = React.useMemo(() => serviceData.map((item: ServiceData) => item.type), [serviceData])
+
   const totalServices = React.useMemo(
-    () => serviceData.reduce((acc, curr) => acc + curr.service, 0),
-    []
+    () => serviceData.reduce((acc: number, curr: ServiceData) => acc + curr.service, 0),
+    [serviceData]
   )
+
+  if (isLoading) {
+    return (
+      <Card className="flex flex-col">
+        <CardHeader>
+          <CardTitle>Service Type Distribution</CardTitle>
+          <CardDescription>Loading...</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-1 justify-center items-center">
+          <div className="text-muted-foreground">Loading chart data...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (serviceData.length === 0) {
+    return (
+      <Card className="flex flex-col">
+        <CardHeader>
+          <CardTitle>Service Type Distribution</CardTitle>
+          <CardDescription>No data</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-1 justify-center items-center">
+          <div className="text-muted-foreground">No data available</div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card data-chart={id} className="flex flex-col">
@@ -88,7 +141,7 @@ export function PieChartCard() {
             <SelectValue placeholder="Select type" />
           </SelectTrigger>
           <SelectContent align="end" className="rounded-xl">
-            {services.map((key) => {
+            {services.map((key: string) => {
               const config = chartConfig[key as keyof typeof chartConfig]
 
               if (!config) {

@@ -26,7 +26,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-const chartData = [
+type ChartDataPoint = {
+  date: string
+  revenue: number
+  transactions: number
+}
+
+const chartDataStatic = [
   { date: "2024-04-01", revenue: 180, transactions: 6 },
   { date: "2024-04-02", revenue: 126, transactions: 4 },
   { date: "2024-04-03", revenue: 270, transactions: 9 },
@@ -140,20 +146,36 @@ const chartConfig = {
 export default function AreaChartCard() {
   const [timeRange, setTimeRange] = React.useState("7d")
   const [dataView, setDataView] = React.useState("all")
+  const [chartData, setChartData] = React.useState<ChartDataPoint[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
 
-  const filteredData = chartData.filter((item) => {
-    const date = new Date(item.date)
-    const referenceDate = new Date("2024-06-30")
-    let daysToSubtract = 90
-    if (timeRange === "30d") {
-      daysToSubtract = 30
-    } else if (timeRange === "7d") {
-      daysToSubtract = 7
+  // Fetch chart data from API
+  React.useEffect(() => {
+    const fetchChartData = async () => {
+      try {
+        let days = 90
+        if (timeRange === "30d") days = 30
+        else if (timeRange === "7d") days = 7
+
+        const response = await fetch(`/api/transaction/chart?days=${days}`)
+        const data = await response.json()
+
+        if (data.success) {
+          setChartData(data.chartData)
+        } else {
+          console.error('Failed to fetch chart data:', data.error)
+        }
+      } catch (error) {
+        console.error('Error fetching chart data:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
-    const startDate = new Date(referenceDate)
-    startDate.setDate(startDate.getDate() - daysToSubtract)
-    return date >= startDate
-  })
+
+    fetchChartData()
+  }, [timeRange])
+
+  const filteredData = chartData
 
   return (
     <Card className="pt-0 h-full">
@@ -161,30 +183,60 @@ export default function AreaChartCard() {
         <div className="grid flex-1 gap-1">
           <CardTitle>Transaction + Revenue Chart</CardTitle>
           <CardDescription>
-            Daily
+            Daily trends
           </CardDescription>
         </div>
-        <Select value={dataView} onValueChange={setDataView}>
-          <SelectTrigger
-            className="w-[130px] rounded-lg"
-            aria-label="Select data view"
-          >
-            <SelectValue placeholder="Show all" />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl">
-            <SelectItem value="all" className="rounded-lg">
-              All
-            </SelectItem>
-            <SelectItem value="revenue" className="rounded-lg">
-              Revenue
-            </SelectItem>
-            <SelectItem value="transactions" className="rounded-lg">
-              Transactions
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Select value={timeRange} onValueChange={setTimeRange}>
+            <SelectTrigger
+              className="w-[130px] rounded-lg"
+              aria-label="Select time range"
+            >
+              <SelectValue placeholder="Last 7 days" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="7d" className="rounded-lg">
+                Last 7 days
+              </SelectItem>
+              <SelectItem value="30d" className="rounded-lg">
+                Last 30 days
+              </SelectItem>
+              <SelectItem value="90d" className="rounded-lg">
+                Last 90 days
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={dataView} onValueChange={setDataView}>
+            <SelectTrigger
+              className="w-[130px] rounded-lg"
+              aria-label="Select data view"
+            >
+              <SelectValue placeholder="Show all" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="all" className="rounded-lg">
+                All
+              </SelectItem>
+              <SelectItem value="revenue" className="rounded-lg">
+                Revenue
+              </SelectItem>
+              <SelectItem value="transactions" className="rounded-lg">
+                Transactions
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-[250px]">
+            <div className="text-muted-foreground">Loading chart data...</div>
+          </div>
+        ) : filteredData.length === 0 ? (
+          <div className="flex items-center justify-center h-[250px]">
+            <div className="text-muted-foreground">No data available</div>
+          </div>
+        ) : (
         <ChartContainer
           config={chartConfig}
           className="aspect-auto h-[250px] w-full"
@@ -245,27 +297,28 @@ export default function AreaChartCard() {
                 />
               }
             />
-            {(dataView === "transactions" || dataView === "all") && (
-              <Area
-                dataKey="transactions"
-                type="natural"
-                fill="url(#fillTransactions)"
-                stroke="var(--color-transactions)"
-                stackId="a"
-              />
-            )}
             {(dataView === "revenue" || dataView === "all") && (
               <Area
                 dataKey="revenue"
-                type="natural"
+                type="monotone"
                 fill="url(#fillRevenue)"
                 stroke="var(--color-revenue)"
-                stackId="a"
+                fillOpacity={0.6}
+              />
+            )}
+            {(dataView === "transactions" || dataView === "all") && (
+              <Area
+                dataKey="transactions"
+                type="monotone"
+                fill="url(#fillTransactions)"
+                stroke="var(--color-transactions)"
+                fillOpacity={0.6}
               />
             )}
             <ChartLegend content={<ChartLegendContent />} />
           </AreaChart>
         </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )
