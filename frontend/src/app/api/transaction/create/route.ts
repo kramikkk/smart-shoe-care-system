@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const { paymentMethod, serviceType, shoeType, careType, amount } = body
 
     // Validate that all required fields are present
-    if (!paymentMethod || !serviceType || !shoeType || !careType || !amount) {
+    if (!paymentMethod || !serviceType || !shoeType || !careType || amount === undefined || amount === null) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
