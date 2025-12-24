@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2 } from "lucide-react"
+import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X } from "lucide-react"
 import { toast } from "sonner"
+import { Badge } from "@/components/ui/badge"
 
 type ServicePricing = {
   id: string
@@ -30,11 +31,42 @@ const serviceNames = {
   package: 'Package',
 }
 
+type Device = {
+  id: string
+  deviceId: string
+  deviceName: string
+  status: 'connected' | 'disconnected' | 'pairing'
+  lastSeen: string
+  pairedAt?: string
+}
+
+// Mock device data - will be replaced with real API calls
+const mockDevices: Device[] = [
+  {
+    id: '1',
+    deviceId: 'SSCM-001',
+    deviceName: 'Shoe Care Machine #1',
+    status: 'connected',
+    lastSeen: new Date().toISOString(),
+    pairedAt: '2024-01-15T10:30:00Z',
+  },
+  {
+    id: '2',
+    deviceId: 'SSCM-002',
+    deviceName: 'Shoe Care Machine #2',
+    status: 'disconnected',
+    lastSeen: new Date(Date.now() - 3600000).toISOString(),
+    pairedAt: '2024-01-10T14:20:00Z',
+  },
+]
+
 export default function SettingsClient() {
   const [pricing, setPricing] = useState<ServicePricing[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [editedPrices, setEditedPrices] = useState<Record<string, number | string>>({})
+  const [devices, setDevices] = useState<Device[]>(mockDevices)
+  const [isPairing, setIsPairing] = useState(false)
 
   // Fetch pricing data
   useEffect(() => {
@@ -140,6 +172,34 @@ export default function SettingsClient() {
     return currentPrice !== editedPrices[serviceType]
   }
 
+  const handlePairDevice = async () => {
+    setIsPairing(true)
+    // TODO: Implement actual device pairing logic
+    setTimeout(() => {
+      toast.success('Scanning for devices...')
+      setIsPairing(false)
+    }, 2000)
+  }
+
+  const handleUnpairDevice = async (deviceId: string) => {
+    // TODO: Implement actual device unpairing logic
+    toast.success('Device unpaired successfully')
+  }
+
+  const formatLastSeen = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins} min ago`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+    const diffDays = Math.floor(diffHours / 24)
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+  }
+
   if (isLoading) {
     return (
       <div className="w-full">
@@ -235,6 +295,119 @@ export default function SettingsClient() {
                 </div>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Device Pairing Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+            <div>
+              <CardTitle className="text-lg">Device Pairing</CardTitle>
+              <CardDescription>
+                Manage connected shoe care machines. Pair new devices or unpair existing ones.
+              </CardDescription>
+            </div>
+            <Button
+              onClick={handlePairDevice}
+              disabled={isPairing}
+              className="gap-2 w-full sm:w-auto sm:shrink-0"
+            >
+              {isPairing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Scanning...
+                </>
+              ) : (
+                <>
+                  <Smartphone className="h-4 w-4" />
+                  Pair New Device
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {devices.length === 0 ? (
+              <div className="text-center py-8 border-2 border-dashed rounded-lg">
+                <Smartphone className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                <p className="text-muted-foreground">No devices paired yet</p>
+                <p className="text-sm text-muted-foreground">Click "Pair New Device" to get started</p>
+              </div>
+            ) : (
+              devices.map((device) => (
+                <div
+                  key={device.id}
+                  className="border rounded-lg p-4 hover:border-purple-500 transition-colors"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                      <div
+                        className={`p-3 rounded-lg shrink-0 ${
+                          device.status === 'connected'
+                            ? 'bg-green-500/10 text-green-500'
+                            : device.status === 'pairing'
+                            ? 'bg-amber-500/10 text-amber-500'
+                            : 'bg-gray-500/10 text-gray-500'
+                        }`}
+                      >
+                        {device.status === 'connected' ? (
+                          <Wifi className="h-6 w-6" />
+                        ) : (
+                          <WifiOff className="h-6 w-6" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-2 mb-1">
+                          <h3 className="font-semibold truncate">{device.deviceName}</h3>
+                          <Badge
+                            variant={device.status === 'connected' ? 'default' : 'secondary'}
+                            className={
+                              device.status === 'connected'
+                                ? 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
+                                : device.status === 'pairing'
+                                ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'
+                                : 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20'
+                            }
+                          >
+                            {device.status === 'connected' && <Check className="h-3 w-3 mr-1" />}
+                            {device.status.charAt(0).toUpperCase() + device.status.slice(1)}
+                          </Badge>
+                        </div>
+
+                        <p className="text-sm text-muted-foreground mb-2 break-all">
+                          Device ID: <span className="font-mono">{device.deviceId}</span>
+                        </p>
+
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                          <div>
+                            Last seen: <span className="text-foreground">{formatLastSeen(device.lastSeen)}</span>
+                          </div>
+                          {device.pairedAt && (
+                            <div>
+                              Paired: <span className="text-foreground">{new Date(device.pairedAt).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleUnpairDevice(device.id)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 sm:shrink-0 w-full sm:w-auto"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Unpair
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>
