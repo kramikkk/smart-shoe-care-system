@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { QrCode, Banknote } from 'lucide-react'
 import { Item, ItemContent, ItemHeader } from '@/components/ui/item'
 import Link from 'next/link'
-import React from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
@@ -15,27 +15,12 @@ interface Service {
   price: number
 }
 
-const services: Service[] = [
-  {
-    id: 'cleaning',
-    name: 'Cleaning',
-    price: 45
-  },
-  {
-    id: 'drying',
-    name: 'Drying',
-    price: 45
-  },
-  {
-    id: 'sterilizing',
-    name: 'Sterilizing',
-    price: 25
-  },
-  {
-    id: 'package',
-    name: 'Package',
-    price: 100
-  }
+// Default fallback prices (used if API fails)
+const defaultServices: Service[] = [
+  { id: 'cleaning', name: 'Cleaning', price: 45 },
+  { id: 'drying', name: 'Drying', price: 45 },
+  { id: 'sterilizing', name: 'Sterilizing', price: 25 },
+  { id: 'package', name: 'Package', price: 100 }
 ]
 
 const Payment = () => {
@@ -43,7 +28,35 @@ const Payment = () => {
   const shoe = searchParams.get('shoe') || 'N/A'
   const service = searchParams.get('service')
   const care = searchParams.get('care')
-  
+
+  const [services, setServices] = useState<Service[]>(defaultServices)
+
+  // Fetch pricing from database
+  useEffect(() => {
+    const fetchPricing = async () => {
+      try {
+        const response = await fetch('/api/pricing')
+        const data = await response.json()
+
+        if (data.success) {
+          // Transform API data to Service format
+          const fetchedServices: Service[] = data.pricing.map((item: any) => ({
+            id: item.serviceType as ServiceType,
+            name: item.serviceType.charAt(0).toUpperCase() + item.serviceType.slice(1),
+            price: item.price,
+          }))
+          setServices(fetchedServices)
+        } else {
+          console.error('Failed to fetch pricing, using defaults')
+        }
+      } catch (error) {
+        console.error('Error fetching pricing, using defaults:', error)
+      }
+    }
+
+    fetchPricing()
+  }, [])
+
   // Get service details
   const getServiceDetails = () => {
     const selectedService = services.find(s => s.id === service) || services.find(s => s.id === 'package')

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sidebar"
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeftRight, ChartLine, Cpu, LayoutDashboard,  } from "lucide-react";
+import { ArrowLeftRight, Cpu, LayoutDashboard, Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SideBarUser } from "./SideBarUser";
 import { useEffect, useState } from "react";
@@ -25,6 +25,7 @@ const menu = [
   { title: "Overview", url: "/admin/dashboard", icon: LayoutDashboard },
   { title: "Transactions", url: "/admin/dashboard/transactions", icon: ArrowLeftRight },
   { title: "System", url: "/admin/dashboard/system", icon: Cpu },
+  { title: "Settings", url: "/admin/dashboard/settings", icon: Settings },
 ]
 
 const SideBar = () => {

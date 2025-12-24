@@ -3,6 +3,7 @@ import NavBar from "@/components/NavBar";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cookies } from "next/dist/server/request/cookies";
+import { Toaster } from "sonner";
 
 export default async function AdminLayout({
     children,
@@ -29,6 +30,7 @@ export default async function AdminLayout({
                 </div>
             </main>
             </SidebarInset>
+            <Toaster />
         </SidebarProvider>
     );
 }
