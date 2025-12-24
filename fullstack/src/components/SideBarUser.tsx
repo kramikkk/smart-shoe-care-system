@@ -39,6 +39,7 @@ import Link from "next/link"
 import { signOut, updateUser } from "@/lib/actions/auth-action"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { toast } from "sonner"
 
 export function SideBarUser({
   user,
@@ -62,24 +63,43 @@ export function SideBarUser({
   const handleSignOut = async () => {
     try {
       await signOut();
+      toast.success("Signed out successfully");
       router.push("/admin/login");
     } catch (error) {
       console.error("Sign out error:", error);
+      toast.error("Failed to sign out. Please try again.");
     }
   };
 
   const handleSaveProfile = async () => {
+    // Validate name
+    if (!editedName.trim()) {
+      toast.error("Name cannot be empty");
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await updateUser({
-        name: editedName,
+      const result = await updateUser({
+        name: editedName.trim(),
         image: editedAvatar,
       });
-      // Refresh the page to update the sidebar
-      router.refresh();
-      setIsEditing(false);
+
+      if (result) {
+        toast.success("Profile updated successfully");
+        // Update local state with new values
+        user.name = editedName.trim();
+        user.avatar = editedAvatar;
+        setIsEditing(false);
+        setPreviewImage(null);
+        // Refresh the page to update all references
+        router.refresh();
+      } else {
+        throw new Error("Failed to update profile");
+      }
     } catch (error) {
       console.error("Update profile error:", error);
+      toast.error("Failed to update profile. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -110,13 +130,13 @@ export function SideBarUser({
     // Validate file type
     const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
     if (!validTypes.includes(file.type)) {
-      alert("Please upload a valid image file (JPEG, PNG, WebP, or GIF)");
+      toast.error("Please upload a valid image file (JPEG, PNG, WebP, or GIF)");
       return;
     }
 
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert("File size must be less than 5MB");
+      toast.error("File size must be less than 5MB");
       return;
     }
 
@@ -145,9 +165,10 @@ export function SideBarUser({
 
       const data = await response.json();
       setEditedAvatar(data.url);
+      toast.success("Image uploaded successfully");
     } catch (error) {
       console.error("Upload error:", error);
-      alert("Failed to upload image. Please try again.");
+      toast.error("Failed to upload image. Please try again.");
       setPreviewImage(null);
     } finally {
       setIsUploading(false);
