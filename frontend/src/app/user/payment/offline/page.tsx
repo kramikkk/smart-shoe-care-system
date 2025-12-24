@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Item, ItemContent } from '@/components/ui/item'
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 
@@ -15,7 +15,7 @@ interface Service {
   price: number
 }
 
-const services: Service[] = [
+const defaultServices: Service[] = [
   {
     id: 'cleaning',
     name: 'Cleaning',
@@ -45,18 +45,52 @@ const Offline = () => {
   const service = searchParams.get('service') as ServiceType || 'package'
   const care = searchParams.get('care') || 'normal'
 
+  // State for services with default fallback
+  const [services, setServices] = useState<Service[]>(defaultServices)
+
+  // Fetch pricing from database
+  useEffect(() => {
+    const fetchPricing = async () => {
+      try {
+        const response = await fetch('/api/pricing')
+        const data = await response.json()
+
+        if (data.success) {
+          const fetchedServices: Service[] = data.pricing.map((item: any) => ({
+            id: item.serviceType as ServiceType,
+            name: item.serviceType.charAt(0).toUpperCase() + item.serviceType.slice(1),
+            price: item.price,
+          }))
+          setServices(fetchedServices)
+        }
+      } catch (error) {
+        console.error('Error fetching pricing, using defaults:', error)
+      }
+    }
+
+    fetchPricing()
+  }, [])
+
   // Get the service details based on the service parameter
   const selectedService = useMemo(() => {
-    return services.find(s => s.id === service) || services[3] // default to package
-  }, [service])
+    return services.find((s) => s.id === service) || services[3] // default to package
+  }, [service, services])
 
   const amountDue = selectedService.price
   const [amountInserted, setAmountInserted] = useState(0)
   const amountRemaining = Math.max(0, amountDue - amountInserted)
   const [isSaving, setIsSaving] = useState(false)
 
+  // Check if payment is complete (amount inserted >= amount due OR amount due is 0)
+  const isPaymentComplete = amountDue === 0 || amountInserted >= amountDue
+
   // STEP 3A: Handle payment proceed - save transaction and redirect
   const handleProceed = async () => {
+    // Don't allow proceeding if payment is not complete
+    if (!isPaymentComplete) {
+      return
+    }
+
     setIsSaving(true)
 
     try {
@@ -136,7 +170,7 @@ const Offline = () => {
             </div>
             <Button
               onClick={handleProceed}
-              disabled={isSaving}
+              disabled={!isPaymentComplete || isSaving}
               className="w-full mt-4 px-4 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? (
@@ -145,7 +179,9 @@ const Offline = () => {
                   <p className='text-base font-bold'>Processing...</p>
                 </>
               ) : (
-                <p className='text-base font-bold'>Proceed</p>
+                <p className='text-base font-bold'>
+                  {isPaymentComplete ? 'Proceed' : 'Insert Full Amount'}
+                </p>
               )}
             </Button>
           </ItemContent>

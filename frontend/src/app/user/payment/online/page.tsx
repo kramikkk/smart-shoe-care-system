@@ -15,7 +15,7 @@ interface Service {
   price: number
 }
 
-const services: Service[] = [
+const defaultServices: Service[] = [
   {
     id: 'cleaning',
     name: 'Cleaning',
@@ -54,10 +54,37 @@ const OnlinePayment = () => {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // State for services with default fallback
+  const [services, setServices] = useState<Service[]>(defaultServices)
+
+  // Fetch pricing from database
+  useEffect(() => {
+    const fetchPricing = async () => {
+      try {
+        const response = await fetch('/api/pricing')
+        const data = await response.json()
+
+        if (data.success) {
+          const fetchedServices: Service[] = data.pricing.map((item: any) => ({
+            id: item.serviceType as ServiceType,
+            name: item.serviceType.charAt(0).toUpperCase() + item.serviceType.slice(1),
+            description: defaultServices.find((s) => s.id === item.serviceType)?.description || '',
+            price: item.price,
+          }))
+          setServices(fetchedServices)
+        }
+      } catch (error) {
+        console.error('Error fetching pricing, using defaults:', error)
+      }
+    }
+
+    fetchPricing()
+  }, [])
+
   // Get selected service data
   const selectedServiceData = useMemo(() => {
     return services.find(s => s.id === selectedService) || services[0]
-  }, [selectedService])
+  }, [selectedService, services])
 
   // PayMongo API States
   const [paymentState, setPaymentState] = useState<'idle' | 'creating' | 'awaiting_payment' | 'checking' | 'success' | 'failed'>('idle')
