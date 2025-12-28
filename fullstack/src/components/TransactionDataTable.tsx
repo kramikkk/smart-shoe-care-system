@@ -49,63 +49,68 @@ export function TransactionDataTable<TData, TValue>({
   })
 
   return (
-<div>
-      <div className="overflow-hidden rounded-md border">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => {
-                return (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                )
-              })}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows?.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow
-                key={row.id}
-                data-state={row.getIsSelected() && "selected"}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
+    <div className="flex flex-col h-full">
+      {/* Table Container with responsive height */}
+      <div className="overflow-auto rounded-md border h-[400px] sm:h-[500px] md:h-[600px] lg:h-[650px] xl:h-[700px]">
+        <Table>
+          <TableHeader className="sticky top-0 bg-background z-10">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  )
+                })}
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="h-24 text-center">
-                <Empty>
-                  <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                      <FileClock />
-                      </EmptyMedia>
-                      <EmptyTitle>
-                        No Transactions Found
-                      </EmptyTitle>
-                      <EmptyDescription>
-                        Try adjusting your search or filter to find what you're looking for.
-                      </EmptyDescription>
-                  </EmptyHeader>
-                  </Empty>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </div>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-[400px] sm:h-[500px] md:h-[600px] lg:h-[650px] xl:h-[700px]">
+                  <div className="flex items-center justify-center h-full">
+                    <Empty>
+                      <EmptyHeader>
+                          <EmptyMedia variant="icon">
+                          <FileClock />
+                          </EmptyMedia>
+                          <EmptyTitle>
+                            No Transactions Found
+                          </EmptyTitle>
+                          <EmptyDescription>
+                            Try adjusting your search or filter to find what you're looking for.
+                          </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination - always visible at bottom */}
       <div className="flex items-center justify-between py-4">
         <div className="text-sm text-muted-foreground whitespace-nowrap">
           Page {table.getState().pagination.pageIndex + 1} of{" "}
@@ -114,6 +119,6 @@ export function TransactionDataTable<TData, TValue>({
 
         <TransactionPagination table={table} />
       </div>
-</div>
+    </div>
   )
 }

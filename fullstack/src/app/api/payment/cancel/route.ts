@@ -1,17 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PayMongoClient } from '@/lib/paymongo/client'
+import { z } from 'zod'
+
+const PaymentCancelSchema = z.object({
+  paymentIntentId: z.string().min(1, 'Payment intent ID is required'),
+})
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { paymentIntentId } = body
 
-    if (!paymentIntentId) {
+    // Validate input
+    const validation = PaymentCancelSchema.safeParse(body)
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, error: 'Payment intent ID is required' },
+        {
+          success: false,
+          error: 'Invalid input',
+          details: validation.error.issues
+        },
         { status: 400 }
       )
     }
+
+    const { paymentIntentId } = validation.data
 
     console.log('=== Cancelling Payment Intent ===')
     console.log('Payment Intent ID:', paymentIntentId)
@@ -27,13 +39,13 @@ export async function POST(request: NextRequest) {
       message: 'Payment intent cancelled successfully'
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('=== Payment Cancellation Failed ===')
-    console.error('Error:', error.message)
+    console.error('Error:', error)
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error.message || 'Failed to cancel payment' 
+      {
+        success: false,
+        error: 'Failed to cancel payment'
       },
       { status: 500 }
     )

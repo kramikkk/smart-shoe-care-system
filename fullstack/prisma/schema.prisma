@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -17,22 +11,21 @@ datasource db {
 model User {
   id            String    @id
   name          String
-  email         String
+  email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @default(now()) @updatedAt
-  sessions      Session[]
   accounts      Account[]
+  sessions      Session[]
 
-  @@unique([email])
   @@map("user")
 }
 
 model Session {
   id        String   @id
   expiresAt DateTime
-  token     String
+  token     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   ipAddress String?
@@ -40,7 +33,6 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([token])
   @@map("session")
 }
 
@@ -49,7 +41,6 @@ model Account {
   accountId             String
   providerId            String
   userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -59,6 +50,7 @@ model Account {
   password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account")
 }
@@ -76,26 +68,47 @@ model Verification {
 
 model Transaction {
   id            String   @id @default(cuid())
-  transactionId String   @unique
   dateTime      DateTime @default(now())
-  paymentMethod String   // "Cash" or "Online"
-  serviceType   String   // "Cleaning", "Drying", "Sterilizing", "Package"
-  shoeType      String   // "Canvas", "Rubber", "Mesh"
-  careType      String   // "Gentle", "Normal", "Strong"
+  paymentMethod String
+  serviceType   String
+  shoeType      String
+  careType      String
   amount        Float
-  status        String   @default("Success") // "Pending", "Success", "Failed"
+  status        String   @default("Success")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  deviceId      String?
+  transactionId String   @unique
+  device        Device?  @relation(fields: [deviceId], references: [deviceId])
 
+  @@index([dateTime])
+  @@index([paymentMethod])
+  @@index([status])
+  @@index([deviceId])
   @@map("transaction")
 }
 
 model ServicePricing {
   id          String   @id @default(cuid())
-  serviceType String   @unique // "cleaning", "drying", "sterilizing", "package"
+  serviceType String   @unique
   price       Float
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("service_pricing")
+}
+
+model Device {
+  id           String        @id @default(cuid())
+  deviceId     String        @unique
+  pairingCode  String?
+  paired       Boolean       @default(false)
+  pairedAt     DateTime?
+  lastSeen     DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  pairedBy     String?
+  transactions Transaction[]
+
+  @@map("device")
 }

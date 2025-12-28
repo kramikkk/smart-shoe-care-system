@@ -104,6 +104,9 @@ const OnlinePayment = () => {
         if (data.status === 'succeeded') {
           // STEP 2A: Save transaction to database when payment succeeds
           try {
+            // Get device ID from localStorage (set by PairingWrapper)
+            const deviceId = localStorage.getItem('kiosk_device_id')
+
             const transactionResponse = await fetch('/api/transaction/create', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -113,6 +116,7 @@ const OnlinePayment = () => {
                 shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
                 careType: selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
                 amount: selectedServiceData.price,
+                deviceId, // Link transaction to this kiosk
               }),
             })
 
@@ -292,6 +296,9 @@ const OnlinePayment = () => {
     // 🧪 TEST: Save transaction to database (same as real payment)
     try {
       console.log('🧪 TEST: Saving transaction to database...')
+      // Get device ID from localStorage (set by PairingWrapper)
+      const deviceId = localStorage.getItem('kiosk_device_id')
+
       const transactionResponse = await fetch('/api/transaction/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -301,6 +308,7 @@ const OnlinePayment = () => {
           shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
           careType: selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
           amount: selectedServiceData.price,
+          deviceId, // Link transaction to this kiosk
         }),
       })
 

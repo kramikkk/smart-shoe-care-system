@@ -12,8 +12,21 @@ export class PayMongoClient {
   /**
    * Step 1: Create Payment Intent with QRPH enabled
    */
-  async createPaymentIntent(amount: number, description: string) {
+  async createPaymentIntent(amount: number, description: string, metadata?: Record<string, string>) {
     console.log('Creating Payment Intent with QRPH')
+
+    const attributes: any = {
+      amount: amount * 100, // Convert to cents (₱50 = 5000 cents)
+      payment_method_allowed: ['qrph'], // Enable QRPH
+      currency: 'PHP',
+      description: description,
+      statement_descriptor: 'Smart Shoe Care',
+    }
+
+    // Only include metadata if provided
+    if (metadata && Object.keys(metadata).length > 0) {
+      attributes.metadata = metadata
+    }
 
     const response = await fetch(`${PAYMONGO_API_URL}/payment_intents`, {
       method: 'POST',
@@ -23,13 +36,7 @@ export class PayMongoClient {
       },
       body: JSON.stringify({
         data: {
-          attributes: {
-            amount: amount * 100, // Convert to cents (₱50 = 5000 cents)
-            payment_method_allowed: ['qrph'], // Enable QRPH
-            currency: 'PHP',
-            description: description,
-            statement_descriptor: 'Smart Shoe Care',
-          }
+          attributes
         }
       })
     })

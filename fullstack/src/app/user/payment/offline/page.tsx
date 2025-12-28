@@ -73,7 +73,11 @@ const Offline = () => {
 
   // Get the service details based on the service parameter
   const selectedService = useMemo(() => {
-    return services.find((s) => s.id === service) || services[3] // default to package
+    console.log('Looking for service:', service)
+    console.log('Available services:', services)
+    const found = services.find((s) => s.id === service)
+    console.log('Found service:', found)
+    return found || services[3] // default to package
   }, [service, services])
 
   const amountDue = selectedService.price
@@ -95,6 +99,19 @@ const Offline = () => {
 
     try {
       // Save transaction to database
+      // Get device ID from localStorage (set by PairingWrapper)
+      const deviceId = localStorage.getItem('kiosk_device_id')
+
+      console.log('Device ID from localStorage:', deviceId)
+      console.log('Transaction data:', {
+        paymentMethod: 'Cash',
+        serviceType: service.charAt(0).toUpperCase() + service.slice(1),
+        shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
+        careType: care.charAt(0).toUpperCase() + care.slice(1),
+        amount: selectedService.price,
+        deviceId,
+      })
+
       const response = await fetch('/api/transaction/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,6 +121,7 @@ const Offline = () => {
           shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
           careType: care.charAt(0).toUpperCase() + care.slice(1),
           amount: selectedService.price,
+          deviceId, // Link transaction to this kiosk
         }),
       })
 
@@ -113,6 +131,9 @@ const Offline = () => {
         console.log('✅ Transaction saved:', data.transaction.transactionId)
       } else {
         console.error('❌ Failed to save transaction:', data.error)
+        if (data.details) {
+          console.error('Validation errors:', data.details)
+        }
       }
     } catch (error) {
       console.error('❌ Transaction save error:', error)

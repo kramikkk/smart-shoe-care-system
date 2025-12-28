@@ -70,11 +70,16 @@ export function PieChartCard() {
         const response = await fetch('/api/transaction/distribution')
         const data = await response.json()
 
-        if (data.success && data.serviceData.length > 0) {
-          setServiceData(data.serviceData)
-          setActiveService(data.serviceData[0].type)
+        if (data.success) {
+          if (data.serviceData.length > 0) {
+            setServiceData(data.serviceData)
+            setActiveService(data.serviceData[0].type)
+          } else {
+            // No transactions yet - this is normal for a fresh database
+            setServiceData([])
+          }
         } else {
-          console.error('Failed to fetch distribution:', data.error)
+          console.error('Failed to fetch distribution:', data.error || 'Unknown error')
         }
       } catch (error) {
         console.error('Error fetching distribution:', error)
@@ -99,7 +104,7 @@ export function PieChartCard() {
 
   if (isLoading) {
     return (
-      <Card className="flex flex-col">
+      <Card className="flex flex-col h-full min-h-[400px]">
         <CardHeader>
           <CardTitle>Service Type Distribution</CardTitle>
           <CardDescription>Loading...</CardDescription>
@@ -113,7 +118,7 @@ export function PieChartCard() {
 
   if (serviceData.length === 0) {
     return (
-      <Card className="flex flex-col">
+      <Card className="flex flex-col h-full min-h-[400px]">
         <CardHeader>
           <CardTitle>Service Type Distribution</CardTitle>
           <CardDescription>No data</CardDescription>
@@ -126,7 +131,7 @@ export function PieChartCard() {
   }
 
   return (
-    <Card data-chart={id} className="flex flex-col">
+    <Card data-chart={id} className="flex flex-col h-full min-h-[400px]">
       <ChartStyle id={id} config={chartConfig} />
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
         <div className="grid gap-1">
@@ -169,11 +174,11 @@ export function PieChartCard() {
           </SelectContent>
         </Select>
       </CardHeader>
-      <CardContent className="flex flex-1 justify-center pb-0">
+      <CardContent className="flex flex-1 justify-center items-center pb-4">
         <ChartContainer
           id={id}
           config={chartConfig}
-          className="mx-auto aspect-square w-full max-w-[300px]"
+          className="mx-auto aspect-square w-full max-w-[400px]"
         >
           <PieChart>
             <ChartTooltip
