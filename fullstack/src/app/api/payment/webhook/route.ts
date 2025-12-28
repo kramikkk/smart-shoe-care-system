@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import prisma from '@/lib/prisma'
 
 // PayMongo webhook signature verification
 function verifyWebhookSignature(payload: string, signature: string): boolean {
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET
-  
+
   if (!webhookSecret) {
     console.error('PAYMONGO_WEBHOOK_SECRET not configured')
     return false
@@ -23,10 +24,10 @@ export async function POST(request: NextRequest) {
     // Get raw body for signature verification
     const rawBody = await request.text()
     const body = JSON.parse(rawBody)
-    
+
     // Verify webhook signature (IMPORTANT for security!)
     const signature = request.headers.get('paymongo-signature')
-    
+
     if (!signature || !verifyWebhookSignature(rawBody, signature)) {
       console.error('⚠️ Invalid webhook signature')
       return NextResponse.json(
@@ -41,27 +42,57 @@ export async function POST(request: NextRequest) {
     // PayMongo sends these events:
     // - payment.paid
     // - payment.failed
-    
+
     const eventType = body.data.attributes.type
+    const paymentData = body.data.attributes.data.attributes
 
     if (eventType === 'payment.paid') {
-      const paymentIntentId = body.data.attributes.data.attributes.payment_intent_id
-      
-      // TODO: Update your database
+      const paymentIntentId = paymentData.payment_intent_id
+      const metadata = paymentData.metadata
+      const transactionId = metadata?.transactionId
+
       console.log('✅ Payment succeeded:', paymentIntentId)
-      
-      // You can trigger machine here or update order status
+      console.log('Transaction ID:', transactionId)
+
+      if (transactionId) {
+        // Update transaction status to Success
+        const updatedTransaction = await prisma.transaction.update({
+          where: { transactionId },
+          data: { status: 'Success' }
+        })
+
+        console.log('✅ Transaction updated to Success:', updatedTransaction.transactionId)
+
+        // TODO: Trigger machine hardware here if needed
+      } else {
+        console.warn('⚠️ No transaction ID in payment metadata')
+      }
     }
 
     if (eventType === 'payment.failed') {
-      const paymentIntentId = body.data.attributes.data.attributes.payment_intent_id
-      
+      const paymentIntentId = paymentData.payment_intent_id
+      const metadata = paymentData.metadata
+      const transactionId = metadata?.transactionId
+
       console.log('❌ Payment failed:', paymentIntentId)
+      console.log('Transaction ID:', transactionId)
+
+      if (transactionId) {
+        // Update transaction status to Failed
+        const updatedTransaction = await prisma.transaction.update({
+          where: { transactionId },
+          data: { status: 'Failed' }
+        })
+
+        console.log('✅ Transaction updated to Failed:', updatedTransaction.transactionId)
+      } else {
+        console.warn('⚠️ No transaction ID in payment metadata')
+      }
     }
 
     return NextResponse.json({ received: true })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Webhook error:', error)
     return NextResponse.json(
       { error: 'Webhook processing failed' },

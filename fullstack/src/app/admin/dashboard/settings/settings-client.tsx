@@ -8,6 +8,15 @@ import { Label } from "@/components/ui/label"
 import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 type ServicePricing = {
   id: string
@@ -34,39 +43,32 @@ const serviceNames = {
 type Device = {
   id: string
   deviceId: string
-  deviceName: string
-  status: 'connected' | 'disconnected' | 'pairing'
+  pairingCode: string | null
+  paired: boolean
+  pairedAt: string | null
+  pairedBy: string | null
   lastSeen: string
-  pairedAt?: string
+  createdAt: string
+  pairedByUser?: {
+    name: string
+    email: string
+  }
 }
 
-// Mock device data - will be replaced with real API calls
-const mockDevices: Device[] = [
-  {
-    id: '1',
-    deviceId: 'SSCM-001',
-    deviceName: 'Shoe Care Machine #1',
-    status: 'connected',
-    lastSeen: new Date().toISOString(),
-    pairedAt: '2024-01-15T10:30:00Z',
-  },
-  {
-    id: '2',
-    deviceId: 'SSCM-002',
-    deviceName: 'Shoe Care Machine #2',
-    status: 'disconnected',
-    lastSeen: new Date(Date.now() - 3600000).toISOString(),
-    pairedAt: '2024-01-10T14:20:00Z',
-  },
-]
+type DeviceWithStatus = Device & {
+  status: 'connected' | 'disconnected' | 'pairing'
+}
 
 export default function SettingsClient() {
   const [pricing, setPricing] = useState<ServicePricing[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [editedPrices, setEditedPrices] = useState<Record<string, number | string>>({})
-  const [devices, setDevices] = useState<Device[]>(mockDevices)
+  const [devices, setDevices] = useState<DeviceWithStatus[]>([])
   const [isPairing, setIsPairing] = useState(false)
+  const [pairingDialogOpen, setPairingDialogOpen] = useState(false)
+  const [pairingDeviceId, setPairingDeviceId] = useState('')
+  const [pairingCode, setPairingCode] = useState('')
 
   // Fetch pricing data
   useEffect(() => {
@@ -95,6 +97,43 @@ export default function SettingsClient() {
     }
 
     fetchPricing()
+  }, [])
+
+  // Fetch only paired devices on mount
+  useEffect(() => {
+    const fetchDevices = async () => {
+      try {
+        const response = await fetch('/api/device/all')
+        const data = await response.json()
+
+        if (data.success) {
+          // Only show paired devices in the list
+          const pairedDevices = data.devices.filter((device: Device) => device.paired)
+          const devicesWithStatus: DeviceWithStatus[] = pairedDevices.map((device: Device) => {
+            const lastSeenDate = new Date(device.lastSeen)
+            const now = new Date()
+            const diffMinutes = (now.getTime() - lastSeenDate.getTime()) / 60000
+
+            let status: 'connected' | 'disconnected' | 'pairing'
+            if (diffMinutes < 5) {
+              status = 'connected'
+            } else {
+              status = 'disconnected'
+            }
+
+            return { ...device, status }
+          })
+          setDevices(devicesWithStatus)
+        }
+      } catch (error) {
+        console.error('Error fetching devices:', error)
+      }
+    }
+
+    fetchDevices()
+    // Poll every 10 seconds to update device statuses
+    const interval = setInterval(fetchDevices, 10000)
+    return () => clearInterval(interval)
   }, [])
 
   const handlePriceChange = (serviceType: string, value: string) => {
@@ -173,17 +212,106 @@ export default function SettingsClient() {
   }
 
   const handlePairDevice = async () => {
+    if (!pairingDeviceId || !pairingCode) {
+      toast.error('Please enter both device ID and pairing code')
+      return
+    }
+
+    if (pairingCode.length !== 6) {
+      toast.error('Pairing code must be 6 digits')
+      return
+    }
+
     setIsPairing(true)
-    // TODO: Implement actual device pairing logic
-    setTimeout(() => {
-      toast.success('Scanning for devices...')
+    try {
+      const response = await fetch(`/api/device/${pairingDeviceId}/pair`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pairingCode: pairingCode,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success('Device paired successfully!')
+        setPairingDialogOpen(false)
+        setPairingDeviceId('')
+        setPairingCode('')
+
+        // Refresh devices list
+        const devicesResponse = await fetch('/api/device/all')
+        const devicesData = await devicesResponse.json()
+        if (devicesData.success) {
+          const pairedDevices = devicesData.devices.filter((device: Device) => device.paired)
+          const devicesWithStatus: DeviceWithStatus[] = pairedDevices.map((device: Device) => {
+            const lastSeenDate = new Date(device.lastSeen)
+            const now = new Date()
+            const diffMinutes = (now.getTime() - lastSeenDate.getTime()) / 60000
+
+            let status: 'connected' | 'disconnected' | 'pairing'
+            if (diffMinutes < 5) {
+              status = 'connected'
+            } else {
+              status = 'disconnected'
+            }
+
+            return { ...device, status }
+          })
+          setDevices(devicesWithStatus)
+        }
+      } else {
+        toast.error(data.error || 'Failed to pair device')
+      }
+    } catch (error) {
+      console.error('Error pairing device:', error)
+      toast.error('Failed to pair device')
+    } finally {
       setIsPairing(false)
-    }, 2000)
+    }
   }
 
   const handleUnpairDevice = async (deviceId: string) => {
-    // TODO: Implement actual device unpairing logic
-    toast.success('Device unpaired successfully')
+    try {
+      const response = await fetch(`/api/device/${deviceId}/pair`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success('Device unpaired successfully')
+        // Refresh devices list
+        const devicesResponse = await fetch('/api/device/all')
+        const devicesData = await devicesResponse.json()
+        if (devicesData.success) {
+          const pairedDevices = devicesData.devices.filter((device: Device) => device.paired)
+          const devicesWithStatus: DeviceWithStatus[] = pairedDevices.map((device: Device) => {
+            const lastSeenDate = new Date(device.lastSeen)
+            const now = new Date()
+            const diffMinutes = (now.getTime() - lastSeenDate.getTime()) / 60000
+
+            let status: 'connected' | 'disconnected' | 'pairing'
+            if (diffMinutes < 5) {
+              status = 'connected'
+            } else {
+              status = 'disconnected'
+            }
+
+            return { ...device, status }
+          })
+          setDevices(devicesWithStatus)
+        }
+      } else {
+        toast.error(data.error || 'Failed to unpair device')
+      }
+    } catch (error) {
+      console.error('Error unpairing device:', error)
+      toast.error('Failed to unpair device')
+    }
   }
 
   const formatLastSeen = (dateString: string) => {
@@ -318,26 +446,71 @@ export default function SettingsClient() {
             <div>
               <CardTitle className="text-lg">Device Pairing</CardTitle>
               <CardDescription>
-                Manage connected shoe care machines. Pair new devices or unpair existing ones.
+                Manage connected shoe care machines. Pair devices using device ID and pairing code from kiosk.
               </CardDescription>
             </div>
-            <Button
-              onClick={handlePairDevice}
-              disabled={isPairing}
-              className="gap-2 w-full sm:w-auto sm:shrink-0"
-            >
-              {isPairing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Scanning...
-                </>
-              ) : (
-                <>
+            <Dialog open={pairingDialogOpen} onOpenChange={setPairingDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2 w-full sm:w-auto sm:shrink-0">
                   <Smartphone className="h-4 w-4" />
                   Pair New Device
-                </>
-              )}
-            </Button>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Pair New Device</DialogTitle>
+                  <DialogDescription>
+                    Enter the device ID and 6-digit pairing code displayed on the kiosk screen.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="deviceId">Device ID</Label>
+                    <Input
+                      id="deviceId"
+                      placeholder="e.g., SSCM-XXXXXX"
+                      value={pairingDeviceId}
+                      onChange={(e) => setPairingDeviceId(e.target.value.toUpperCase())}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pairingCode">Pairing Code</Label>
+                    <Input
+                      id="pairingCode"
+                      placeholder="6-digit code"
+                      maxLength={6}
+                      value={pairingCode}
+                      onChange={(e) => setPairingCode(e.target.value.replace(/\D/g, ''))}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setPairingDialogOpen(false)
+                      setPairingDeviceId('')
+                      setPairingCode('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handlePairDevice}
+                    disabled={isPairing || !pairingDeviceId || pairingCode.length !== 6}
+                  >
+                    {isPairing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Pairing...
+                      </>
+                    ) : (
+                      'Pair Device'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent>
@@ -382,7 +555,7 @@ export default function SettingsClient() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center flex-wrap gap-2 mb-1">
-                          <h3 className="font-semibold truncate">{device.deviceName}</h3>
+                          <h3 className="font-semibold truncate">Shoe Care Machine</h3>
                           <Badge
                             variant={device.status === 'connected' ? 'default' : 'secondary'}
                             className={
@@ -411,19 +584,26 @@ export default function SettingsClient() {
                               Paired: <span className="text-foreground">{new Date(device.pairedAt).toLocaleDateString()}</span>
                             </div>
                           )}
+                          {device.pairedByUser && (
+                            <div>
+                              Paired by: <span className="text-foreground">{device.pairedByUser.name}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleUnpairDevice(device.id)}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10 sm:shrink-0 w-full sm:w-auto"
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      Unpair
-                    </Button>
+                    {device.paired && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleUnpairDevice(device.deviceId)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 sm:shrink-0 w-full sm:w-auto"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Unpair
+                      </Button>
+                    )}
                   </div>
                 </div>
                 );

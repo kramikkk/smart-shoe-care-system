@@ -1,17 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PayMongoClient } from '@/lib/paymongo/client'
+import { z } from 'zod'
+
+const PaymentStatusQuerySchema = z.object({
+  paymentIntentId: z.string().min(1, 'Payment intent ID is required'),
+})
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const paymentIntentId = searchParams.get('paymentIntentId')
+    const queryParams = Object.fromEntries(searchParams)
 
-    if (!paymentIntentId) {
+    // Validate query parameters
+    const validation = PaymentStatusQuerySchema.safeParse(queryParams)
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, error: 'Payment intent ID is required' },
+        {
+          success: false,
+          error: 'Invalid query parameters',
+          details: validation.error.issues
+        },
         { status: 400 }
       )
     }
+
+    const { paymentIntentId } = validation.data
 
     const client = new PayMongoClient()
     const paymentIntent = await client.getPaymentIntentStatus(paymentIntentId)
@@ -29,12 +42,12 @@ export async function GET(request: NextRequest) {
       paymentIntent: paymentIntent.data
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Payment status check error:', error)
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error.message || 'Failed to check payment status' 
+      {
+        success: false,
+        error: 'Failed to check payment status'
       },
       { status: 500 }
     )

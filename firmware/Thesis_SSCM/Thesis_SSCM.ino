@@ -1,16 +1,18 @@
 /*
- * Smart Shoe Care Machine - WiFi & Pairing Only
- * Simplified firmware for WiFi configuration and device pairing
+ * Smart Shoe Care Machine - WiFi & Pairing with WebSocket
+ * Firmware with WiFi configuration and real-time device pairing via WebSocket
  *
  * Required Libraries:
  * - WiFi (built-in with ESP32)
  * - HTTPClient (built-in with ESP32)
  * - Preferences (built-in with ESP32)
+ * - WebSocketsClient (by Markus Sattler) - Install via Library Manager
  */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
+#include <WebSocketsClient.h>
 
 /* ===================== WIFI ===================== */
 Preferences prefs;
@@ -24,16 +26,21 @@ unsigned long lastWiFiRetry = 0;
 #define WIFI_TIMEOUT 60000        // 1 minute
 #define WIFI_RETRY_INTERVAL 5000  // Retry every 5 seconds
 
+/* ===================== WEBSOCKET ===================== */
+WebSocketsClient webSocket;
+bool wsConnected = false;
+unsigned long lastWsReconnect = 0;
+const unsigned long WS_RECONNECT_INTERVAL = 5000; // Try to reconnect every 5 seconds
+
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
 String deviceId = "";
-unsigned long lastPairingCheck = 0;
-const unsigned long PAIRING_CHECK_INTERVAL = 1000;   // Check every 1 second when not paired
-const unsigned long PAIRED_CHECK_INTERVAL = 5000;    // Check every 5 seconds when paired
-unsigned long unpairDetectedAt = 0;
+bool isPaired = false;
 
 /* ===================== BACKEND URL ===================== */
-const char* BACKEND_URL = "http://192.168.1.12:3000";  // Update with your Next.js server URL
+const char* BACKEND_HOST = "192.168.1.8";  // Update with your Next.js server IP
+const int BACKEND_PORT = 3000;
+const char* BACKEND_URL = "http://192.168.1.8:3000";
 
 /* ===================== WIFI PORTAL HTML ===================== */
 const char WIFI_HTML[] PROGMEM = R"rawliteral(
@@ -324,7 +331,6 @@ const timer = setInterval(() => {
   if (seconds <= 0) {
     clearInterval(timer);
     hintEl.innerHTML = "Closing now...";
-    // Close the window/tab
     setTimeout(() => {
       window.open('about:blank', '_self');
       window.close();
@@ -339,7 +345,6 @@ const timer = setInterval(() => {
 </html>
 )rawliteral";
 
-        // Replace SSID placeholder - must assign result back!
         confirmPage.replace("{{SSID}}", ssid);
 
         client.println("HTTP/1.1 200 OK");
@@ -397,11 +402,11 @@ String generateDeviceId() {
     return id;
 }
 
-void sendPairingRequest() {
+void sendDeviceRegistration() {
     if (WiFi.status() != WL_CONNECTED) return;
 
     HTTPClient http;
-    String url = String(BACKEND_URL) + "/api/device/pair";
+    String url = String(BACKEND_URL) + "/api/device/register";
 
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
@@ -411,7 +416,7 @@ void sendPairingRequest() {
     payload += "\"pairingCode\":\"" + pairingCode + "\"";
     payload += "}";
 
-    Serial.println("=== Sending Pairing Request ===");
+    Serial.println("=== Registering Device ===");
     Serial.println("URL: " + url);
     Serial.println("Payload: " + payload);
 
@@ -422,48 +427,88 @@ void sendPairingRequest() {
         if (httpCode == 200 || httpCode == 201) {
             String response = http.getString();
             Serial.println("Response: " + response);
-            Serial.println("Pairing request registered with backend");
+            Serial.println("Device registered successfully");
         }
     } else {
-        Serial.printf("Request failed: %s\n", http.errorToString(httpCode).c_str());
+        Serial.printf("Registration failed: %s\n", http.errorToString(httpCode).c_str());
     }
-    Serial.println("================================");
+    Serial.println("==========================");
 
     http.end();
 }
 
-bool checkPairingStatus() {
-    if (WiFi.status() != WL_CONNECTED) return false;
+void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
+    switch(type) {
+        case WStype_DISCONNECTED: {
+            Serial.println("[WebSocket] Disconnected");
+            wsConnected = false;
+            break;
+        }
 
-    HTTPClient http;
-    String url = String(BACKEND_URL) + "/api/device/" + deviceId + "/status";
+        case WStype_CONNECTED: {
+            Serial.println("[WebSocket] Connected to server");
+            wsConnected = true;
 
-    http.begin(url);
-    int httpCode = http.GET();
+            // Subscribe to device updates
+            String subscribeMsg = "{\"type\":\"subscribe\",\"deviceId\":\"" + deviceId + "\"}";
+            webSocket.sendTXT(subscribeMsg);
+            Serial.println("[WebSocket] Sent subscription: " + subscribeMsg);
+            break;
+        }
 
-    bool paired = false;
+        case WStype_TEXT: {
+            Serial.printf("[WebSocket] Received: %s\n", payload);
 
-    if (httpCode == 200) {
-        String response = http.getString();
-        // Check if device is paired
-        if (response.indexOf("\"paired\":true") != -1 ||
-            response.indexOf("\"status\":\"paired\"") != -1) {
-            paired = true;
-            if (!prefs.getBool("paired", false)) {
-                Serial.println("=== Device Successfully Paired! ===");
+            // Parse JSON response
+            String message = String((char*)payload);
+
+            if (message.indexOf("\"type\":\"subscribed\"") != -1) {
+                Serial.println("[WebSocket] Successfully subscribed to device updates");
             }
-            prefs.putBool("paired", true);
-            prefs.putString("deviceId", deviceId);
-        } else if (response.indexOf("\"paired\":false") != -1) {
-            paired = false;
-            if (prefs.getBool("paired", false)) {
-                Serial.println("=== Device Unpaired on Backend ===");
+            else if (message.indexOf("\"type\":\"device-update\"") != -1) {
+                // Check if paired
+                if (message.indexOf("\"paired\":true") != -1) {
+                    if (!isPaired) {
+                        Serial.println("\n=== Device Paired! ===");
+                        Serial.println("Received pairing confirmation via WebSocket");
+                        Serial.println("======================\n");
+                        isPaired = true;
+                        prefs.putBool("paired", true);
+                    }
+                }
+                else if (message.indexOf("\"paired\":false") != -1) {
+                    if (isPaired) {
+                        Serial.println("\n=== Device Unpaired! ===");
+                        Serial.println("Device was unpaired, generating new code");
+                        isPaired = false;
+                        prefs.putBool("paired", false);
+                        pairingCode = generatePairingCode();
+                        Serial.println("Device ID: " + deviceId);
+                        Serial.println("New Pairing Code: " + pairingCode);
+                        Serial.println("========================\n");
+
+                        // Re-register with new pairing code
+                        sendDeviceRegistration();
+                    }
+                }
             }
+            break;
+        }
+
+        case WStype_ERROR: {
+            Serial.println("[WebSocket] Error occurred");
+            break;
         }
     }
+}
 
-    http.end();
-    return paired;
+void connectWebSocket() {
+    if (!wifiConnected || wsConnected) return;
+
+    Serial.println("[WebSocket] Connecting to ws://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + "/api/ws");
+    webSocket.begin(BACKEND_HOST, BACKEND_PORT, "/api/ws");
+    webSocket.onEvent(webSocketEvent);
+    webSocket.setReconnectInterval(5000);
 }
 
 void connectWiFi() {
@@ -491,7 +536,8 @@ void setup() {
     delay(1000);
 
     Serial.println("\n\n=================================");
-    Serial.println("  Smart Shoe Care Machine v1.0");
+    Serial.println("  Smart Shoe Care Machine v2.0");
+    Serial.println("  WebSocket Edition");
     Serial.println("=================================\n");
 
     prefs.begin("sscm", false);
@@ -510,8 +556,11 @@ void setup() {
     uint64_t chipid = ESP.getEfuseMac();
     Serial.printf("Chip ID: %04X%08X\n\n", (uint16_t)(chipid>>32), (uint32_t)chipid);
 
-    // Generate new pairing code each boot (if not paired)
-    if (!prefs.getBool("paired", false)) {
+    // Check if device is paired
+    isPaired = prefs.getBool("paired", false);
+
+    // Generate pairing code if not paired
+    if (!isPaired) {
         pairingCode = generatePairingCode();
         Serial.println("=== Pairing Information ===");
         Serial.println("Device ID: " + deviceId);
@@ -527,6 +576,11 @@ void setup() {
 /* ===================== LOOP ===================== */
 void loop() {
     delay(10);
+
+    // Handle WebSocket
+    if (wsConnected) {
+        webSocket.loop();
+    }
 
     // Serial commands
     if (Serial.available()) {
@@ -544,6 +598,7 @@ void loop() {
         else if (cmd == "RESET_PAIRING") {
             Serial.println("=== Clearing Pairing Status ===");
             prefs.putBool("paired", false);
+            isPaired = false;
             pairingCode = generatePairingCode();
             Serial.println("New Pairing Code: " + pairingCode);
             Serial.println("Restarting...");
@@ -557,8 +612,9 @@ void loop() {
             if (wifiConnected) {
                 Serial.println("IP Address: " + WiFi.localIP().toString());
             }
-            Serial.println("Paired: " + String(prefs.getBool("paired", false) ? "Yes" : "No"));
-            if (!prefs.getBool("paired", false)) {
+            Serial.println("WebSocket: " + String(wsConnected ? "Connected" : "Disconnected"));
+            Serial.println("Paired: " + String(isPaired ? "Yes" : "No"));
+            if (!isPaired) {
                 Serial.println("Pairing Code: " + pairingCode);
             }
             Serial.println("=====================\n");
@@ -576,6 +632,7 @@ void loop() {
     if (wifiConnected && WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi disconnected! Attempting reconnect...");
         wifiConnected = false;
+        wsConnected = false;
         wifiStartTime = millis();
         lastWiFiRetry = millis();
         connectWiFi();
@@ -593,27 +650,16 @@ void loop() {
         Serial.println("IP: " + WiFi.localIP().toString());
         Serial.println("======================\n");
 
-        bool devicePaired = prefs.getBool("paired", false);
-
-        // Check actual pairing status with backend on boot
-        bool actuallyPaired = checkPairingStatus();
-
-        // If we thought we were paired but backend says no, update local state
-        if (devicePaired && !actuallyPaired) {
-            Serial.println("Device was unpaired while offline. Updating local state.");
-            devicePaired = false;
-            prefs.putBool("paired", false);
-            pairingCode = generatePairingCode();
-            Serial.println("New Pairing Code: " + pairingCode);
-        }
-
-        if (!devicePaired) {
-            Serial.println("Device not paired. Waiting for pairing...");
-            sendPairingRequest();
-            lastPairingCheck = millis();
+        // Register device with backend if not paired
+        if (!isPaired) {
+            Serial.println("Device not paired. Registering with backend...");
+            sendDeviceRegistration();
         } else {
             Serial.println("Device is paired and ready!");
         }
+
+        // Connect to WebSocket for real-time updates
+        connectWebSocket();
     }
 
     /* WiFi retry logic */
@@ -657,48 +703,10 @@ void loop() {
         return;
     }
 
-    /* ================= PAIRING CHECK ================= */
-    bool devicePaired = prefs.getBool("paired", false);
-    unsigned long checkInterval = devicePaired ? PAIRED_CHECK_INTERVAL : PAIRING_CHECK_INTERVAL;
-
-    if (millis() - lastPairingCheck >= checkInterval) {
-        lastPairingCheck = millis();
-
-        bool currentlyPaired = checkPairingStatus();
-
-        if (!devicePaired && currentlyPaired) {
-            Serial.println("\n=== Successfully Paired! ===");
-            Serial.println("Device is now connected to the system");
-            Serial.println("============================\n");
-            unpairDetectedAt = 0;
-            return;
-        }
-
-        if (devicePaired && !currentlyPaired) {
-            if (unpairDetectedAt == 0) {
-                unpairDetectedAt = millis();
-                Serial.println("Unpair detected, waiting to confirm...");
-            }
-
-            // Confirm if actually unpaired after 1 second
-            if (millis() - unpairDetectedAt >= 1000) {
-                Serial.println("\n=== Device Unpaired ===");
-                Serial.println("Generating new pairing code...");
-
-                prefs.putBool("paired", false);
-                pairingCode = generatePairingCode();
-
-                Serial.println("Device ID: " + deviceId);
-                Serial.println("New Pairing Code: " + pairingCode);
-                Serial.println("=======================\n");
-
-                sendPairingRequest();
-                unpairDetectedAt = 0;
-                return;
-            }
-        }
-        else {
-            unpairDetectedAt = 0;
-        }
+    /* ================= WEBSOCKET RECONNECTION ================= */
+    if (!wsConnected && millis() - lastWsReconnect >= WS_RECONNECT_INTERVAL) {
+        lastWsReconnect = millis();
+        Serial.println("[WebSocket] Attempting to reconnect...");
+        connectWebSocket();
     }
 }

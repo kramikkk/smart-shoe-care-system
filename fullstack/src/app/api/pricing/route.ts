@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth-middleware'
+import { z } from 'zod'
 
-// GET - Fetch all service pricing
+const PricingUpdateSchema = z.object({
+  serviceType: z.enum(['cleaning', 'drying', 'sterilizing', 'package']),
+  price: z.number().nonnegative('Price must be a non-negative number'),
+})
+
+// GET - Fetch all service pricing (public endpoint)
 export async function GET(req: NextRequest) {
   try {
     const pricing = await prisma.servicePricing.findMany({
@@ -39,43 +46,43 @@ export async function GET(req: NextRequest) {
       success: true,
       pricing,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching pricing:', error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to fetch pricing',
+        error: 'Failed to fetch pricing',
       },
       { status: 500 }
     )
   }
 }
 
-// PUT - Update service pricing
+// PUT - Update service pricing (requires authentication)
 export async function PUT(req: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req)
+    if (authResult instanceof NextResponse) {
+      return authResult
+    }
+
     const body = await req.json()
-    const { serviceType, price } = body
 
-    if (!serviceType || price === undefined || price === null) {
+    // Validate input
+    const validation = PricingUpdateSchema.safeParse(body)
+    if (!validation.success) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Service type and price are required',
+          error: 'Invalid input',
+          details: validation.error.issues
         },
         { status: 400 }
       )
     }
 
-    if (price < 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Price must be a positive number',
-        },
-        { status: 400 }
-      )
-    }
+    const { serviceType, price } = validation.data
 
     // Update or create pricing
     const updatedPricing = await prisma.servicePricing.upsert({
@@ -95,12 +102,12 @@ export async function PUT(req: NextRequest) {
       success: true,
       pricing: updatedPricing,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating pricing:', error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to update pricing',
+        error: 'Failed to update pricing',
       },
       { status: 500 }
     )
