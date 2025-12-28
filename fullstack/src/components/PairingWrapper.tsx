@@ -10,12 +10,24 @@ interface PairingWrapperProps {
 
 const DEVICE_ID_KEY = 'kiosk_device_id'
 
+// WebSocket connection states
+enum ConnectionState {
+  DISCONNECTED = 'disconnected',
+  CONNECTING = 'connecting',
+  CONNECTED = 'connected',
+  RECONNECTING = 'reconnecting'
+}
+
 export default function PairingWrapper({ children }: PairingWrapperProps) {
   const [isPaired, setIsPaired] = useState<boolean | null>(null)
   const [pairingCode, setPairingCode] = useState<string>('')
   const [deviceId, setDeviceId] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const wsRef = useRef<WebSocket | null>(null)
+  const connectionStateRef = useRef<ConnectionState>(ConnectionState.DISCONNECTED)
+  const reconnectAttemptsRef = useRef<number>(0)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const intentionalCloseRef = useRef<boolean>(false)
 
   // Initial check and WebSocket setup
   useEffect(() => {
@@ -59,18 +71,38 @@ export default function PairingWrapper({ children }: PairingWrapperProps) {
     }
 
     const connectWebSocket = (deviceId: string) => {
+      // Prevent duplicate connections
+      if (connectionStateRef.current === ConnectionState.CONNECTING ||
+          connectionStateRef.current === ConnectionState.CONNECTED) {
+        console.log('[WebSocket] Already connected or connecting, skipping')
+        return
+      }
+
+      // Clear any pending reconnect timeout
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
+      }
+
+      connectionStateRef.current = reconnectAttemptsRef.current > 0
+        ? ConnectionState.RECONNECTING
+        : ConnectionState.CONNECTING
+
       // Determine WebSocket protocol based on current protocol
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       // Add deviceId as query parameter for authentication
       const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
 
-      console.log(`[WebSocket] Connecting to ${wsUrl}`)
+      console.log(`[WebSocket] ${connectionStateRef.current === ConnectionState.RECONNECTING ? 'Reconnecting' : 'Connecting'} to ${wsUrl}`)
 
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => {
-        console.log('[WebSocket] Connected')
+        console.log('[WebSocket] Connected successfully')
+        connectionStateRef.current = ConnectionState.CONNECTED
+        reconnectAttemptsRef.current = 0 // Reset reconnect attempts on successful connection
+
         // Subscribe to device updates
         ws.send(JSON.stringify({
           type: 'subscribe',
@@ -97,23 +129,35 @@ export default function PairingWrapper({ children }: PairingWrapperProps) {
       }
 
       ws.onerror = (error) => {
-        console.error('[WebSocket] Connection error - unable to establish WebSocket connection')
-        console.error('[WebSocket] This may be due to:')
-        console.error('  - WebSocket server not running')
-        console.error('  - Network connectivity issues')
-        console.error('  - CORS or authentication problems')
-        console.error('[WebSocket] Error details:', error)
+        console.error('[WebSocket] Connection error')
+        connectionStateRef.current = ConnectionState.DISCONNECTED
       }
 
-      ws.onclose = () => {
-        console.log('[WebSocket] Disconnected')
-        // Attempt to reconnect after 5 seconds
-        setTimeout(() => {
-          if (deviceId) {
-            console.log('[WebSocket] Attempting to reconnect...')
+      ws.onclose = (event) => {
+        connectionStateRef.current = ConnectionState.DISCONNECTED
+
+        // Don't reconnect if close was intentional
+        if (intentionalCloseRef.current) {
+          console.log('[WebSocket] Disconnected (intentional)')
+          return
+        }
+
+        console.log(`[WebSocket] Disconnected (code: ${event.code}, reason: ${event.reason || 'none'})`)
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+        const baseDelay = 1000
+        const maxDelay = 30000
+        const delay = Math.min(baseDelay * Math.pow(2, reconnectAttemptsRef.current), maxDelay)
+
+        reconnectAttemptsRef.current++
+
+        console.log(`[WebSocket] Will attempt reconnection #${reconnectAttemptsRef.current} in ${delay / 1000}s`)
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (deviceId && !intentionalCloseRef.current) {
             connectWebSocket(deviceId)
           }
-        }, 5000)
+        }, delay)
       }
     }
 
@@ -121,9 +165,21 @@ export default function PairingWrapper({ children }: PairingWrapperProps) {
 
     // Cleanup WebSocket on unmount
     return () => {
+      intentionalCloseRef.current = true
+
+      // Clear any pending reconnect timeout
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
+      }
+
+      // Close WebSocket connection
       if (wsRef.current) {
         wsRef.current.close()
+        wsRef.current = null
       }
+
+      connectionStateRef.current = ConnectionState.DISCONNECTED
     }
   }, [])
 

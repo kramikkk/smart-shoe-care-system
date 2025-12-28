@@ -1,16 +1,7 @@
 import SensCard from "@/components/SensorCard"
-import { headers } from "next/headers"
-import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation";
-import SystemAlertCard from "@/components/SystemAlertCard";
+import SystemAlertCard from "@/components/SystemAlertCard"
 
-export default async function SystemPage() {
-  const session = await auth.api.getSession({
-      headers: await headers(), // you need to pass the headers object.
-    });
-    if (!session) {
-      redirect("/admin/login");
-    }
+export default function SystemPage() {
   return (
     <div className="flex flex-col space-y-4 h-full">
       <div>
