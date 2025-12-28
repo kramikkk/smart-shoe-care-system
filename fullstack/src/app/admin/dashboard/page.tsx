@@ -4,17 +4,8 @@ import StatsCard from "@/components/StatsCard"
 import RecentTransactionTable from "@/components/RecentTransactionTable"
 import SystemAlertCard from "@/components/SystemAlertCard"
 import SensorCard from "@/components/SensorCard"
-import { auth } from "@/lib/auth"
-import { headers } from "next/headers"
-import { redirect } from "next/navigation";
 
-export default async function DashboardPage() {
-    const session = await auth.api.getSession({
-          headers: await headers(),
-    });
-        if (!session) {
-        redirect("/admin/login");
-        }
+export default function DashboardPage() {
     return (
         <div className="flex flex-col gap-4 w-full overflow-x-hidden overflow-y-scroll">
         {/* Stats and Sensor Cards */}

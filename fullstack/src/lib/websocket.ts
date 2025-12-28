@@ -23,6 +23,7 @@ export function createWebSocketServer(server: Server) {
   server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname, searchParams } = new URL(request.url || '', `http://${request.headers.host}`)
 
+    // Only handle our custom WebSocket endpoint
     if (pathname === '/api/ws') {
       // Extract token from query params or cookies
       const token = searchParams.get('token') || request.headers.cookie?.match(/auth-token=([^;]+)/)?.[1] || null
@@ -42,9 +43,9 @@ export function createWebSocketServer(server: Server) {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request)
       })
-    } else {
-      socket.destroy()
     }
+    // For other paths (like /_next/webpack-hmr), don't handle them
+    // Let Next.js handle its own WebSocket connections
   })
 
   wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
