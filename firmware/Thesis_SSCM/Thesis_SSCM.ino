@@ -36,6 +36,28 @@ const unsigned long WS_RECONNECT_INTERVAL = 5000; // Try to reconnect every 5 se
 unsigned long lastStatusUpdate = 0;
 const unsigned long STATUS_UPDATE_INTERVAL = 60000; // Update status every 1 minute
 
+/* ===================== COIN SLOT ===================== */
+#define COIN_SLOT_PIN 5
+volatile unsigned long lastCoinPulseTime = 0;
+volatile unsigned int currentCoinPulses = 0;
+unsigned int totalCoinPesos = 0;
+const unsigned long COIN_PULSE_DEBOUNCE_TIME = 100;     // 100ms between pulses (increased for noise immunity)
+const unsigned long COIN_COMPLETE_TIMEOUT = 300;        // 200ms to confirm coin insertion complete
+unsigned long coinSystemReadyTime = 0;                  // Time when system is ready to accept coins
+
+/* ===================== BILL ACCEPTOR ===================== */
+#define BILL_PULSE_PIN 4
+volatile unsigned long lastBillPulseTime = 0;
+volatile unsigned int currentBillPulses = 0;
+unsigned int totalBillPesos = 0;
+unsigned int totalPesos = 0;  // Combined total (coins + bills)
+const unsigned long BILL_PULSE_DEBOUNCE_TIME = 100;     // 100ms between pulses (increased for noise immunity)
+const unsigned long BILL_COMPLETE_TIMEOUT = 300;        // 200ms to confirm bill insertion complete
+unsigned long billSystemReadyTime = 0;                  // Time when system is ready to accept bills
+
+/* ===================== STARTUP DELAY ===================== */
+const unsigned long PAYMENT_SYSTEM_STARTUP_DELAY = 10000; // 10 seconds - ignore pulses during startup
+
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
 String deviceId = "";
@@ -593,6 +615,38 @@ void connectWiFi() {
     Serial.println("==========================");
 }
 
+/* ===================== COIN SLOT INTERRUPT HANDLER ===================== */
+void IRAM_ATTR handleCoinPulse() {
+    unsigned long currentTime = millis();
+
+    // Ignore pulses during startup period
+    if (currentTime < coinSystemReadyTime) {
+        return;
+    }
+
+    // Debounce: ignore if less than COIN_PULSE_DEBOUNCE_TIME has passed
+    if (currentTime - lastCoinPulseTime > COIN_PULSE_DEBOUNCE_TIME) {
+        lastCoinPulseTime = currentTime;
+        currentCoinPulses++;
+    }
+}
+
+/* ===================== BILL ACCEPTOR INTERRUPT HANDLER ===================== */
+void IRAM_ATTR handleBillPulse() {
+    unsigned long currentTime = millis();
+
+    // Ignore pulses during startup period
+    if (currentTime < billSystemReadyTime) {
+        return;
+    }
+
+    // Debounce: ignore if less than BILL_PULSE_DEBOUNCE_TIME has passed
+    if (currentTime - lastBillPulseTime > BILL_PULSE_DEBOUNCE_TIME) {
+        lastBillPulseTime = currentTime;
+        currentBillPulses++;
+    }
+}
+
 /* ===================== SETUP ===================== */
 void setup() {
     Serial.begin(115200);
@@ -604,6 +658,33 @@ void setup() {
     Serial.println("=================================\n");
 
     prefs.begin("sscm", false);
+
+    // Initialize coin slot pin
+    pinMode(COIN_SLOT_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(COIN_SLOT_PIN), handleCoinPulse, FALLING);
+    Serial.println("Coin slot initialized on GPIO 5");
+    Serial.println("Supported coin denominations: 1, 5, 10, 20 pesos");
+
+    // Initialize bill acceptor pins
+    pinMode(BILL_PULSE_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BILL_PULSE_PIN), handleBillPulse, FALLING);
+    Serial.println("Bill acceptor initialized on GPIO 4");
+    Serial.println("Supported bill denominations: 20, 50, 100 pesos");
+    Serial.println("Bill pulse ratio: 1 pulse = 10 pesos");
+
+    // Set ready time to ignore startup noise and initialization pulses
+    coinSystemReadyTime = millis() + PAYMENT_SYSTEM_STARTUP_DELAY;
+    billSystemReadyTime = millis() + PAYMENT_SYSTEM_STARTUP_DELAY;
+    Serial.println("\n*** Payment system will be ready in 10 seconds ***");
+    Serial.println("Ignoring all pulses during initialization period\n");
+
+    // Load totals from preferences
+    totalCoinPesos = prefs.getUInt("totalCoinPesos", 0);
+    totalBillPesos = prefs.getUInt("totalBillPesos", 0);
+    totalPesos = totalCoinPesos + totalBillPesos;
+    Serial.println("Total coins collected: " + String(totalCoinPesos) + " PHP");
+    Serial.println("Total bills collected: " + String(totalBillPesos) + " PHP");
+    Serial.println("Grand total: " + String(totalPesos) + " PHP\n");
 
     // Initialize device ID (persistent)
     deviceId = prefs.getString("deviceId", "");
@@ -640,8 +721,103 @@ void setup() {
 void loop() {
     delay(10);
 
+    // Notify when payment system becomes ready
+    static bool paymentSystemReady = false;
+    if (!paymentSystemReady && millis() >= coinSystemReadyTime) {
+        paymentSystemReady = true;
+        Serial.println("\n=== PAYMENT SYSTEM READY ===");
+        Serial.println("Coin and bill acceptors are now active");
+        Serial.println("============================\n");
+    }
+
     // Handle WebSocket - MUST call loop() even when not connected for handshake
     webSocket.loop();
+
+    // Handle coin insertion with pulse counting and timeout
+    if (currentCoinPulses > 0) {
+        unsigned long timeSinceLastPulse = millis() - lastCoinPulseTime;
+
+        // Check if coin insertion is complete (no new pulse for COIN_COMPLETE_TIMEOUT ms)
+        if (timeSinceLastPulse >= COIN_COMPLETE_TIMEOUT) {
+            // Coin insertion complete - process the value
+            unsigned int coinValue = currentCoinPulses;
+            totalCoinPesos += coinValue;
+            totalPesos = totalCoinPesos + totalBillPesos;
+
+            // Save totals to persistent storage
+            prefs.putUInt("totalCoinPesos", totalCoinPesos);
+
+            Serial.println("\n=== COIN INSERTED ===");
+            Serial.println("Coin Value: " + String(coinValue) + " PHP");
+            Serial.println("Pulses Counted: " + String(currentCoinPulses));
+            Serial.println("Total Coins: " + String(totalCoinPesos) + " PHP");
+            Serial.println("Grand Total: " + String(totalPesos) + " PHP");
+
+            // Warn if unexpected denomination (but still accept it)
+            if (coinValue != 1 && coinValue != 5 && coinValue != 10 && coinValue != 20) {
+                Serial.println("[WARNING] Unexpected coin value: " + String(coinValue) + " PHP");
+                Serial.println("[WARNING] Expected: 1, 5, 10, or 20 pesos");
+                Serial.println("[WARNING] Coin was still counted");
+            }
+            Serial.println("=====================\n");
+
+            // Send coin insertion event via WebSocket
+            if (wsConnected) {
+                String coinMsg = "{\"type\":\"coin-inserted\",\"deviceId\":\"" + deviceId + "\",\"coinValue\":" + String(coinValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
+                webSocket.sendTXT(coinMsg);
+                Serial.println("[WebSocket] Sent coin event: " + coinMsg);
+            } else {
+                Serial.println("[WebSocket] Not connected - coin event not sent");
+            }
+
+            // Reset pulse counter for next coin
+            currentCoinPulses = 0;
+        }
+    }
+
+    // Handle bill insertion with pulse counting and timeout
+    if (currentBillPulses > 0) {
+        unsigned long timeSinceLastPulse = millis() - lastBillPulseTime;
+
+        // Check if bill insertion is complete (no new pulse for BILL_COMPLETE_TIMEOUT ms)
+        if (timeSinceLastPulse >= BILL_COMPLETE_TIMEOUT) {
+            // Bill insertion complete - calculate value (1 pulse = 10 pesos)
+            unsigned int billValue = currentBillPulses * 10;
+
+            // Accept all bills - process and count
+            totalBillPesos += billValue;
+            totalPesos = totalCoinPesos + totalBillPesos;
+
+            // Save totals to persistent storage
+            prefs.putUInt("totalBillPesos", totalBillPesos);
+
+            Serial.println("\n=== BILL INSERTED ===");
+            Serial.println("Bill Value: " + String(billValue) + " PHP");
+            Serial.println("Pulses Counted: " + String(currentBillPulses) + " (x10)");
+            Serial.println("Total Bills: " + String(totalBillPesos) + " PHP");
+            Serial.println("Grand Total: " + String(totalPesos) + " PHP");
+
+            // Warn if unexpected denomination (but still accept it)
+            if (billValue != 20 && billValue != 50 && billValue != 100) {
+                Serial.println("[WARNING] Unexpected bill value: " + String(billValue) + " PHP");
+                Serial.println("[WARNING] Expected: 20, 50, or 100 pesos");
+                Serial.println("[WARNING] Bill was still counted");
+            }
+            Serial.println("=====================\n");
+
+            // Send bill insertion event via WebSocket
+            if (wsConnected) {
+                String billMsg = "{\"type\":\"bill-inserted\",\"deviceId\":\"" + deviceId + "\",\"billValue\":" + String(billValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
+                webSocket.sendTXT(billMsg);
+                Serial.println("[WebSocket] Sent bill event: " + billMsg);
+            } else {
+                Serial.println("[WebSocket] Not connected - bill event not sent");
+            }
+
+            // Reset pulse counter for next bill
+            currentBillPulses = 0;
+        }
+    }
 
     // Serial commands
     if (Serial.available()) {
@@ -666,6 +842,18 @@ void loop() {
             delay(1000);
             ESP.restart();
         }
+        else if (cmd == "RESET_MONEY") {
+            Serial.println("=== Resetting Money Counters ===");
+            totalCoinPesos = 0;
+            totalBillPesos = 0;
+            totalPesos = 0;
+            currentCoinPulses = 0;
+            currentBillPulses = 0;
+            prefs.putUInt("totalCoinPesos", 0);
+            prefs.putUInt("totalBillPesos", 0);
+            Serial.println("All counters reset to 0 PHP");
+            Serial.println("================================\n");
+        }
         else if (cmd == "STATUS") {
             Serial.println("\n=== Device Status ===");
             Serial.println("Device ID: " + deviceId);
@@ -678,6 +866,12 @@ void loop() {
             if (!isPaired) {
                 Serial.println("Pairing Code: " + pairingCode);
             }
+            Serial.println("--- Payment Status ---");
+            Serial.println("Total Coins: " + String(totalCoinPesos) + " PHP");
+            Serial.println("Total Bills: " + String(totalBillPesos) + " PHP");
+            Serial.println("Grand Total: " + String(totalPesos) + " PHP");
+            Serial.println("Current Coin Pulses: " + String(currentCoinPulses));
+            Serial.println("Current Bill Pulses: " + String(currentBillPulses));
             Serial.println("=====================\n");
         }
     }
