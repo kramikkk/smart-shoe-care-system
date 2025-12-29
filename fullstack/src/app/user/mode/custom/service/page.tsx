@@ -5,12 +5,15 @@ import { Droplets, Wind, ShieldCheck } from 'lucide-react'
 import { Item, ItemContent } from '@/components/ui/item'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { BackButton } from '@/components/BackButton'
 
 const service = () => {
     const searchParams = useSearchParams()
     const shoe = searchParams.get('shoe') || 'mesh'
   return (
-    <div>
+    <div className="relative">
+      <BackButton />
+
       <h1 className="text-5xl font-bold text-center mb-10 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Choose Service Type
       </h1>

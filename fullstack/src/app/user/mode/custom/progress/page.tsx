@@ -76,27 +76,35 @@ const CustomProgress = () => {
     switch (service.toLowerCase()) {
       case 'cleaning':
         return {
-          icon: <Droplets className="w-32 h-32 text-blue-600" />,
+          icon: <Droplets className="w-24 h-24 text-blue-600" />,
           name: 'Cleaning',
-          color: 'text-blue-600'
+          color: 'text-blue-600',
+          gradientFrom: 'from-blue-400',
+          gradientTo: 'to-cyan-400'
         }
       case 'drying':
         return {
-          icon: <Wind className="w-32 h-32 text-cyan-600" />,
+          icon: <Wind className="w-24 h-24 text-cyan-600" />,
           name: 'Drying',
-          color: 'text-cyan-600'
+          color: 'text-cyan-600',
+          gradientFrom: 'from-cyan-400',
+          gradientTo: 'to-blue-400'
         }
       case 'sterilizing':
         return {
-          icon: <ShieldCheck className="w-32 h-32 text-green-600" />,
+          icon: <ShieldCheck className="w-24 h-24 text-green-600" />,
           name: 'Sterilizing',
-          color: 'text-green-600'
+          color: 'text-green-600',
+          gradientFrom: 'from-green-400',
+          gradientTo: 'to-emerald-400'
         }
       default:
         return {
-          icon: <Droplets className="w-32 h-32 text-blue-600" />,
+          icon: <Droplets className="w-24 h-24 text-blue-600" />,
           name: 'Cleaning',
-          color: 'text-blue-600'
+          color: 'text-blue-600',
+          gradientFrom: 'from-blue-400',
+          gradientTo: 'to-cyan-400'
         }
     }
   }
@@ -105,28 +113,67 @@ const CustomProgress = () => {
     return care.charAt(0).toUpperCase() + care.slice(1)
   }
 
+  const getShoeTypeName = () => {
+    return shoe.charAt(0).toUpperCase() + shoe.slice(1)
+  }
+
   const serviceConfig = getServiceConfig()
 
   return (
-    <div>
-      <h1 className="text-5xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-        Shoe Care in Progress...
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-6">
+      {/* Title */}
+      <h1 className="text-4xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+        Shoe Care in Progress
       </h1>
-      <div className='flex justify-center'>
-        {serviceConfig.icon}
+
+      {/* Service Icon with Animation */}
+      <div className='flex justify-center mb-6'>
+        <div className="relative">
+          <div className={`absolute inset-0 bg-gradient-to-r ${serviceConfig.gradientFrom} ${serviceConfig.gradientTo} rounded-full blur-xl opacity-40 animate-pulse`}></div>
+          <div className="relative bg-white rounded-full p-6 shadow-xl">
+            <div className="w-28 h-28 flex items-center justify-center">
+              {serviceConfig.icon}
+            </div>
+          </div>
+        </div>
       </div>
-      <h2 className="text-4xl font-bold text-center mt-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-        {serviceConfig.name} - {getCareTypeName()}
+
+      {/* Service Name */}
+      <h2 className="text-3xl font-bold text-center mb-3 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+        {serviceConfig.name}
       </h2>
-      <p className="text-center text-gray-600 mt-4">
-        Please wait while we {serviceConfig.name.toLowerCase()} your shoes with {care} care.
-      </p>
-      <p className="text-center text-4xl font-bold text-gray-600 mt-4">
-        Time Remaining: {formatTime(timeRemaining)}
-      </p>
-      <div className="mt-6">
-        <Progress value={progress} className='bg-gray-200 relative h-2 w-full overflow-hidden rounded-full [&>*]:bg-gradient-to-r [&>*]:from-blue-600 [&>*]:via-cyan-600 [&>*]:to-green-600'/>
+
+      {/* Shoe Type & Care Type Badges */}
+      <div className="flex gap-3 mb-6">
+        <span className="inline-block px-5 py-1.5 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full text-base font-semibold text-purple-800 shadow-sm">
+          {getShoeTypeName()} Type
+        </span>
+        <span className="inline-block px-5 py-1.5 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-full text-base font-semibold text-blue-800 shadow-sm">
+          {getCareTypeName()} Care
+        </span>
       </div>
+
+      {/* Time Remaining */}
+      <div className="mb-6">
+        <p className="text-xl text-gray-500 text-center mb-1">Time Remaining</p>
+        <p className="text-6xl font-bold text-center bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+          {formatTime(timeRemaining)}
+        </p>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="w-full max-w-xl mb-6">
+        <Progress
+          value={progress}
+          className='bg-gray-200 relative h-5 w-full overflow-hidden rounded-full shadow-inner [&>*]:bg-gradient-to-r [&>*]:from-blue-600 [&>*]:via-cyan-600 [&>*]:to-green-600 [&>*]:transition-all [&>*]:duration-500'
+        />
+        <p className="text-center text-gray-500 mt-2 text-base font-medium">{Math.round(progress)}% Complete</p>
+      </div>
+
+      {/* Instruction Text */}
+      <p className="text-center text-gray-500 text-lg max-w-xl leading-relaxed">
+        Please wait while we take care of your shoes. You will be automatically redirected when complete.
+      </p>
     </div>
   )
 }

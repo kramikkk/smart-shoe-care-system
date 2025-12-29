@@ -121,47 +121,135 @@ const Auto = () => {
     return care.charAt(0).toUpperCase() + care.slice(1)
   }
 
+  const getShoeTypeName = () => {
+    return shoe.charAt(0).toUpperCase() + shoe.slice(1)
+  }
+
   return (
-    <div>
-      <h1 className="text-5xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-        Shoe Care in Progress...
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-4">
+      {/* Title */}
+      <h1 className="text-4xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+        Shoe Care in Progress
       </h1>
-      <div className='flex justify-center'>
-        {getStageIcon()}
+
+      {/* Main Stage Icon with Animation */}
+      <div className='flex justify-center mb-4'>
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-cyan-400 to-green-400 rounded-full blur-xl opacity-40 animate-pulse"></div>
+          <div className="relative bg-white rounded-full p-4 shadow-xl">
+            <div className="w-24 h-24 flex items-center justify-center">
+              {currentStage === 'cleaning' && <Droplets className="w-20 h-20 text-cyan-600" />}
+              {currentStage === 'drying' && <Wind className="w-20 h-20 text-blue-600" />}
+              {currentStage === 'sterilizing' && <ShieldCheck className="w-20 h-20 text-green-600" />}
+            </div>
+          </div>
+        </div>
       </div>
-      <h2 className="text-4xl font-bold text-center mt-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-        {getStageName()} - {getCareTypeName()} Care
+
+      {/* Current Stage Name */}
+      <h2 className="text-3xl font-bold text-center mb-2 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+        {getStageName()}
       </h2>
-      <p className="text-center text-gray-600 mt-4">
-        Please wait while we take care of your shoes with {care} care settings. You will be notified once the process is complete.
-      </p>
-      <p className="text-center text-4xl font-bold text-gray-600 mt-4">
-        Time Remaining: {formatTime(timeRemaining)}
-      </p>
-      <div className="mt-6">
-        <Progress value={progress} className='bg-gray-200 relative h-2 w-full overflow-hidden rounded-full [&>*]:bg-gradient-to-r [&>*]:from-blue-600 [&>*]:via-cyan-600 [&>*]:to-green-600'/>
+
+      {/* Shoe Type & Care Type Badges */}
+      <div className="flex gap-2 mb-4">
+        <span className="inline-block px-4 py-1 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full text-sm font-semibold text-purple-800 shadow-sm">
+          {getShoeTypeName()} Type
+        </span>
+        <span className="inline-block px-4 py-1 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-full text-sm font-semibold text-blue-800 shadow-sm">
+          {getCareTypeName()} Care
+        </span>
       </div>
-      <h2 className='text-2xl font-bold text-center mt-8 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent'>Process Stage:</h2>
-      <div className='mt-4 flex justify-center'>
-        <div>
-          <Droplets className={`w-16 h-16 mx-auto ${currentStage === 'cleaning' ? 'text-blue-600' : 'text-gray-400'}`} />
-          <Item className={`text-center px-6 py-3 mt-2 rounded-full shadow-lg flex flex-col items-center ${currentStage === 'cleaning' ? 'bg-blue-600/50' : 'bg-white/50'}`}>
-            Cleaning
-          </Item>
-        </div>
-        <div className='mx-12'>
-          <Wind className={`w-16 h-16 mx-auto ${currentStage === 'drying' ? 'text-cyan-600' : 'text-gray-400'}`} />
-          <Item className={`text-center px-6 py-3 mt-2 rounded-full shadow-lg flex flex-col items-center ${currentStage === 'drying' ? 'bg-cyan-600/50' : 'bg-white/50'}`}>
-            Drying
-          </Item>
-        </div>
-        <div>
-          <ShieldCheck className={`w-16 h-16 mx-auto ${currentStage === 'sterilizing' ? 'text-green-600' : 'text-gray-400'}`} />
-          <Item className={`text-center px-6 py-3 mt-2 rounded-full shadow-lg flex flex-col items-center ${currentStage === 'sterilizing' ? 'bg-green-600/50' : 'bg-white/50'}`}>
-            Sterilizing
-          </Item>
+
+      {/* Time Remaining */}
+      <div className="mb-4">
+        <p className="text-lg text-gray-500 text-center mb-1">Time Remaining</p>
+        <p className="text-5xl font-bold text-center bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+          {formatTime(timeRemaining)}
+        </p>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="w-full max-w-xl mb-6">
+        <Progress
+          value={progress}
+          className='bg-gray-200 relative h-4 w-full overflow-hidden rounded-full shadow-inner [&>*]:bg-gradient-to-r [&>*]:from-blue-600 [&>*]:via-cyan-600 [&>*]:to-green-600 [&>*]:transition-all [&>*]:duration-500'
+        />
+        <p className="text-center text-gray-500 mt-2 text-sm font-medium">{Math.round(progress)}% Complete</p>
+      </div>
+
+      {/* Process Stages Indicator */}
+      <div className="w-full max-w-2xl">
+        <h2 className='text-xl font-bold text-center mb-4 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent'>
+          Process Stages
+        </h2>
+        <div className='flex justify-center gap-6'>
+          {/* Cleaning Stage */}
+          <div className="flex flex-col items-center transition-all duration-300">
+            <div className={`rounded-full p-3 mb-2 transition-all duration-300 ${
+              currentStage === 'cleaning'
+                ? 'bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg scale-105'
+                : 'bg-gray-200 shadow-md'
+            }`}>
+              <Droplets className={`w-12 h-12 transition-colors duration-300 ${
+                currentStage === 'cleaning' ? 'text-white' : 'text-gray-400'
+              }`} />
+            </div>
+            <Item className={`text-center px-4 py-2 rounded-full shadow-lg transition-all duration-300 ${
+              currentStage === 'cleaning'
+                ? 'bg-blue-600 text-white font-bold'
+                : 'bg-white/70 text-gray-600'
+            }`}>
+              <span className="text-sm">Cleaning</span>
+            </Item>
+          </div>
+
+          {/* Drying Stage */}
+          <div className="flex flex-col items-center transition-all duration-300">
+            <div className={`rounded-full p-3 mb-2 transition-all duration-300 ${
+              currentStage === 'drying'
+                ? 'bg-gradient-to-br from-cyan-500 to-green-500 shadow-lg scale-105'
+                : 'bg-gray-200 shadow-md'
+            }`}>
+              <Wind className={`w-12 h-12 transition-colors duration-300 ${
+                currentStage === 'drying' ? 'text-white' : 'text-gray-400'
+              }`} />
+            </div>
+            <Item className={`text-center px-4 py-2 rounded-full shadow-lg transition-all duration-300 ${
+              currentStage === 'drying'
+                ? 'bg-cyan-600 text-white font-bold'
+                : 'bg-white/70 text-gray-600'
+            }`}>
+              <span className="text-sm">Drying</span>
+            </Item>
+          </div>
+
+          {/* Sterilizing Stage */}
+          <div className="flex flex-col items-center transition-all duration-300">
+            <div className={`rounded-full p-3 mb-2 transition-all duration-300 ${
+              currentStage === 'sterilizing'
+                ? 'bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg scale-105'
+                : 'bg-gray-200 shadow-md'
+            }`}>
+              <ShieldCheck className={`w-12 h-12 transition-colors duration-300 ${
+                currentStage === 'sterilizing' ? 'text-white' : 'text-gray-400'
+              }`} />
+            </div>
+            <Item className={`text-center px-4 py-2 rounded-full shadow-lg transition-all duration-300 ${
+              currentStage === 'sterilizing'
+                ? 'bg-green-600 text-white font-bold'
+                : 'bg-white/70 text-gray-600'
+            }`}>
+              <span className="text-sm">Sterilizing</span>
+            </Item>
+          </div>
         </div>
       </div>
+
+      {/* Instruction Text */}
+      <p className="text-center text-gray-500 mt-6 text-base max-w-xl">
+        Please wait while we take care of your shoes. You will be automatically redirected when complete.
+      </p>
     </div>
   )
 }
