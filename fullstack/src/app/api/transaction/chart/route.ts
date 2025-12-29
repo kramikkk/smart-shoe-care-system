@@ -3,23 +3,32 @@ import prisma from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
   try {
-    // Get date range from query params (default to last 90 days)
+    // Get date range and device filter from query params
     const { searchParams } = new URL(req.url)
     const days = parseInt(searchParams.get('days') || '90')
+    const deviceId = searchParams.get('deviceId')
 
     // Calculate start date
     const endDate = new Date()
     const startDate = new Date(endDate)
     startDate.setDate(startDate.getDate() - days)
 
+    // Build where clause with optional device filter
+    const whereClause: any = {
+      dateTime: {
+        gte: startDate,
+        lte: endDate,
+      },
+    }
+
+    // Add device filter if provided
+    if (deviceId) {
+      whereClause.deviceId = deviceId
+    }
+
     // Fetch transactions within date range
     const transactions = await prisma.transaction.findMany({
-      where: {
-        dateTime: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
+      where: whereClause,
       orderBy: {
         dateTime: 'asc',
       },

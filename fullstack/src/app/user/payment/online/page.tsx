@@ -62,7 +62,11 @@ const OnlinePayment = () => {
   useEffect(() => {
     const fetchPricing = async () => {
       try {
-        const response = await fetch('/api/pricing')
+        // Get device ID from localStorage (set by PairingWrapper)
+        const deviceId = localStorage.getItem('kiosk_device_id')
+        const deviceParam = deviceId ? `?deviceId=${deviceId}` : ''
+
+        const response = await fetch(`/api/pricing${deviceParam}`)
         const data = await response.json()
 
         if (data.success) {
@@ -115,7 +119,6 @@ const OnlinePayment = () => {
                 serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1), // Capitalize first letter
                 shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
                 careType: selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
-                amount: selectedServiceData.price,
                 deviceId, // Link transaction to this kiosk
               }),
             })
@@ -307,7 +310,6 @@ const OnlinePayment = () => {
           serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1),
           shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
           careType: selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
-          amount: selectedServiceData.price,
           deviceId, // Link transaction to this kiosk
         }),
       })

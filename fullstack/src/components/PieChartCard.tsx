@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Label, Pie, PieChart, Sector } from "recharts"
 import { PieSectorDataItem } from "recharts/types/polar/Pie"
+import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
 import {
   Card,
@@ -58,6 +59,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export function PieChartCard() {
+  const { selectedDevice } = useDeviceFilter()
   const id = "pie-interactive"
   const [serviceData, setServiceData] = React.useState<ServiceData[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
@@ -67,7 +69,7 @@ export function PieChartCard() {
   React.useEffect(() => {
     const fetchDistribution = async () => {
       try {
-        const response = await fetch('/api/transaction/distribution')
+        const response = await fetch(`/api/transaction/distribution?deviceId=${selectedDevice}`)
         const data = await response.json()
 
         if (data.success) {
@@ -89,7 +91,7 @@ export function PieChartCard() {
     }
 
     fetchDistribution()
-  }, [])
+  }, [selectedDevice])
 
   const activeIndex = React.useMemo(
     () => serviceData.findIndex((item: ServiceData) => item.type === activeService),
@@ -104,7 +106,7 @@ export function PieChartCard() {
 
   if (isLoading) {
     return (
-      <Card className="flex flex-col h-full min-h-[400px]">
+      <Card className="flex flex-col min-h-[400px]">
         <CardHeader>
           <CardTitle>Service Type Distribution</CardTitle>
           <CardDescription>Loading...</CardDescription>
@@ -118,7 +120,7 @@ export function PieChartCard() {
 
   if (serviceData.length === 0) {
     return (
-      <Card className="flex flex-col h-full min-h-[400px]">
+      <Card className="flex flex-col min-h-[400px]">
         <CardHeader>
           <CardTitle>Service Type Distribution</CardTitle>
           <CardDescription>No data</CardDescription>
@@ -131,7 +133,7 @@ export function PieChartCard() {
   }
 
   return (
-    <Card data-chart={id} className="flex flex-col h-full min-h-[400px]">
+    <Card data-chart={id} className="flex flex-col min-h-[400px]">
       <ChartStyle id={id} config={chartConfig} />
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
         <div className="grid gap-1">

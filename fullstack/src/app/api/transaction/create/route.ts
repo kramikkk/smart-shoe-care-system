@@ -9,7 +9,6 @@ const TransactionSchema = z.object({
   serviceType: z.enum(['Cleaning', 'Drying', 'Sterilizing', 'Package']),
   shoeType: z.enum(['Canvas', 'Rubber', 'Mesh']),
   careType: z.enum(['Gentle', 'Normal', 'Strong']),
-  amount: z.number().nonnegative('Amount must be non-negative'),
   status: z.enum(['Pending', 'Success', 'Failed']).optional().default('Success'),
   deviceId: z.string().regex(/^SSCM-[A-F0-9]{6}$/, 'Device ID is required and must be in format SSCM-XXXXXX'),
 })
@@ -43,7 +42,39 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { paymentMethod, serviceType, shoeType, careType, amount, status, deviceId } = validation.data
+    const { paymentMethod, serviceType, shoeType, careType, status, deviceId } = validation.data
+
+    // Fetch device-specific pricing (or fallback to global pricing)
+    const serviceTypeLower = serviceType.toLowerCase()
+    let pricing = await prisma.servicePricing.findFirst({
+      where: {
+        deviceId,
+        serviceType: serviceTypeLower,
+      },
+    })
+
+    // If no device-specific pricing exists, fetch global default
+    if (!pricing) {
+      pricing = await prisma.servicePricing.findFirst({
+        where: {
+          deviceId: null,
+          serviceType: serviceTypeLower,
+        },
+      })
+    }
+
+    // If still no pricing exists, return error
+    if (!pricing) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `No pricing found for service type: ${serviceType}`,
+        },
+        { status: 400 }
+      )
+    }
+
+    const amount = pricing.price
 
     // Generate transaction ID in format TXN-1, TXN-2, TXN-3, etc.
     // Get the count of existing transactions to determine the next ID

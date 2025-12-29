@@ -1,16 +1,9 @@
-import { LogOut, Moon, User } from "lucide-react"
+'use client'
+
 import Link from "next/link"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { ModeToggle } from "@/components/ModeToggle"
 import { SidebarTrigger } from "./ui/sidebar"
+import { DeviceSelector } from "./DeviceSelector"
 
 const NavBar = () => {
   return (
@@ -20,6 +13,7 @@ const NavBar = () => {
         <Link href="/admin/dashboard" className="text-base font-bold"> Admin Dashboard </Link>
       </div>
       <div className="flex items-center gap-4">
+        <DeviceSelector />
         <ModeToggle/>
       </div>
     </nav>

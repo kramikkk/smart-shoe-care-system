@@ -35,7 +35,11 @@ const Payment = () => {
   useEffect(() => {
     const fetchPricing = async () => {
       try {
-        const response = await fetch('/api/pricing')
+        // Get device ID from localStorage (set by PairingWrapper)
+        const deviceId = localStorage.getItem('kiosk_device_id')
+        const deviceParam = deviceId ? `?deviceId=${deviceId}` : ''
+
+        const response = await fetch(`/api/pricing${deviceParam}`)
         const data = await response.json()
 
         if (data.success) {

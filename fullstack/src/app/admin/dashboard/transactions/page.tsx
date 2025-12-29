@@ -17,8 +17,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
+import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
 export default function TransactionsPage() {
+  const { selectedDevice, devices } = useDeviceFilter()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [search, setSearch] = useState("")
   const [paymentFilter, setPaymentFilter] = useState<string>("all")
@@ -33,21 +35,23 @@ export default function TransactionsPage() {
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
-        const response = await fetch('/api/transaction/list')
+        const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}`)
         const data = await response.json()
 
         if (data.success) {
-          const formattedTransactions = data.transactions.map((tx: any) => ({
-            ...tx,
-            dateTime: new Date(tx.dateTime).toLocaleString('en-US', {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            }).replace(',', ''),
-          }))
+          const formattedTransactions = data.transactions.map((tx: any) => {
+            return {
+              ...tx,
+              dateTime: new Date(tx.dateTime).toLocaleString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              }).replace(',', ''),
+            }
+          })
           setTransactions(formattedTransactions as any)
         } else {
           console.error('Failed to fetch transactions:', data.error)
@@ -58,7 +62,7 @@ export default function TransactionsPage() {
     }
 
     fetchTransactions()
-  }, [])
+  }, [selectedDevice, devices])
 
   const filteredData = useMemo(() => {
     return transactions.filter((tx) => {
