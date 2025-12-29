@@ -67,7 +67,7 @@ const SideBar = () => {
             <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                     <Link href="/admin/dashboard">
-                    <Image src="/SSCMLogoCircle.png" alt="Logo" width={30} height={20} />
+                    <Image src="/SSCMLogoCircle.png" alt="Logo" width={30} height={20} priority style={{ width: 'auto', height: 'auto' }}/>
                     <span className=" text-base font-bold">Smart Shoe Care</span>
                     </Link>
                 </SidebarMenuButton>

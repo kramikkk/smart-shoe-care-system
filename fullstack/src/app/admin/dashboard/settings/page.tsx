@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X } from "lucide-react"
+import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -69,6 +69,8 @@ export default function SettingsPage() {
   const [pairingDialogOpen, setPairingDialogOpen] = useState(false)
   const [pairingDeviceId, setPairingDeviceId] = useState('')
   const [pairingCode, setPairingCode] = useState('')
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
+  const [editingDeviceName, setEditingDeviceName] = useState('')
 
   // Fetch pricing data
   useEffect(() => {
@@ -555,7 +557,63 @@ export default function SettingsPage() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center flex-wrap gap-2 mb-1">
-                          <h3 className="font-semibold truncate">Shoe Care Machine</h3>
+                          {editingDeviceId === device.deviceId ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={editingDeviceName}
+                                onChange={(e) => setEditingDeviceName(e.target.value)}
+                                className="h-8 w-48"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    // Save device name
+                                    localStorage.setItem(`device_name_${device.deviceId}`, editingDeviceName)
+                                    setEditingDeviceId(null)
+                                    toast.success('Device name updated')
+                                  } else if (e.key === 'Escape') {
+                                    setEditingDeviceId(null)
+                                  }
+                                }}
+                              />
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={() => {
+                                  localStorage.setItem(`device_name_${device.deviceId}`, editingDeviceName)
+                                  setEditingDeviceId(null)
+                                  toast.success('Device name updated')
+                                }}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={() => setEditingDeviceId(null)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold truncate">
+                                {localStorage.getItem(`device_name_${device.deviceId}`) || 'Smart Shoe Care Machine'}
+                              </h3>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  setEditingDeviceId(device.deviceId)
+                                  setEditingDeviceName(localStorage.getItem(`device_name_${device.deviceId}`) || 'Smart Shoe Care Machine')
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                           <Badge
                             variant={device.status === 'connected' ? 'default' : 'secondary'}
                             className={

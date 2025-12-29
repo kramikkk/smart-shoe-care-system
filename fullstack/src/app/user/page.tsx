@@ -13,7 +13,9 @@ const user = () => {
         alt="User Illustration"
         width={300}
         height={300}
+        priority
         className="mx-auto mb-8"
+        style={{ width: 'auto', height: 'auto' }}
       />
       <h1 className="text-5xl font-bold text-center mb-4 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Smart Shoe Care Machine

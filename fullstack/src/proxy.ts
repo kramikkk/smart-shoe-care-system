@@ -13,6 +13,7 @@ export async function proxy(request: NextRequest) {
     '/api/transaction/create',
     '/api/pricing',
     '/api/device/register',      // ESP32 registration
+    '/api/device/status',         // ESP32 status update
     '/api/payment',
   ]
 
