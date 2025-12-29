@@ -12,12 +12,15 @@ export async function proxy(request: NextRequest) {
     '/api/auth',
     '/api/transaction/create',
     '/api/pricing',
-    '/api/device',
+    '/api/device/register',      // ESP32 registration
     '/api/payment',
   ]
 
+  // Check for device-specific routes that should be public (for kiosk/ESP32)
+  const isPublicDeviceRoute = pathname.match(/^\/api\/device\/[^/]+\/(status|pair)$/)
+
   // Check if the current path is public
-  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route)) || isPublicDeviceRoute
 
   if (isPublicRoute) {
     return NextResponse.next()

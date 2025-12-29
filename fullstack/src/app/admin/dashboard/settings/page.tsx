@@ -103,7 +103,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const fetchDevices = async () => {
       try {
-        const response = await fetch('/api/device/all')
+        const response = await fetch('/api/device/list')
         const data = await response.json()
 
         if (data.success) {
@@ -243,7 +243,7 @@ export default function SettingsPage() {
         setPairingCode('')
 
         // Refresh devices list
-        const devicesResponse = await fetch('/api/device/all')
+        const devicesResponse = await fetch('/api/device/list')
         const devicesData = await devicesResponse.json()
         if (devicesData.success) {
           const pairedDevices = devicesData.devices.filter((device: Device) => device.paired)
@@ -285,7 +285,7 @@ export default function SettingsPage() {
       if (data.success) {
         toast.success('Device unpaired successfully')
         // Refresh devices list
-        const devicesResponse = await fetch('/api/device/all')
+        const devicesResponse = await fetch('/api/device/list')
         const devicesData = await devicesResponse.json()
         if (devicesData.success) {
           const pairedDevices = devicesData.devices.filter((device: Device) => device.paired)

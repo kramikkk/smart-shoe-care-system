@@ -427,7 +427,15 @@ void sendDeviceRegistration() {
         if (httpCode == 200 || httpCode == 201) {
             String response = http.getString();
             Serial.println("Response: " + response);
-            Serial.println("Device registered successfully");
+
+            // Check if device is already paired
+            if (response.indexOf("\"paired\":true") != -1) {
+                Serial.println("Device is already paired!");
+                isPaired = true;
+                prefs.putBool("paired", true);
+            } else {
+                Serial.println("Device registered successfully");
+            }
         }
     } else {
         Serial.printf("Registration failed: %s\n", http.errorToString(httpCode).c_str());
@@ -497,6 +505,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
         case WStype_ERROR: {
             Serial.println("[WebSocket] Error occurred");
+            wsConnected = false;
             break;
         }
     }
@@ -505,8 +514,11 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 void connectWebSocket() {
     if (!wifiConnected || wsConnected) return;
 
-    Serial.println("[WebSocket] Connecting to ws://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + "/api/ws");
-    webSocket.begin(BACKEND_HOST, BACKEND_PORT, "/api/ws");
+    // Include deviceId as query parameter for server authentication
+    String wsPath = "/api/ws?deviceId=" + deviceId;
+
+    Serial.println("[WebSocket] Connecting to ws://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + wsPath);
+    webSocket.begin(BACKEND_HOST, BACKEND_PORT, wsPath);
     webSocket.onEvent(webSocketEvent);
     webSocket.setReconnectInterval(5000);
 }
@@ -577,10 +589,8 @@ void setup() {
 void loop() {
     delay(10);
 
-    // Handle WebSocket
-    if (wsConnected) {
-        webSocket.loop();
-    }
+    // Handle WebSocket - MUST call loop() even when not connected for handshake
+    webSocket.loop();
 
     // Serial commands
     if (Serial.available()) {
@@ -652,10 +662,7 @@ void loop() {
 
         // Register device with backend if not paired
         if (!isPaired) {
-            Serial.println("Device not paired. Registering with backend...");
             sendDeviceRegistration();
-        } else {
-            Serial.println("Device is paired and ready!");
         }
 
         // Connect to WebSocket for real-time updates
