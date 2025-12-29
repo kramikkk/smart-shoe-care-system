@@ -32,6 +32,10 @@ bool wsConnected = false;
 unsigned long lastWsReconnect = 0;
 const unsigned long WS_RECONNECT_INTERVAL = 5000; // Try to reconnect every 5 seconds
 
+/* ===================== STATUS UPDATE ===================== */
+unsigned long lastStatusUpdate = 0;
+const unsigned long STATUS_UPDATE_INTERVAL = 60000; // Update status every 1 minute
+
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
 String deviceId = "";
@@ -445,6 +449,40 @@ void sendDeviceRegistration() {
     http.end();
 }
 
+void sendStatusUpdate() {
+    if (WiFi.status() != WL_CONNECTED) return;
+
+    HTTPClient http;
+    String url = String(BACKEND_URL) + "/api/device/status";
+
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+
+    String payload = "{";
+    payload += "\"deviceId\":\"" + deviceId + "\"";
+    payload += "}";
+
+    Serial.println("=== Updating Device Status ===");
+    Serial.println("URL: " + url);
+    Serial.println("Payload: " + payload);
+
+    int httpCode = http.POST(payload);
+
+    if (httpCode > 0) {
+        Serial.printf("HTTP Response: %d\n", httpCode);
+        if (httpCode == 200) {
+            String response = http.getString();
+            Serial.println("Response: " + response);
+            Serial.println("Status updated successfully");
+        }
+    } else {
+        Serial.printf("Status update failed: %s\n", http.errorToString(httpCode).c_str());
+    }
+    Serial.println("==============================");
+
+    http.end();
+}
+
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
         case WStype_DISCONNECTED: {
@@ -472,6 +510,19 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
             if (message.indexOf("\"type\":\"subscribed\"") != -1) {
                 Serial.println("[WebSocket] Successfully subscribed to device updates");
+
+                // Send initial status update immediately after subscribing
+                String statusMsg = "{\"type\":\"status-update\",\"deviceId\":\"" + deviceId + "\"}";
+                webSocket.sendTXT(statusMsg);
+                Serial.println("[WebSocket] Sent initial status update");
+            }
+            else if (message.indexOf("\"type\":\"status-ack\"") != -1) {
+                // Acknowledgment of status update
+                if (message.indexOf("\"success\":true") != -1) {
+                    Serial.println("[WebSocket] Status update acknowledged");
+                } else {
+                    Serial.println("[WebSocket] Status update failed");
+                }
             }
             else if (message.indexOf("\"type\":\"device-update\"") != -1) {
                 // Check if paired
@@ -660,7 +711,7 @@ void loop() {
         Serial.println("IP: " + WiFi.localIP().toString());
         Serial.println("======================\n");
 
-        // Register device with backend if not paired
+        // Register device with backend if not paired (HTTP - one time)
         if (!isPaired) {
             sendDeviceRegistration();
         }
@@ -715,5 +766,15 @@ void loop() {
         lastWsReconnect = millis();
         Serial.println("[WebSocket] Attempting to reconnect...");
         connectWebSocket();
+    }
+
+    /* ================= STATUS UPDATE (KEEP ALIVE) ================= */
+    if (wsConnected && millis() - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {
+        lastStatusUpdate = millis();
+
+        // Send status update via WebSocket (non-blocking)
+        String statusMsg = "{\"type\":\"status-update\",\"deviceId\":\"" + deviceId + "\"}";
+        webSocket.sendTXT(statusMsg);
+        Serial.println("[WebSocket] Sent status update: " + statusMsg);
     }
 }

@@ -2,8 +2,9 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { IncomingMessage } from 'http'
 import type { Server } from 'http'
 import type { Duplex } from 'stream'
+import prisma from './prisma'
 
-// Store active WebSocket connections by device ID
+// Store active WebSocket connections by device ID (for clients subscribing to device updates)
 const deviceConnections = new Map<string, Set<WebSocket>>()
 
 // Simple token validation - in production, verify against session store
@@ -53,10 +54,11 @@ export function createWebSocketServer(server: Server) {
 
     let deviceId: string | null = null
 
-    ws.on('message', (data: Buffer) => {
+    ws.on('message', async (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString())
 
+        // Handle client subscription to device updates
         if (message.type === 'subscribe' && message.deviceId) {
           const subscribeDeviceId = message.deviceId as string
           deviceId = subscribeDeviceId
@@ -76,6 +78,36 @@ export function createWebSocketServer(server: Server) {
             type: 'subscribed',
             deviceId: subscribeDeviceId
           }))
+        }
+
+        // Handle device status update from ESP32
+        else if (message.type === 'status-update' && message.deviceId) {
+          const updateDeviceId = message.deviceId as string
+
+          console.log(`[WebSocket] Status update from device: ${updateDeviceId}`)
+
+          // Update lastSeen in database
+          try {
+            await prisma.device.update({
+              where: { deviceId: updateDeviceId },
+              data: { lastSeen: new Date() }
+            })
+
+            // Send acknowledgment
+            ws.send(JSON.stringify({
+              type: 'status-ack',
+              deviceId: updateDeviceId,
+              success: true
+            }))
+          } catch (error) {
+            console.error(`[WebSocket] Failed to update device ${updateDeviceId}:`, error)
+            ws.send(JSON.stringify({
+              type: 'status-ack',
+              deviceId: updateDeviceId,
+              success: false,
+              error: 'Database update failed'
+            }))
+          }
         }
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)
