@@ -109,6 +109,20 @@ export function createWebSocketServer(server: Server) {
             }))
           }
         }
+
+        // Handle coin insertion from ESP32
+        else if (message.type === 'coin-inserted' && message.deviceId) {
+          const coinDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Coin: ₱${message.coinValue} on ${coinDeviceId}`)
+          broadcastToDevice(coinDeviceId, message)
+        }
+
+        // Handle bill insertion from ESP32
+        else if (message.type === 'bill-inserted' && message.deviceId) {
+          const billDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Bill: ₱${message.billValue} on ${billDeviceId}`)
+          broadcastToDevice(billDeviceId, message)
+        }
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)
       }
@@ -136,27 +150,28 @@ export function createWebSocketServer(server: Server) {
   return wss
 }
 
+// Generic broadcast function
+function broadcastToDevice(deviceId: string, message: any) {
+  const connections = deviceConnections.get(deviceId)
+  if (connections && connections.size > 0) {
+    const messageStr = JSON.stringify(message)
+    connections.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(messageStr)
+      }
+    })
+  }
+}
+
 // Broadcast device status update to all subscribed clients
 export function broadcastDeviceUpdate(deviceId: string, data: {
   paired: boolean
   pairingCode: string | null
   pairedAt: Date | null
 }) {
-  const connections = deviceConnections.get(deviceId)
-
-  if (connections && connections.size > 0) {
-    const message = JSON.stringify({
-      type: 'device-update',
-      deviceId,
-      data
-    })
-
-    connections.forEach((ws) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(message)
-      }
-    })
-
-    console.log(`[WebSocket] Broadcasted update for device ${deviceId} to ${connections.size} client(s)`)
-  }
+  broadcastToDevice(deviceId, {
+    type: 'device-update',
+    deviceId,
+    data
+  })
 }

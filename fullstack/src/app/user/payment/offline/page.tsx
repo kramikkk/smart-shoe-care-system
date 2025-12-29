@@ -89,9 +89,51 @@ const Offline = () => {
   const [amountInserted, setAmountInserted] = useState(0)
   const amountRemaining = Math.max(0, amountDue - amountInserted)
   const [isSaving, setIsSaving] = useState(false)
+  const [wsConnected, setWsConnected] = useState(false)
 
   // Check if payment is complete (amount inserted >= amount due OR amount due is 0)
   const isPaymentComplete = amountDue === 0 || amountInserted >= amountDue
+
+  // WebSocket connection for real-time coin/bill events
+  useEffect(() => {
+    const deviceId = localStorage.getItem('kiosk_device_id')
+    if (!deviceId) return
+
+    let intentionalClose = false
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
+    const ws = new WebSocket(wsUrl)
+
+    ws.onopen = () => {
+      setWsConnected(true)
+      ws.send(JSON.stringify({ type: 'subscribe', deviceId }))
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data)
+        if (message.type === 'coin-inserted') {
+          setAmountInserted((prev) => prev + message.coinValue)
+        } else if (message.type === 'bill-inserted') {
+          setAmountInserted((prev) => prev + message.billValue)
+        }
+      } catch (error) {
+        console.error('[Payment] Error parsing message:', error)
+      }
+    }
+
+    ws.onerror = () => setWsConnected(false)
+    ws.onclose = () => {
+      if (!intentionalClose) setWsConnected(false)
+    }
+
+    return () => {
+      intentionalClose = true
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close()
+      }
+    }
+  }, [])
 
   // STEP 3A: Handle payment proceed - save transaction and redirect
   const handleProceed = async () => {
@@ -158,13 +200,19 @@ const Offline = () => {
       </h1>
 
       {/* Caution Message */}
-      <div className="max-w-5xl mx-auto mb-4">
+      <div className="max-w-5xl mx-auto mb-4 space-y-2">
         <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-3 flex items-center gap-3">
           <AlertTriangle className="w-10 h-10 text-yellow-700 flex-shrink-0" />
           <div>
             <p className="text-base font-bold text-yellow-800">CAUTION: Insert Exact Amount Only</p>
             <p className="text-sm text-yellow-700">This machine does not provide change. Please insert the exact amount.</p>
           </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-2">
+          <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <p className="text-xs text-gray-600">
+            {wsConnected ? 'Payment system ready' : 'Connecting...'}
+          </p>
         </div>
       </div>
 
