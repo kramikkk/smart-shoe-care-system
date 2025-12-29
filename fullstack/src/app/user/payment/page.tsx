@@ -6,6 +6,7 @@ import { Item, ItemContent, ItemHeader } from '@/components/ui/item'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { BackButton } from '@/components/BackButton'
 
 type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
 
@@ -50,11 +51,9 @@ const Payment = () => {
             price: item.price,
           }))
           setServices(fetchedServices)
-        } else {
-          console.error('Failed to fetch pricing, using defaults')
         }
       } catch (error) {
-        console.error('Error fetching pricing, using defaults:', error)
+        // Use default pricing if fetch fails
       }
     }
 
@@ -97,9 +96,10 @@ const Payment = () => {
     { label: 'Total', value: getTotalPrice() },
   ]
 
-  // Build query string for payment links (include both service and care)
+  // Build query string for payment links
   const buildQueryString = () => {
     const params = []
+    if (shoe) params.push(`shoe=${shoe}`)
     if (service) params.push(`service=${service}`)
     if (care) params.push(`care=${care}`)
     return params.length > 0 ? `?${params.join('&')}` : ''
@@ -129,7 +129,9 @@ const Payment = () => {
   ]
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-8 py-6 relative">
+      <BackButton />
+
       <h1 className="text-5xl font-bold text-center mb-10 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Select Payment Method
       </h1>

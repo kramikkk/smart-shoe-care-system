@@ -6,6 +6,7 @@ import { Item, ItemContent } from '@/components/ui/item'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { BackButton } from '@/components/BackButton'
 
 function CareContent() {
   const searchParams = useSearchParams()
@@ -62,7 +63,9 @@ function CareContent() {
   ]
 
   return (
-    <div>
+    <div className="relative">
+      <BackButton />
+
       <h1 className="text-5xl font-bold text-center mb-10 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Choose Care Type
       </h1>

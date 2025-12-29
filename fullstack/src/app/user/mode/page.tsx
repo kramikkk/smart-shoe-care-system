@@ -2,11 +2,13 @@ import { Button } from '@/components/ui/button'
 import { Zap, Settings } from 'lucide-react'
 import { Item, ItemContent } from '@/components/ui/item'
 import Link from 'next/link'
-import React from 'react'
+import { BackButton } from '@/components/BackButton'
 
 const mode = () => {
   return (
-    <div>
+    <div className="relative">
+      <BackButton />
+
       <h1 className="text-5xl font-bold text-center mb-10 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Select Mode
       </h1>
@@ -18,7 +20,7 @@ const mode = () => {
             <p className="text-xl text-gray-600">Automatic Shoe Type Detection</p>
             <p className="text-xl text-gray-600">Automated Service Package</p>
             <p className="text-xl text-gray-600">Automated Care Type Selection</p>
-            <Link href="/user/payment?service=package">
+            <Link href="/user/payment?service=package&shoe=mesh&care=normal">
               <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
                 <p className='text-lg font-bold'>Select Auto Mode</p>
               </Button>

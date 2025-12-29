@@ -6,6 +6,7 @@ import { Item, ItemContent } from '@/components/ui/item'
 import React, { useState, useMemo, useEffect } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { BackButton } from '@/components/BackButton'
 
 type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
 
@@ -149,7 +150,9 @@ const Offline = () => {
   }
 
   return (
-    <div className="px-8 py-4">
+    <div className="px-8 py-4 relative">
+      <BackButton />
+
       <h1 className="text-4xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Cash Payment
       </h1>
