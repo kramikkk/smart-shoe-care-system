@@ -43,17 +43,17 @@ export function TransactionDataTable<TData, TValue>({
     getPaginationRowModel: getPaginationRowModel(),
     initialState: {
       pagination: {
-        pageSize: 15,
+        pageSize: 25,
       },
     },
   })
 
   return (
     <div className="flex flex-col h-full">
-      {/* Table Container with responsive height */}
-      <div className="overflow-auto rounded-md border h-[400px] sm:h-[500px] md:h-[600px] lg:h-[650px] xl:h-[700px]">
+      {/* Table Container - no scroll, shows only what fits */}
+      <div className="rounded-md border overflow-hidden">
         <Table>
-          <TableHeader className="sticky top-0 bg-background z-10">
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -87,7 +87,7 @@ export function TransactionDataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-[400px] sm:h-[500px] md:h-[600px] lg:h-[650px] xl:h-[700px]">
+                <TableCell colSpan={columns.length} className="h-64">
                   <div className="flex items-center justify-center h-full">
                     <Empty>
                       <EmptyHeader>

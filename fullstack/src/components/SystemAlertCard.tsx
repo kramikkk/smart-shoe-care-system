@@ -12,8 +12,8 @@ import {
 
 const SystemAlertCard = () => {
   return (
-    <div className="flex flex-col">
-        <Card className="@container/card flex flex-col min-h-[400px]">
+    <div className="flex flex-col h-full">
+        <Card className="@container/card flex flex-col h-full">
             <CardHeader>
                 <div className="flex items-center gap-2">
                   <AlertCircle className="text-red-500" />

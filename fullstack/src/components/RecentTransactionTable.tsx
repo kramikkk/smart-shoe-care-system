@@ -39,8 +39,8 @@ const RecentTransactionTable = () => {
         const data = await response.json()
 
         if (data.success) {
-          // Get last 5 transactions and format dateTime
-          const recent = data.transactions.slice(0, 5).map((tx: any) => ({
+          // Get last 7 transactions and format dateTime
+          const recent = data.transactions.slice(0, 7).map((tx: any) => ({
             ...tx,
             dateTime: new Date(tx.dateTime).toLocaleString('en-US', {
               year: 'numeric',
@@ -96,7 +96,7 @@ const RecentTransactionTable = () => {
                   </Link>
                 </CardAction>
             </CardHeader>
-            <CardContent className="flex-1 overflow-auto">
+            <CardContent className="flex-1 min-h-0 overflow-hidden">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-muted-foreground">Loading transactions...</div>
@@ -106,40 +106,42 @@ const RecentTransactionTable = () => {
                     <div className="text-muted-foreground">No transactions yet</div>
                   </div>
                 ) : (
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead>Transaction ID</TableHead>
-                        <TableHead>Date & Time</TableHead>
-                        <TableHead>Method</TableHead>
-                        <TableHead>Service Type</TableHead>
-                        <TableHead>Shoe Type</TableHead>
-                        <TableHead>Care Type</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Status</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {recentTransactions.map((transaction) => (
-                          <TableRow key={transaction.transactionId}>
-                            <TableCell className="font-medium">{transaction.transactionId}</TableCell>
-                            <TableCell>{transaction.dateTime}</TableCell>
-                            <TableCell>{transaction.paymentMethod}</TableCell>
-                            <TableCell>{transaction.serviceType}</TableCell>
-                            <TableCell>{transaction.shoeType}</TableCell>
-                            <TableCell>{transaction.careType}</TableCell>
-                            <TableCell>
-                              {new Intl.NumberFormat("en-US", {
-                                style: "currency",
-                                currency: "PHP",
-                              }).format(transaction.amount)}
-                            </TableCell>
-                            <TableCell>{getStatusBadge(transaction.status)}</TableCell>
-
+                <div className="overflow-x-auto h-full">
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                          <TableHead className="whitespace-nowrap">Transaction ID</TableHead>
+                          <TableHead className="whitespace-nowrap">Date & Time</TableHead>
+                          <TableHead className="whitespace-nowrap">Method</TableHead>
+                          <TableHead className="whitespace-nowrap">Service</TableHead>
+                          <TableHead className="whitespace-nowrap hidden lg:table-cell">Shoe Type</TableHead>
+                          <TableHead className="whitespace-nowrap hidden xl:table-cell">Care Type</TableHead>
+                          <TableHead className="whitespace-nowrap">Amount</TableHead>
+                          <TableHead className="whitespace-nowrap">Status</TableHead>
                           </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                      </TableHeader>
+                      <TableBody>
+                          {recentTransactions.map((transaction) => (
+                            <TableRow key={transaction.transactionId}>
+                              <TableCell className="font-medium whitespace-nowrap">{transaction.transactionId}</TableCell>
+                              <TableCell className="whitespace-nowrap text-sm">{transaction.dateTime}</TableCell>
+                              <TableCell className="whitespace-nowrap">{transaction.paymentMethod}</TableCell>
+                              <TableCell className="whitespace-nowrap">{transaction.serviceType}</TableCell>
+                              <TableCell className="whitespace-nowrap hidden lg:table-cell">{transaction.shoeType}</TableCell>
+                              <TableCell className="whitespace-nowrap hidden xl:table-cell">{transaction.careType}</TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {new Intl.NumberFormat("en-US", {
+                                  style: "currency",
+                                  currency: "PHP",
+                                }).format(transaction.amount)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">{getStatusBadge(transaction.status)}</TableCell>
+
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                  </Table>
+                </div>
                 )}
             </CardContent>
         </Card>
