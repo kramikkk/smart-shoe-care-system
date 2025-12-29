@@ -330,6 +330,35 @@ const OnlinePayment = () => {
     router.push(`/user/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
   }
 
+  // Loading state - rendered without Card wrapper
+  if (paymentState === 'idle' || paymentState === 'creating') {
+    return (
+      <div className="container mx-auto px-4 h-screen flex flex-col justify-center items-center">
+        <div className="bg-white/50 backdrop-blur-sm rounded-2xl border border-white/30 shadow-lg p-8">
+          <div className="flex flex-col items-center space-y-4">
+            {/* Loader - no glowing effect */}
+            <div className="bg-white rounded-full p-6 shadow-xl">
+              <Loader2 className="w-16 h-16 animate-spin text-blue-600" />
+            </div>
+
+            {/* Text Content */}
+            <div className="space-y-2 text-center">
+              <h3 className="text-2xl font-bold text-gray-800">Generating QR Code</h3>
+              <p className="text-base text-gray-600">Please wait while we prepare your payment...</p>
+            </div>
+
+            {/* Service Info Badge */}
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 px-6 py-3 rounded-full border border-blue-200">
+              <p className="text-base font-semibold text-blue-800">
+                {selectedServiceData.name} - ₱{selectedServiceData.price}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto px-4 h-screen flex flex-col justify-center max-w-4xl">
       <Card className="bg-white/80 backdrop-blur-md shadow-2xl border border-white/50 gap-0">
@@ -348,14 +377,6 @@ const OnlinePayment = () => {
 
         <CardContent className="px-4 py-4">
           {/* Payment States */}
-          {paymentState === 'creating' && (
-            <div className="text-center py-6 max-w-md mx-auto">
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl border border-white/40">
-                <Loader2 className="w-10 h-10 animate-spin mx-auto text-blue-600 mb-3" />
-                <p className="text-xl font-medium text-gray-800">Generating QR code...</p>
-              </div>
-            </div>
-          )}
 
           {paymentState === 'awaiting_payment' && qrImageUrl && (
             <div className="grid grid-cols-2 gap-4">

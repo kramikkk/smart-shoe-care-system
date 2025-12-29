@@ -76,35 +76,31 @@ const CustomProgress = () => {
     switch (service.toLowerCase()) {
       case 'cleaning':
         return {
-          icon: <Droplets className="w-24 h-24 text-blue-600" />,
+          icon: Droplets,
           name: 'Cleaning',
-          color: 'text-blue-600',
-          gradientFrom: 'from-blue-400',
-          gradientTo: 'to-cyan-400'
+          gradientFrom: 'from-blue-500',
+          gradientTo: 'to-cyan-500'
         }
       case 'drying':
         return {
-          icon: <Wind className="w-24 h-24 text-cyan-600" />,
+          icon: Wind,
           name: 'Drying',
-          color: 'text-cyan-600',
-          gradientFrom: 'from-cyan-400',
-          gradientTo: 'to-blue-400'
+          gradientFrom: 'from-cyan-500',
+          gradientTo: 'to-green-500'
         }
       case 'sterilizing':
         return {
-          icon: <ShieldCheck className="w-24 h-24 text-green-600" />,
+          icon: ShieldCheck,
           name: 'Sterilizing',
-          color: 'text-green-600',
-          gradientFrom: 'from-green-400',
-          gradientTo: 'to-emerald-400'
+          gradientFrom: 'from-green-500',
+          gradientTo: 'to-emerald-500'
         }
       default:
         return {
-          icon: <Droplets className="w-24 h-24 text-blue-600" />,
+          icon: Droplets,
           name: 'Cleaning',
-          color: 'text-blue-600',
-          gradientFrom: 'from-blue-400',
-          gradientTo: 'to-cyan-400'
+          gradientFrom: 'from-blue-500',
+          gradientTo: 'to-cyan-500'
         }
     }
   }
@@ -118,28 +114,26 @@ const CustomProgress = () => {
   }
 
   const serviceConfig = getServiceConfig()
+  const ServiceIcon = serviceConfig.icon
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-6">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-6">
       {/* Title */}
-      <h1 className="text-4xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+      <h1 className="text-5xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Shoe Care in Progress
       </h1>
 
-      {/* Service Icon with Animation */}
-      <div className='flex justify-center mb-6'>
-        <div className="relative">
-          <div className={`absolute inset-0 bg-gradient-to-r ${serviceConfig.gradientFrom} ${serviceConfig.gradientTo} rounded-full blur-xl opacity-40 animate-pulse`}></div>
-          <div className="relative bg-white rounded-full p-6 shadow-xl">
-            <div className="w-28 h-28 flex items-center justify-center">
-              {serviceConfig.icon}
-            </div>
+      {/* Service Icon */}
+      <div className='flex justify-center mb-4'>
+        <div className="flex flex-col items-center transition-all duration-300">
+          <div className={`rounded-full p-4 transition-all duration-300 bg-gradient-to-br ${serviceConfig.gradientFrom} ${serviceConfig.gradientTo} shadow-lg scale-105`}>
+            <ServiceIcon className="w-20 h-20 transition-colors duration-300 text-white" />
           </div>
         </div>
       </div>
 
       {/* Service Name */}
-      <h2 className="text-3xl font-bold text-center mb-3 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+      <h2 className="text-4xl font-bold text-center mb-3 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         {serviceConfig.name}
       </h2>
 
@@ -162,7 +156,7 @@ const CustomProgress = () => {
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full max-w-xl mb-6">
+      <div className="w-full max-w-2xl mb-6">
         <Progress
           value={progress}
           className='bg-gray-200 relative h-5 w-full overflow-hidden rounded-full shadow-inner [&>*]:bg-gradient-to-r [&>*]:from-blue-600 [&>*]:via-cyan-600 [&>*]:to-green-600 [&>*]:transition-all [&>*]:duration-500'
@@ -171,7 +165,7 @@ const CustomProgress = () => {
       </div>
 
       {/* Instruction Text */}
-      <p className="text-center text-gray-500 text-lg max-w-xl leading-relaxed">
+      <p className="text-center text-gray-500 text-lg max-w-2xl leading-relaxed">
         Please wait while we take care of your shoes. You will be automatically redirected when complete.
       </p>
     </div>

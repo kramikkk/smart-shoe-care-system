@@ -9,7 +9,7 @@ export default function PaymentSuccess() {
   const service = searchParams.get('service');
   const care = searchParams.get('care');
   const router = useRouter();
-  const [countdown, setCountdown] = useState(3);
+  const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
     const countdownInterval = setInterval(() => {
@@ -54,13 +54,59 @@ export default function PaymentSuccess() {
     return "Process will begin shortly.";
   };
 
+  const getServiceName = () => {
+    if (service === 'package') return 'Package';
+    if (service === 'cleaning') return 'Cleaning';
+    if (service === 'drying') return 'Drying';
+    if (service === 'sterilizing') return 'Sterilizing';
+    if (service) return service.charAt(0).toUpperCase() + service.slice(1);
+    return 'Service';
+  };
+
+  const getShoeName = () => {
+    return shoe.charAt(0).toUpperCase() + shoe.slice(1);
+  };
+
+  const getCareName = () => {
+    if (care) return care.charAt(0).toUpperCase() + care.slice(1);
+    return 'Normal';
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen text-center">
-      <div className="bg-white/50 py-10 px-30 rounded-2xl shadow-xl backdrop-blur-sm">
-        <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
-        <h1 className="text-4xl font-bold text-green-600">Payment Successful</h1>
-        <p className="mt-3 text-lg">{getMessage()}</p>
-        <p className="text-gray-600 mt-2">Starting in {countdown} seconds...</p>
+    <div className="flex flex-col items-center justify-center min-h-screen text-center px-4 py-6">
+      <div className="bg-white/80 py-8 px-10 rounded-3xl shadow-2xl backdrop-blur-md w-[500px]">
+        {/* Success Icon */}
+        <div className="mb-4">
+          <CheckCircle className="w-20 h-20 text-green-600 mx-auto" strokeWidth={2.5} />
+        </div>
+
+        {/* Success Title */}
+        <h1 className="text-3xl font-bold text-green-600 mb-3">Payment Successful!</h1>
+
+        {/* Service Info Badges */}
+        <div className="flex flex-wrap justify-center gap-2 mb-4">
+          <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full text-sm font-semibold text-purple-800 shadow-sm">
+            {getShoeName()} Type
+          </span>
+          <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-full text-sm font-semibold text-blue-800 shadow-sm">
+            {getServiceName()}
+          </span>
+          <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full text-sm font-semibold text-green-800 shadow-sm">
+            {getCareName()} Care
+          </span>
+        </div>
+
+        {/* Message */}
+        <p className="text-base text-gray-700 mb-4 leading-relaxed">{getMessage()}</p>
+
+        {/* Countdown */}
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 py-3 px-5 rounded-xl">
+          <p className="text-gray-600 text-base">Starting in</p>
+          <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+            {countdown}
+          </p>
+          <p className="text-gray-600 text-base">seconds</p>
+        </div>
       </div>
     </div>
   );
