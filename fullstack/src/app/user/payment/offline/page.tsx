@@ -52,7 +52,11 @@ const Offline = () => {
   useEffect(() => {
     const fetchPricing = async () => {
       try {
-        const response = await fetch('/api/pricing')
+        // Get device ID from localStorage (set by PairingWrapper)
+        const deviceId = localStorage.getItem('kiosk_device_id')
+        const deviceParam = deviceId ? `?deviceId=${deviceId}` : ''
+
+        const response = await fetch(`/api/pricing${deviceParam}`)
         const data = await response.json()
 
         if (data.success) {
@@ -120,7 +124,6 @@ const Offline = () => {
           serviceType: service.charAt(0).toUpperCase() + service.slice(1), // Capitalize first letter
           shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
           careType: care.charAt(0).toUpperCase() + care.slice(1),
-          amount: selectedService.price,
           deviceId, // Link transaction to this kiosk
         }),
       })

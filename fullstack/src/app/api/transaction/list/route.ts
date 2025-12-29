@@ -11,6 +11,7 @@ const TransactionListQuerySchema = z.object({
   status: z.enum(['Pending', 'Success', 'Failed']).optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
+  deviceId: z.string().optional(),
 })
 
 export async function GET(req: NextRequest) {
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const { page, limit, paymentMethod, status, startDate, endDate } = validation.data
+    const { page, limit, paymentMethod, status, startDate, endDate, deviceId } = validation.data
 
     // Build filter conditions
     const where: any = {}
@@ -47,6 +48,10 @@ export async function GET(req: NextRequest) {
 
     if (status) {
       where.status = status
+    }
+
+    if (deviceId) {
+      where.deviceId = deviceId
     }
 
     if (startDate || endDate) {

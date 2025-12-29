@@ -12,6 +12,7 @@ export type Transaction = {
   careType: "Gentle" | "Normal" | "Strong"
   amount: number
   status: "Pending" | "Success" | "Failed"
+  deviceId?: string | null
 }
 
 const getStatusBadge = (status: string) => {
@@ -31,6 +32,18 @@ export const columns: ColumnDef<Transaction>[] = [
   {
     accessorKey: "transactionId",
     header: "Transaction ID",
+  },
+  {
+    accessorKey: "deviceId",
+    header: "Device ID",
+    cell: ({ row }) => {
+      const deviceId = row.getValue("deviceId") as string | null | undefined
+      return (
+        <div className="text-sm font-mono">
+          {deviceId || "Unknown"}
+        </div>
+      )
+    },
   },
   {
     accessorKey: "dateTime",

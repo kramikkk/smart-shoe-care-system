@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
 type ServicePricing = {
   id: string
@@ -60,6 +61,7 @@ type DeviceWithStatus = Device & {
 }
 
 export default function SettingsPage() {
+  const { selectedDevice } = useDeviceFilter()
   const [pricing, setPricing] = useState<ServicePricing[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -72,11 +74,17 @@ export default function SettingsPage() {
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
   const [editingDeviceName, setEditingDeviceName] = useState('')
 
-  // Fetch pricing data
+  // Fetch pricing data for selected device
   useEffect(() => {
     const fetchPricing = async () => {
+      if (!selectedDevice) {
+        setIsLoading(false)
+        return
+      }
+
+      setIsLoading(true)
       try {
-        const response = await fetch('/api/pricing')
+        const response = await fetch(`/api/pricing?deviceId=${selectedDevice}`)
         const data = await response.json()
 
         if (data.success) {
@@ -99,7 +107,7 @@ export default function SettingsPage() {
     }
 
     fetchPricing()
-  }, [])
+  }, [selectedDevice])
 
   // Fetch only paired devices on mount
   useEffect(() => {
@@ -181,6 +189,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           serviceType,
           price: numPrice,
+          deviceId: selectedDevice,
         }),
       })
 
@@ -356,7 +365,7 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-lg">Service Pricing</CardTitle>
           <CardDescription>
-            Update the price for each service type. Changes will be reflected immediately on the user payment page.
+            Update prices for {selectedDevice}. These prices will only apply to this specific machine.
           </CardDescription>
         </CardHeader>
         <CardContent>

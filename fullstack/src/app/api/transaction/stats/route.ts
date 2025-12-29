@@ -3,14 +3,26 @@ import prisma from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
   try {
+    // Get device filter from query params
+    const { searchParams } = new URL(req.url)
+    const deviceId = searchParams.get('deviceId')
+
     // Get current date and yesterday's date
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
 
-    // Fetch all transactions
-    const allTransactions = await prisma.transaction.findMany()
+    // Build where clause with optional device filter
+    const whereClause: any = {}
+    if (deviceId) {
+      whereClause.deviceId = deviceId
+    }
+
+    // Fetch transactions with optional device filter
+    const allTransactions = await prisma.transaction.findMany({
+      where: whereClause
+    })
 
     // Calculate total revenue
     const totalRevenue = allTransactions.reduce((sum, tx) => sum + tx.amount, 0)

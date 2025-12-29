@@ -6,41 +6,56 @@ import { z } from 'zod'
 const PricingUpdateSchema = z.object({
   serviceType: z.enum(['cleaning', 'drying', 'sterilizing', 'package']),
   price: z.number().nonnegative('Price must be a non-negative number'),
+  deviceId: z.string().optional(),
 })
 
-// GET - Fetch all service pricing (public endpoint)
+// GET - Fetch service pricing for specific device (public endpoint)
 export async function GET(req: NextRequest) {
   try {
-    const pricing = await prisma.servicePricing.findMany({
-      orderBy: {
-        serviceType: 'asc',
-      },
+    const { searchParams } = new URL(req.url)
+    const deviceId = searchParams.get('deviceId')
+
+    const allServiceTypes = ['cleaning', 'drying', 'sterilizing', 'package']
+
+    // Fetch device-specific pricing if deviceId provided
+    const deviceSpecificPricing = deviceId
+      ? await prisma.servicePricing.findMany({
+          where: { deviceId },
+          orderBy: { serviceType: 'asc' },
+        })
+      : []
+
+    // Fetch global defaults
+    let globalPricing = await prisma.servicePricing.findMany({
+      where: { deviceId: null },
+      orderBy: { serviceType: 'asc' },
     })
 
-    // If no pricing exists, create default pricing
-    if (pricing.length === 0) {
+    // If no global pricing exists, create it
+    if (globalPricing.length === 0) {
       const defaultPricing = [
-        { serviceType: 'cleaning', price: 45 },
-        { serviceType: 'drying', price: 45 },
-        { serviceType: 'sterilizing', price: 25 },
-        { serviceType: 'package', price: 100 },
+        { serviceType: 'cleaning', price: 45, deviceId: null },
+        { serviceType: 'drying', price: 45, deviceId: null },
+        { serviceType: 'sterilizing', price: 25, deviceId: null },
+        { serviceType: 'package', price: 100, deviceId: null },
       ]
 
       await prisma.servicePricing.createMany({
         data: defaultPricing,
       })
 
-      const newPricing = await prisma.servicePricing.findMany({
-        orderBy: {
-          serviceType: 'asc',
-        },
-      })
-
-      return NextResponse.json({
-        success: true,
-        pricing: newPricing,
+      globalPricing = await prisma.servicePricing.findMany({
+        where: { deviceId: null },
+        orderBy: { serviceType: 'asc' },
       })
     }
+
+    // Build final pricing: use device-specific if exists, otherwise use global
+    const pricing = allServiceTypes.map(serviceType => {
+      const devicePrice = deviceSpecificPricing.find(p => p.serviceType === serviceType)
+      const globalPrice = globalPricing.find(p => p.serviceType === serviceType)
+      return devicePrice || globalPrice
+    }).filter(Boolean) // Remove any undefined entries
 
     return NextResponse.json({
       success: true,
@@ -58,7 +73,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// PUT - Update service pricing (requires authentication)
+// PUT - Update service pricing for specific device (requires authentication)
 export async function PUT(req: NextRequest) {
   try {
     // Require authentication
@@ -82,21 +97,58 @@ export async function PUT(req: NextRequest) {
       )
     }
 
-    const { serviceType, price } = validation.data
+    const { serviceType, price, deviceId } = validation.data
+    const targetDeviceId = deviceId || null
 
-    // Update or create pricing
-    const updatedPricing = await prisma.servicePricing.upsert({
+    // Verify ownership: User can only edit pricing for devices they own
+    if (targetDeviceId) {
+      const device = await prisma.device.findUnique({
+        where: { deviceId: targetDeviceId },
+        select: { pairedBy: true }
+      })
+
+      if (!device) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Device not found',
+          },
+          { status: 404 }
+        )
+      }
+
+      if (device.pairedBy !== authResult.user.id) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'You do not have permission to edit pricing for this device',
+          },
+          { status: 403 }
+        )
+      }
+    }
+
+    // Find existing pricing entry
+    const existingPricing = await prisma.servicePricing.findFirst({
       where: {
+        deviceId: targetDeviceId,
         serviceType,
-      },
-      update: {
-        price,
-      },
-      create: {
-        serviceType,
-        price,
       },
     })
+
+    // Update or create device-specific pricing
+    const updatedPricing = existingPricing
+      ? await prisma.servicePricing.update({
+          where: { id: existingPricing.id },
+          data: { price },
+        })
+      : await prisma.servicePricing.create({
+          data: {
+            serviceType,
+            price,
+            deviceId: targetDeviceId,
+          },
+        })
 
     return NextResponse.json({
       success: true,

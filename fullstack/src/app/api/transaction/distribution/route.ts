@@ -3,8 +3,20 @@ import prisma from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
   try {
-    // Fetch all transactions
-    const transactions = await prisma.transaction.findMany()
+    // Get device filter from query params
+    const { searchParams } = new URL(req.url)
+    const deviceId = searchParams.get('deviceId')
+
+    // Build where clause with optional device filter
+    const whereClause: any = {}
+    if (deviceId) {
+      whereClause.deviceId = deviceId
+    }
+
+    // Fetch transactions with optional device filter
+    const transactions = await prisma.transaction.findMany({
+      where: whereClause
+    })
 
     // Group by service type and calculate totals
     const serviceDistribution = transactions.reduce((acc, tx) => {

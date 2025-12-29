@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
 import {
   Card,
@@ -144,6 +145,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export default function AreaChartCard() {
+  const { selectedDevice } = useDeviceFilter()
   const [timeRange, setTimeRange] = React.useState("7d")
   const [dataView, setDataView] = React.useState("all")
   const [chartData, setChartData] = React.useState<ChartDataPoint[]>([])
@@ -157,7 +159,7 @@ export default function AreaChartCard() {
         if (timeRange === "30d") days = 30
         else if (timeRange === "7d") days = 7
 
-        const response = await fetch(`/api/transaction/chart?days=${days}`)
+        const response = await fetch(`/api/transaction/chart?days=${days}&deviceId=${selectedDevice}`)
         const data = await response.json()
 
         if (data.success) {
@@ -173,13 +175,13 @@ export default function AreaChartCard() {
     }
 
     fetchChartData()
-  }, [timeRange])
+  }, [timeRange, selectedDevice])
 
   const filteredData = chartData
 
   return (
-    <Card className="pt-0 h-full">
-      <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
+    <Card className="pt-0 h-full flex flex-col">
+      <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row shrink-0">
         <div className="grid flex-1 gap-1">
           <CardTitle>Transaction + Revenue Chart</CardTitle>
           <CardDescription>
@@ -227,19 +229,19 @@ export default function AreaChartCard() {
           </Select>
         </div>
       </CardHeader>
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6 flex-1 flex items-center">
         {isLoading ? (
-          <div className="flex items-center justify-center h-[250px]">
+          <div className="flex items-center justify-center w-full">
             <div className="text-muted-foreground">Loading chart data...</div>
           </div>
         ) : filteredData.length === 0 ? (
-          <div className="flex items-center justify-center h-[250px]">
+          <div className="flex items-center justify-center w-full">
             <div className="text-muted-foreground">No data available</div>
           </div>
         ) : (
         <ChartContainer
           config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
+          className="aspect-auto h-full w-full"
         >
           <AreaChart data={filteredData}>
             <defs>

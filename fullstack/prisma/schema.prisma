@@ -90,25 +90,30 @@ model Transaction {
 
 model ServicePricing {
   id          String   @id @default(cuid())
-  serviceType String   @unique
+  serviceType String
   price       Float
+  deviceId    String?
+  device      Device?  @relation(fields: [deviceId], references: [deviceId])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@unique([deviceId, serviceType])
+  @@index([deviceId])
   @@map("service_pricing")
 }
 
 model Device {
-  id           String        @id @default(cuid())
-  deviceId     String        @unique
+  id           String           @id @default(cuid())
+  deviceId     String           @unique
   pairingCode  String?
-  paired       Boolean       @default(false)
+  paired       Boolean          @default(false)
   pairedAt     DateTime?
-  lastSeen     DateTime      @default(now())
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  lastSeen     DateTime         @default(now())
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
   pairedBy     String?
   transactions Transaction[]
+  pricing      ServicePricing[]
 
   @@map("device")
 }

@@ -10,6 +10,7 @@ import {
   CardContent
 } from "@/components/ui/card"
 import { useEffect, useState } from "react"
+import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
 type StatsType = 'totalRevenue' | 'totalTransactions'
 
@@ -31,13 +32,14 @@ interface Stats {
 }
 
 const StatsCard = ({ id }: { id: StatsType }) => {
+  const { selectedDevice } = useDeviceFilter()
   const [stats, setStats] = useState<Stats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('/api/transaction/stats')
+        const response = await fetch(`/api/transaction/stats?deviceId=${selectedDevice}`)
         const data = await response.json()
 
         if (data.success) {
@@ -53,7 +55,7 @@ const StatsCard = ({ id }: { id: StatsType }) => {
     }
 
     fetchStats()
-  }, [])
+  }, [selectedDevice])
 
   if (isLoading || !stats) {
     return (

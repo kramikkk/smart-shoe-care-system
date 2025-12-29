@@ -13,6 +13,7 @@ import { Badge } from "./ui/badge"
 import { ArrowRight, ArrowLeftRight } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
 type Transaction = {
   transactionId: string
@@ -26,6 +27,7 @@ type Transaction = {
 }
 
 const RecentTransactionTable = () => {
+  const { selectedDevice } = useDeviceFilter()
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -33,7 +35,7 @@ const RecentTransactionTable = () => {
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
-        const response = await fetch('/api/transaction/list')
+        const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}`)
         const data = await response.json()
 
         if (data.success) {
@@ -61,7 +63,7 @@ const RecentTransactionTable = () => {
     }
 
     fetchTransactions()
-  }, [])
+  }, [selectedDevice])
 
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
@@ -78,15 +80,15 @@ const RecentTransactionTable = () => {
 
   return (
     <div className="flex flex-col h-full">
-        <Card className="flex-1 flex flex-col">
-            <CardHeader>
+        <Card className="flex flex-col h-full">
+            <CardHeader className="shrink-0">
                 <div className="flex items-center gap-2">
                   <ArrowLeftRight className="text-purple-500" />
                   <CardTitle>Recent Transactions</CardTitle>
                 </div>
                 <CardAction>
-                  <Link 
-                    href="/admin/dashboard/transactions" 
+                  <Link
+                    href="/admin/dashboard/transactions"
                     className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                   >
                     View All
@@ -96,11 +98,11 @@ const RecentTransactionTable = () => {
             </CardHeader>
             <CardContent className="flex-1 overflow-auto">
                 {isLoading ? (
-                  <div className="flex items-center justify-center h-40">
+                  <div className="flex items-center justify-center h-full">
                     <div className="text-muted-foreground">Loading transactions...</div>
                   </div>
                 ) : recentTransactions.length === 0 ? (
-                  <div className="flex items-center justify-center h-40">
+                  <div className="flex items-center justify-center h-full">
                     <div className="text-muted-foreground">No transactions yet</div>
                   </div>
                 ) : (
