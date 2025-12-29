@@ -36,6 +36,8 @@ type ServiceData = {
   fill: string
 }
 
+type DistributionType = 'service' | 'shoe' | 'care'
+
 const chartConfig = {
   service: {
     label: "Service",
@@ -56,6 +58,30 @@ const chartConfig = {
     label: "Package",
     color: "var(--chart-4)",
   },
+  canvas: {
+    label: "Canvas",
+    color: "var(--chart-1)",
+  },
+  rubber: {
+    label: "Rubber",
+    color: "var(--chart-2)",
+  },
+  mesh: {
+    label: "Mesh",
+    color: "var(--chart-3)",
+  },
+  gentle: {
+    label: "Gentle",
+    color: "var(--chart-1)",
+  },
+  normal: {
+    label: "Normal",
+    color: "var(--chart-2)",
+  },
+  strong: {
+    label: "Strong",
+    color: "var(--chart-3)",
+  },
 } satisfies ChartConfig
 
 export function PieChartCard() {
@@ -64,12 +90,14 @@ export function PieChartCard() {
   const [serviceData, setServiceData] = React.useState<ServiceData[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [activeService, setActiveService] = React.useState("")
+  const [distributionType, setDistributionType] = React.useState<DistributionType>('service')
 
-  // Fetch service distribution data
+  // Fetch distribution data
   React.useEffect(() => {
     const fetchDistribution = async () => {
+      setIsLoading(true)
       try {
-        const response = await fetch(`/api/transaction/distribution?deviceId=${selectedDevice}`)
+        const response = await fetch(`/api/transaction/distribution?deviceId=${selectedDevice}&type=${distributionType}`)
         const data = await response.json()
 
         if (data.success) {
@@ -91,7 +119,7 @@ export function PieChartCard() {
     }
 
     fetchDistribution()
-  }, [selectedDevice])
+  }, [selectedDevice, distributionType])
 
   const activeIndex = React.useMemo(
     () => serviceData.findIndex((item: ServiceData) => item.type === activeService),
@@ -104,12 +132,29 @@ export function PieChartCard() {
     [serviceData]
   )
 
+  const getTitle = () => {
+    switch (distributionType) {
+      case 'service': return 'Service Type Distribution'
+      case 'shoe': return 'Shoe Type Distribution'
+      case 'care': return 'Care Type Distribution'
+    }
+  }
+
   if (isLoading) {
     return (
-      <Card className="flex flex-col min-h-[400px]">
-        <CardHeader>
-          <CardTitle>Service Type Distribution</CardTitle>
-          <CardDescription>Loading...</CardDescription>
+      <Card className="flex flex-col h-full">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm sm:text-base lg:text-lg">{getTitle()}</CardTitle>
+          <Select value={distributionType} onValueChange={(value) => setDistributionType(value as DistributionType)}>
+            <SelectTrigger className="h-7 w-fit rounded-lg">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="service">Service</SelectItem>
+              <SelectItem value="shoe">Shoe</SelectItem>
+              <SelectItem value="care">Care</SelectItem>
+            </SelectContent>
+          </Select>
         </CardHeader>
         <CardContent className="flex flex-1 justify-center items-center">
           <div className="text-muted-foreground">Loading chart data...</div>
@@ -120,10 +165,19 @@ export function PieChartCard() {
 
   if (serviceData.length === 0) {
     return (
-      <Card className="flex flex-col min-h-[400px]">
-        <CardHeader>
-          <CardTitle>Service Type Distribution</CardTitle>
-          <CardDescription>No data</CardDescription>
+      <Card className="flex flex-col h-full">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm sm:text-base lg:text-lg">{getTitle()}</CardTitle>
+          <Select value={distributionType} onValueChange={(value) => setDistributionType(value as DistributionType)}>
+            <SelectTrigger className="h-7 w-fit rounded-lg">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="service">Service</SelectItem>
+              <SelectItem value="shoe">Shoe</SelectItem>
+              <SelectItem value="care">Care</SelectItem>
+            </SelectContent>
+          </Select>
         </CardHeader>
         <CardContent className="flex flex-1 justify-center items-center">
           <div className="text-muted-foreground">No data available</div>
@@ -135,46 +189,55 @@ export function PieChartCard() {
   return (
     <Card data-chart={id} className="flex flex-col min-h-[400px]">
       <ChartStyle id={id} config={chartConfig} />
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
-        <div className="grid gap-1">
-          <CardTitle>Service Type Distribution</CardTitle>
-          <CardDescription>Daily</CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
+        <CardTitle className="text-sm sm:text-base lg:text-lg">{getTitle()}</CardTitle>
+        <div className="flex flex-row gap-2">
+          <Select value={distributionType} onValueChange={(value) => setDistributionType(value as DistributionType)}>
+            <SelectTrigger className="h-7 w-fit rounded-lg">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="service">Service</SelectItem>
+              <SelectItem value="shoe">Shoe</SelectItem>
+              <SelectItem value="care">Care</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={activeService} onValueChange={setActiveService}>
+            <SelectTrigger
+              className="h-7 w-fit rounded-lg"
+              aria-label="Select a value"
+            >
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent align="end" className="rounded-xl">
+              {services.map((key: string) => {
+                const config = chartConfig[key as keyof typeof chartConfig]
+
+                if (!config) {
+                  return null
+                }
+
+                return (
+                  <SelectItem
+                    key={key}
+                    value={key}
+                    className="rounded-lg [&_span]:flex"
+                  >
+                    <div className="flex items-center gap-2 text-xs">
+                      <span
+                        className="flex h-3 w-3 shrink-0 rounded-xs"
+                        style={{
+                          backgroundColor: `var(--color-${key})`,
+                        }}
+                      />
+                      {config?.label}
+                    </div>
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={activeService} onValueChange={setActiveService}>
-          <SelectTrigger
-            className="ml-auto h-7 w-[130px] rounded-lg pl-2.5"
-            aria-label="Select a value"
-          >
-            <SelectValue placeholder="Select type" />
-          </SelectTrigger>
-          <SelectContent align="end" className="rounded-xl">
-            {services.map((key: string) => {
-              const config = chartConfig[key as keyof typeof chartConfig]
-
-              if (!config) {
-                return null
-              }
-
-              return (
-                <SelectItem
-                  key={key}
-                  value={key}
-                  className="rounded-lg [&_span]:flex"
-                >
-                  <div className="flex items-center gap-2 text-xs">
-                    <span
-                      className="flex h-3 w-3 shrink-0 rounded-xs"
-                      style={{
-                        backgroundColor: `var(--color-${key})`,
-                      }}
-                    />
-                    {config?.label}
-                  </div>
-                </SelectItem>
-              )
-            })}
-          </SelectContent>
-        </Select>
       </CardHeader>
       <CardContent className="flex flex-1 justify-center items-center pb-4">
         <ChartContainer
