@@ -107,6 +107,10 @@ const Offline = () => {
     ws.onopen = () => {
       setWsConnected(true)
       ws.send(JSON.stringify({ type: 'subscribe', deviceId }))
+      
+      // Enable payment system when entering payment page
+      ws.send(JSON.stringify({ type: 'enable-payment', deviceId }))
+      console.log('[Payment] Payment system enabled')
     }
 
     ws.onmessage = (event) => {
@@ -129,6 +133,11 @@ const Offline = () => {
 
     return () => {
       intentionalClose = true
+      // Disable payment system when leaving payment page
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'disable-payment', deviceId }))
+        console.log('[Payment] Payment system disabled')
+      }
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         ws.close()
       }

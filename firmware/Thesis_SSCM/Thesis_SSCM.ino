@@ -42,8 +42,7 @@ volatile unsigned long lastCoinPulseTime = 0;
 volatile unsigned int currentCoinPulses = 0;
 unsigned int totalCoinPesos = 0;
 const unsigned long COIN_PULSE_DEBOUNCE_TIME = 100;     // 100ms between pulses (increased for noise immunity)
-const unsigned long COIN_COMPLETE_TIMEOUT = 300;        // 200ms to confirm coin insertion complete
-unsigned long coinSystemReadyTime = 0;                  // Time when system is ready to accept coins
+const unsigned long COIN_COMPLETE_TIMEOUT = 250;        // 300ms to confirm coin insertion complete
 
 /* ===================== BILL ACCEPTOR ===================== */
 #define BILL_PULSE_PIN 4
@@ -52,11 +51,10 @@ volatile unsigned int currentBillPulses = 0;
 unsigned int totalBillPesos = 0;
 unsigned int totalPesos = 0;  // Combined total (coins + bills)
 const unsigned long BILL_PULSE_DEBOUNCE_TIME = 100;     // 100ms between pulses (increased for noise immunity)
-const unsigned long BILL_COMPLETE_TIMEOUT = 300;        // 200ms to confirm bill insertion complete
-unsigned long billSystemReadyTime = 0;                  // Time when system is ready to accept bills
+const unsigned long BILL_COMPLETE_TIMEOUT = 250;        // 300ms to confirm bill insertion complete
 
-/* ===================== STARTUP DELAY ===================== */
-const unsigned long PAYMENT_SYSTEM_STARTUP_DELAY = 10000; // 10 seconds - ignore pulses during startup
+/* ===================== PAYMENT CONTROL ===================== */
+bool paymentEnabled = false;  // Only accept payments when explicitly enabled from frontend
 
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
@@ -64,9 +62,9 @@ String deviceId = "";
 bool isPaired = false;
 
 /* ===================== BACKEND URL ===================== */
-const char* BACKEND_HOST = "192.168.1.8";  // Update with your Next.js server IP
+const char* BACKEND_HOST = "172.20.10.3";  // Update with your Next.js server IP
 const int BACKEND_PORT = 3000;
-const char* BACKEND_URL = "http://192.168.1.8:3000";
+const char* BACKEND_URL = "http://172.20.10.3:3000";
 
 /* ===================== WIFI PORTAL HTML ===================== */
 const char WIFI_HTML[] PROGMEM = R"rawliteral(
@@ -573,6 +571,23 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     }
                 }
             }
+            else if (message.indexOf("\"type\":\"enable-payment\"") != -1) {
+                // Frontend entered payment page - enable payment system
+                paymentEnabled = true;
+                Serial.println("\n=== PAYMENT SYSTEM ENABLED ===");
+                Serial.println("Ready to accept coins and bills");
+                Serial.println("===============================\n");
+            }
+            else if (message.indexOf("\"type\":\"disable-payment\"") != -1) {
+                // Frontend left payment page - disable payment system
+                paymentEnabled = false;
+                Serial.println("\n=== PAYMENT SYSTEM DISABLED ===");
+                Serial.println("Ignoring coins and bills");
+                Serial.println("================================\n");
+                // Reset any partial coin/bill counts
+                currentCoinPulses = 0;
+                currentBillPulses = 0;
+            }
             break;
         }
 
@@ -617,12 +632,12 @@ void connectWiFi() {
 
 /* ===================== COIN SLOT INTERRUPT HANDLER ===================== */
 void IRAM_ATTR handleCoinPulse() {
-    unsigned long currentTime = millis();
-
-    // Ignore pulses during startup period
-    if (currentTime < coinSystemReadyTime) {
+    // Only accept pulses when payment is enabled (on payment page)
+    if (!paymentEnabled) {
         return;
     }
+
+    unsigned long currentTime = millis();
 
     // Debounce: ignore if less than COIN_PULSE_DEBOUNCE_TIME has passed
     if (currentTime - lastCoinPulseTime > COIN_PULSE_DEBOUNCE_TIME) {
@@ -633,12 +648,12 @@ void IRAM_ATTR handleCoinPulse() {
 
 /* ===================== BILL ACCEPTOR INTERRUPT HANDLER ===================== */
 void IRAM_ATTR handleBillPulse() {
-    unsigned long currentTime = millis();
-
-    // Ignore pulses during startup period
-    if (currentTime < billSystemReadyTime) {
+    // Only accept pulses when payment is enabled (on payment page)
+    if (!paymentEnabled) {
         return;
     }
+
+    unsigned long currentTime = millis();
 
     // Debounce: ignore if less than BILL_PULSE_DEBOUNCE_TIME has passed
     if (currentTime - lastBillPulseTime > BILL_PULSE_DEBOUNCE_TIME) {
@@ -671,12 +686,7 @@ void setup() {
     Serial.println("Bill acceptor initialized on GPIO 4");
     Serial.println("Supported bill denominations: 20, 50, 100 pesos");
     Serial.println("Bill pulse ratio: 1 pulse = 10 pesos");
-
-    // Set ready time to ignore startup noise and initialization pulses
-    coinSystemReadyTime = millis() + PAYMENT_SYSTEM_STARTUP_DELAY;
-    billSystemReadyTime = millis() + PAYMENT_SYSTEM_STARTUP_DELAY;
-    Serial.println("\n*** Payment system will be ready in 10 seconds ***");
-    Serial.println("Ignoring all pulses during initialization period\n");
+    Serial.println("\n*** Payment system will be enabled when user enters payment page ***\n");
 
     // Load totals from preferences
     totalCoinPesos = prefs.getUInt("totalCoinPesos", 0);
@@ -720,15 +730,6 @@ void setup() {
 /* ===================== LOOP ===================== */
 void loop() {
     delay(10);
-
-    // Notify when payment system becomes ready
-    static bool paymentSystemReady = false;
-    if (!paymentSystemReady && millis() >= coinSystemReadyTime) {
-        paymentSystemReady = true;
-        Serial.println("\n=== PAYMENT SYSTEM READY ===");
-        Serial.println("Coin and bill acceptors are now active");
-        Serial.println("============================\n");
-    }
 
     // Handle WebSocket - MUST call loop() even when not connected for handshake
     webSocket.loop();
