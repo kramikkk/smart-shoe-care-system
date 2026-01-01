@@ -42,7 +42,7 @@ volatile unsigned long lastCoinPulseTime = 0;
 volatile unsigned int currentCoinPulses = 0;
 unsigned int totalCoinPesos = 0;
 const unsigned long COIN_PULSE_DEBOUNCE_TIME = 100;     // 100ms between pulses (increased for noise immunity)
-const unsigned long COIN_COMPLETE_TIMEOUT = 250;        // 300ms to confirm coin insertion complete
+const unsigned long COIN_COMPLETE_TIMEOUT = 300;        // 300ms to confirm coin insertion complete
 
 /* ===================== BILL ACCEPTOR ===================== */
 #define BILL_PULSE_PIN 4
@@ -51,10 +51,33 @@ volatile unsigned int currentBillPulses = 0;
 unsigned int totalBillPesos = 0;
 unsigned int totalPesos = 0;  // Combined total (coins + bills)
 const unsigned long BILL_PULSE_DEBOUNCE_TIME = 100;     // 100ms between pulses (increased for noise immunity)
-const unsigned long BILL_COMPLETE_TIMEOUT = 250;        // 300ms to confirm bill insertion complete
+const unsigned long BILL_COMPLETE_TIMEOUT = 300;        // 300ms to confirm bill insertion complete
 
 /* ===================== PAYMENT CONTROL ===================== */
 bool paymentEnabled = false;  // Only accept payments when explicitly enabled from frontend
+
+/* ===================== 8-CHANNEL RELAY ===================== */
+#define RELAY_1_PIN 6   // Channel 1: Bill Acceptor
+#define RELAY_2_PIN 7   // Channel 2: Coin Slot
+#define RELAY_3_PIN 15  // Channel 3: Centrifugal Blower Fan
+#define RELAY_4_PIN 16  // Channel 4: PTC Ceramic Heater
+#define RELAY_5_PIN 17  // Channel 5: Bottom Exhaust
+#define RELAY_6_PIN 18  // Channel 6: Diaphragm Pump
+#define RELAY_7_PIN 8   // Channel 7: Ultrasonic Mist Maker
+#define RELAY_8_PIN 3   // Channel 8: UVC Light
+
+// Most relay modules are active LOW (LOW = ON, HIGH = OFF)
+#define RELAY_ON HIGH
+#define RELAY_OFF LOW
+
+bool relay1State = false;  // Bill Acceptor
+bool relay2State = false;  // Coin Slot
+bool relay3State = false;  // Centrifugal Blower Fan
+bool relay4State = false;  // PTC Ceramic Heater
+bool relay5State = false;  // Bottom Exhaust
+bool relay6State = false;  // Diaphragm Pump
+bool relay7State = false;  // Ultrasonic Mist Maker
+bool relay8State = false;  // UVC Light
 
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
@@ -588,6 +611,39 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 currentCoinPulses = 0;
                 currentBillPulses = 0;
             }
+            else if (message.indexOf("\"type\":\"relay-control\"") != -1) {
+                // Parse relay control command
+                // Expected format: {"type":"relay-control","channel":1,"state":true}
+                int channelIndex = message.indexOf("\"channel\":");
+                int stateIndex = message.indexOf("\"state\":");
+
+                if (channelIndex != -1 && stateIndex != -1) {
+                    // Extract channel number
+                    int channelStart = channelIndex + 10; // length of "\"channel\":"
+                    int channelEnd = message.indexOf(',', channelStart);
+                    if (channelEnd == -1) channelEnd = message.indexOf('}', channelStart);
+                    String channelStr = message.substring(channelStart, channelEnd);
+                    channelStr.trim();
+                    int channel = channelStr.toInt();
+
+                    // Extract state
+                    int stateStart = stateIndex + 8; // length of "\"state\":"
+                    int stateEnd = message.indexOf('}', stateStart);
+                    String stateStr = message.substring(stateStart, stateEnd);
+                    stateStr.trim();
+                    bool state = (stateStr.indexOf("true") != -1);
+
+                    // Set the relay
+                    if (channel >= 1 && channel <= 8) {
+                        setRelay(channel, state);
+                        Serial.println("[WebSocket] Relay control: CH" + String(channel) + " -> " + (state ? "ON" : "OFF"));
+                    } else {
+                        Serial.println("[WebSocket] Invalid relay channel: " + String(channel));
+                    }
+                } else {
+                    Serial.println("[WebSocket] Invalid relay-control message format");
+                }
+            }
             break;
         }
 
@@ -628,6 +684,39 @@ void connectWiFi() {
     Serial.println("=== Connecting to WiFi ===");
     Serial.println("SSID: " + ssid);
     Serial.println("==========================");
+}
+
+/* ===================== RELAY CONTROL FUNCTIONS ===================== */
+void setRelay(int channel, bool state) {
+    int pin;
+    bool* stateVar;
+    String name;
+
+    switch(channel) {
+        case 1: pin = RELAY_1_PIN; stateVar = &relay1State; name = "Bill Acceptor"; break;
+        case 2: pin = RELAY_2_PIN; stateVar = &relay2State; name = "Coin Slot"; break;
+        case 3: pin = RELAY_3_PIN; stateVar = &relay3State; name = "Centrifugal Blower Fan"; break;
+        case 4: pin = RELAY_4_PIN; stateVar = &relay4State; name = "PTC Ceramic Heater"; break;
+        case 5: pin = RELAY_5_PIN; stateVar = &relay5State; name = "Bottom Exhaust"; break;
+        case 6: pin = RELAY_6_PIN; stateVar = &relay6State; name = "Diaphragm Pump"; break;
+        case 7: pin = RELAY_7_PIN; stateVar = &relay7State; name = "Ultrasonic Mist Maker"; break;
+        case 8: pin = RELAY_8_PIN; stateVar = &relay8State; name = "UVC Light"; break;
+        default:
+            Serial.println("[ERROR] Invalid relay channel: " + String(channel));
+            return;
+    }
+
+    *stateVar = state;
+    digitalWrite(pin, state ? RELAY_ON : RELAY_OFF);
+    Serial.println("[Relay " + String(channel) + "] " + name + ": " + (state ? "ON" : "OFF"));
+}
+
+void allRelaysOff() {
+    Serial.println("\n=== Turning All Relays OFF ===");
+    for (int i = 1; i <= 8; i++) {
+        setRelay(i, false);
+    }
+    Serial.println("===============================\n");
 }
 
 /* ===================== COIN SLOT INTERRUPT HANDLER ===================== */
@@ -673,6 +762,29 @@ void setup() {
     Serial.println("=================================\n");
 
     prefs.begin("sscm", false);
+
+    // Initialize 8-channel relay
+    pinMode(RELAY_1_PIN, OUTPUT);
+    pinMode(RELAY_2_PIN, OUTPUT);
+    pinMode(RELAY_3_PIN, OUTPUT);
+    pinMode(RELAY_4_PIN, OUTPUT);
+    pinMode(RELAY_5_PIN, OUTPUT);
+    pinMode(RELAY_6_PIN, OUTPUT);
+    pinMode(RELAY_7_PIN, OUTPUT);
+    pinMode(RELAY_8_PIN, OUTPUT);
+
+    // Turn all relays OFF initially
+    allRelaysOff();
+    Serial.println("8-Channel Relay initialized:");
+    Serial.println("  CH1 (GPIO 6):  Bill Acceptor");
+    Serial.println("  CH2 (GPIO 7):  Coin Slot");
+    Serial.println("  CH3 (GPIO 15): Centrifugal Blower Fan");
+    Serial.println("  CH4 (GPIO 16): PTC Ceramic Heater");
+    Serial.println("  CH5 (GPIO 17): Bottom Exhaust");
+    Serial.println("  CH6 (GPIO 18): Diaphragm Pump");
+    Serial.println("  CH7 (GPIO 8):  Ultrasonic Mist Maker");
+    Serial.println("  CH8 (GPIO 3):  UVC Light");
+    Serial.println("All relays set to OFF\n");
 
     // Initialize coin slot pin
     pinMode(COIN_SLOT_PIN, INPUT_PULLUP);
@@ -873,7 +985,50 @@ void loop() {
             Serial.println("Grand Total: " + String(totalPesos) + " PHP");
             Serial.println("Current Coin Pulses: " + String(currentCoinPulses));
             Serial.println("Current Bill Pulses: " + String(currentBillPulses));
+            Serial.println("--- Relay Status ---");
+            Serial.println("Relay 1 (Bill Acceptor): " + String(relay1State ? "ON" : "OFF"));
+            Serial.println("Relay 2 (Coin Slot): " + String(relay2State ? "ON" : "OFF"));
+            Serial.println("Relay 3 (Blower Fan): " + String(relay3State ? "ON" : "OFF"));
+            Serial.println("Relay 4 (PTC Heater): " + String(relay4State ? "ON" : "OFF"));
+            Serial.println("Relay 5 (Bottom Exhaust): " + String(relay5State ? "ON" : "OFF"));
+            Serial.println("Relay 6 (Diaphragm Pump): " + String(relay6State ? "ON" : "OFF"));
+            Serial.println("Relay 7 (Mist Maker): " + String(relay7State ? "ON" : "OFF"));
+            Serial.println("Relay 8 (UVC Light): " + String(relay8State ? "ON" : "OFF"));
             Serial.println("=====================\n");
+        }
+        else if (cmd.startsWith("RELAY")) {
+            // Commands: RELAY_1_ON, RELAY_1_OFF, RELAY_ALL_OFF
+            if (cmd == "RELAY_ALL_OFF") {
+                allRelaysOff();
+            }
+            else {
+                // Parse RELAY_X_ON or RELAY_X_OFF
+                int firstUnderscore = cmd.indexOf('_');
+                int secondUnderscore = cmd.indexOf('_', firstUnderscore + 1);
+
+                if (firstUnderscore != -1 && secondUnderscore != -1) {
+                    String channelStr = cmd.substring(firstUnderscore + 1, secondUnderscore);
+                    String action = cmd.substring(secondUnderscore + 1);
+
+                    int channel = channelStr.toInt();
+                    if (channel >= 1 && channel <= 8) {
+                        if (action == "ON") {
+                            setRelay(channel, true);
+                        } else if (action == "OFF") {
+                            setRelay(channel, false);
+                        } else {
+                            Serial.println("[ERROR] Unknown action: " + action);
+                            Serial.println("Use: RELAY_1_ON, RELAY_1_OFF, or RELAY_ALL_OFF");
+                        }
+                    } else {
+                        Serial.println("[ERROR] Invalid channel: " + channelStr);
+                        Serial.println("Valid channels: 1-8");
+                    }
+                } else {
+                    Serial.println("[ERROR] Invalid relay command format");
+                    Serial.println("Use: RELAY_1_ON, RELAY_1_OFF, or RELAY_ALL_OFF");
+                }
+            }
         }
     }
 
