@@ -123,6 +123,22 @@ export function createWebSocketServer(server: Server) {
           console.log(`[WebSocket] Bill: ₱${message.billValue} on ${billDeviceId}`)
           broadcastToDevice(billDeviceId, message)
         }
+
+        // Handle payment system enable from frontend
+        else if (message.type === 'enable-payment' && message.deviceId) {
+          const paymentDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Enable payment system on ${paymentDeviceId}`)
+          // Forward to ESP32 device
+          broadcastToDevice(paymentDeviceId, message)
+        }
+
+        // Handle payment system disable from frontend
+        else if (message.type === 'disable-payment' && message.deviceId) {
+          const paymentDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Disable payment system on ${paymentDeviceId}`)
+          // Forward to ESP32 device
+          broadcastToDevice(paymentDeviceId, message)
+        }
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)
       }
