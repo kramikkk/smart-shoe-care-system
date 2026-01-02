@@ -86,18 +86,20 @@ export function createWebSocketServer(server: Server) {
 
           console.log(`[WebSocket] Status update from device: ${updateDeviceId}`)
 
-          // Update lastSeen in database
+          // Update lastSeen in database and get current paired status
           try {
-            await prisma.device.update({
+            const updatedDevice = await prisma.device.update({
               where: { deviceId: updateDeviceId },
               data: { lastSeen: new Date() }
             })
 
-            // Send acknowledgment
+            // Send acknowledgment with current paired status for sync
             ws.send(JSON.stringify({
               type: 'status-ack',
               deviceId: updateDeviceId,
-              success: true
+              success: true,
+              paired: updatedDevice.paired,
+              pairingCode: updatedDevice.pairingCode
             }))
           } catch (error) {
             console.error(`[WebSocket] Failed to update device ${updateDeviceId}:`, error)
