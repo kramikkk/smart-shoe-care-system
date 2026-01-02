@@ -139,6 +139,22 @@ export function createWebSocketServer(server: Server) {
           // Forward to ESP32 device
           broadcastToDevice(paymentDeviceId, message)
         }
+
+        // Handle sensor data from ESP32 (temperature & humidity)
+        else if (message.type === 'sensor-data' && message.deviceId) {
+          const sensorDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Sensor data from ${sensorDeviceId}: Temp ${message.temperature}°C, Humidity ${message.humidity}%`)
+          // Broadcast to all clients subscribed to this device
+          broadcastToDevice(sensorDeviceId, message)
+        }
+
+        // Handle distance data from ESP32 (atomizer & foam levels)
+        else if (message.type === 'distance-data' && message.deviceId) {
+          const distanceDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Distance data from ${distanceDeviceId}: Atomizer ${message.atomizerDistance}cm, Foam ${message.foamDistance}cm`)
+          // Broadcast to all clients subscribed to this device
+          broadcastToDevice(distanceDeviceId, message)
+        }
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)
       }

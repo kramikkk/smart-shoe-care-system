@@ -800,6 +800,7 @@ bool readAtomizerLevel() {
     
     // Calculate distance: duration in microseconds, speed of sound = 343 m/s
     // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
+    int distance = (duration * 0.034) / 2;
     
     // Validate range (JSN-SR20-Y1: 2cm to 500cm)
     if (distance < 2 || distance > 500) {
