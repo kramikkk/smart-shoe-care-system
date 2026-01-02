@@ -8,17 +8,17 @@ import {
 export const SensorData = {
   temperature: {
     name: "Temperature",
-    value: "32°C",
-    percentage: 80,
+    value: "0°C",
+    percentage: 0,
     icon: Thermometer,
     color: "text-orange-600",
     range: "18-30°C",
-    status: "Warning"
+    status: "Normal"
   },
   foamLevel: {
     name: "Foam Level",
-    value: "65%",
-    percentage: 65,
+    value: "0%",
+    percentage: 0,
     icon: Droplets,
     color: "text-blue-600",
     range: "0-100%",
@@ -26,21 +26,21 @@ export const SensorData = {
   },
   atomizerLevel: {
     name: "Atomizer Level",
-    value: "15%",
-    percentage: 15,
+    value: "0%",
+    percentage: 0,
     icon: Gauge,
     color: "text-cyan-600",
     range: "0-100%",
-    status: "Critical"
+    status: "Normal"
   },
-  uvLamp: {
-    name: "UV Lamp Status",
-    value: "Active",
-    percentage: 100,
-    icon: Zap,
-    color: "text-purple-600",
-    range: "On/Off",
-    status: "Active"
+  humidity: {
+    name: "Humidity",
+    value: "0%",
+    percentage: 0,
+    icon: Droplets,
+    color: "text-teal-600",
+    range: "40-70%",
+    status: "Normal"
   },
     systemStatus: {
     name: "System Status",
