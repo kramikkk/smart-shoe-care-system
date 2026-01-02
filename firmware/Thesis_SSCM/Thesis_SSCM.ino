@@ -588,9 +588,36 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 Serial.println("[WebSocket] Sent initial status update");
             }
             else if (message.indexOf("\"type\":\"status-ack\"") != -1) {
-                // Acknowledgment of status update
+                // Acknowledgment of status update with paired status sync
                 if (message.indexOf("\"success\":true") != -1) {
                     Serial.println("[WebSocket] Status update acknowledged");
+
+                    // Sync paired status from database
+                    bool dbPaired = (message.indexOf("\"paired\":true") != -1);
+
+                    if (dbPaired != isPaired) {
+                        Serial.println("\n=== Syncing Paired Status ===");
+                        Serial.println("Local isPaired: " + String(isPaired ? "true" : "false"));
+                        Serial.println("Database paired: " + String(dbPaired ? "true" : "false"));
+
+                        if (dbPaired && !isPaired) {
+                            // Database says paired, but ESP32 thinks unpaired - sync to paired
+                            Serial.println("Syncing to PAIRED state");
+                            isPaired = true;
+                            prefs.putBool("paired", true);
+                        } else if (!dbPaired && isPaired) {
+                            // Database says unpaired, but ESP32 thinks paired - sync to unpaired
+                            Serial.println("Syncing to UNPAIRED state - generating new code");
+                            isPaired = false;
+                            prefs.putBool("paired", false);
+                            pairingCode = generatePairingCode();
+                            Serial.println("New Pairing Code: " + pairingCode);
+
+                            // Re-register with new pairing code
+                            sendDeviceRegistration();
+                        }
+                        Serial.println("==============================\n");
+                    }
                 } else {
                     Serial.println("[WebSocket] Status update failed");
                 }
@@ -766,7 +793,8 @@ bool readDHT22() {
 }
 
 void sendDHTDataViaWebSocket() {
-    if (!wsConnected) return;
+    // Don't send data if device is not paired
+    if (!isPaired || !wsConnected) return;
 
     String sensorMsg = "{";
     sensorMsg += "\"type\":\"sensor-data\",";
@@ -847,7 +875,8 @@ bool readFoamLevel() {
 }
 
 void sendUltrasonicDataViaWebSocket() {
-    if (!wsConnected) return;
+    // Don't send data if device is not paired
+    if (!isPaired || !wsConnected) return;
 
     String distanceMsg = "{";
     distanceMsg += "\"type\":\"distance-data\",";
@@ -1039,13 +1068,13 @@ void loop() {
             }
             Serial.println("=====================\n");
 
-            // Send coin insertion event via WebSocket
-            if (wsConnected) {
+            // Send coin insertion event via WebSocket (only if paired)
+            if (isPaired && wsConnected) {
                 String coinMsg = "{\"type\":\"coin-inserted\",\"deviceId\":\"" + deviceId + "\",\"coinValue\":" + String(coinValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
                 webSocket.sendTXT(coinMsg);
                 Serial.println("[WebSocket] Sent coin event: " + coinMsg);
             } else {
-                Serial.println("[WebSocket] Not connected - coin event not sent");
+                Serial.println("[WebSocket] Not sending coin event - device not paired or not connected");
             }
 
             // Reset pulse counter for next coin
@@ -1083,13 +1112,13 @@ void loop() {
             }
             Serial.println("=====================\n");
 
-            // Send bill insertion event via WebSocket
-            if (wsConnected) {
+            // Send bill insertion event via WebSocket (only if paired)
+            if (isPaired && wsConnected) {
                 String billMsg = "{\"type\":\"bill-inserted\",\"deviceId\":\"" + deviceId + "\",\"billValue\":" + String(billValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
                 webSocket.sendTXT(billMsg);
                 Serial.println("[WebSocket] Sent bill event: " + billMsg);
             } else {
-                Serial.println("[WebSocket] Not connected - bill event not sent");
+                Serial.println("[WebSocket] Not sending bill event - device not paired or not connected");
             }
 
             // Reset pulse counter for next bill
@@ -1290,6 +1319,7 @@ void loop() {
     }
 
     /* ================= STATUS UPDATE (KEEP ALIVE) ================= */
+    // Always send status updates (even when unpaired) to show device is online/offline
     if (wsConnected && millis() - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {
         lastStatusUpdate = millis();
 
@@ -1300,7 +1330,8 @@ void loop() {
     }
 
     /* ================= DHT22 AUTOMATIC READING ================= */
-    if (millis() - lastDHTRead >= DHT_READ_INTERVAL) {
+    // Only read sensors if device is paired
+    if (isPaired && millis() - lastDHTRead >= DHT_READ_INTERVAL) {
         lastDHTRead = millis();
 
         // Read DHT22 sensor
@@ -1313,7 +1344,8 @@ void loop() {
     }
 
     /* ================= ULTRASONIC AUTOMATIC READING ================= */
-    if (millis() - lastUltrasonicRead >= ULTRASONIC_READ_INTERVAL) {
+    // Only read sensors if device is paired
+    if (isPaired && millis() - lastUltrasonicRead >= ULTRASONIC_READ_INTERVAL) {
         lastUltrasonicRead = millis();
 
         // Read both ultrasonic sensors
