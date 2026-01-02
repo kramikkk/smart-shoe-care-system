@@ -9,6 +9,7 @@
  * - WebSocketsClient (by Markus Sattler) - Install via Library Manager
  * - DHT sensor library (by Adafruit) - Install via Library Manager
  * - Adafruit Unified Sensor - Install via Library Manager
+ * - ESP32Servo (by Kevin Harrington) - Install via Library Manager
  */
 
 #include <WiFi.h>
@@ -16,6 +17,7 @@
 #include <Preferences.h>
 #include <WebSocketsClient.h>
 #include <DHT.h>
+#include <ESP32Servo.h>
 
 /* ===================== WIFI ===================== */
 Preferences prefs;
@@ -106,6 +108,21 @@ int currentAtomizerDistance = 0;  // Atomizer liquid level in cm
 int currentFoamDistance = 0;      // Foam level in cm
 unsigned long lastUltrasonicRead = 0;
 const unsigned long ULTRASONIC_READ_INTERVAL = 5000;  // Read every 5 seconds
+
+/* ===================== SERVO MOTORS (MG995) - TWO SERVOS ===================== */
+#define SERVO_LEFT_PIN 14   // GPIO 14 for left servo (0° → 180°)
+#define SERVO_RIGHT_PIN 19  // GPIO 19 for right servo (180° → 0°)
+
+Servo servoLeft;   // Left servo: moves from 0° to 180°
+Servo servoRight;  // Right servo: moves from 180° to 0° (mirrored)
+
+int currentLeftPosition = 0;    // Current position of left servo (0-180)
+int currentRightPosition = 180; // Current position of right servo (starts at 180)
+int targetLeftPosition = 0;     // Target position for left servo
+int targetRightPosition = 180;  // Target position for right servo
+bool servosMoving = false;      // Are servos currently moving
+unsigned long lastServoUpdate = 0;
+const unsigned long SERVO_UPDATE_INTERVAL = 15;  // Update servos every 15ms for smooth slow movement
 
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
@@ -889,6 +906,70 @@ void sendUltrasonicDataViaWebSocket() {
     Serial.println("[WebSocket] Sent distance data: " + distanceMsg);
 }
 
+/* ===================== SERVO MOTOR CONTROL (NON-BLOCKING) - DUAL SERVOS ===================== */
+// Non-blocking smooth servo movement - called every loop iteration
+// Left servo: 0° → 180° | Right servo: 180° → 0° (mirrored)
+void updateServoPositions() {
+    if (!servosMoving) return;
+
+    unsigned long currentTime = millis();
+
+    // Check if it's time to update servo positions (every 15ms)
+    if (currentTime - lastServoUpdate >= SERVO_UPDATE_INTERVAL) {
+        lastServoUpdate = currentTime;
+
+        bool leftReached = false;
+        bool rightReached = false;
+
+        // Update LEFT servo
+        if (currentLeftPosition < targetLeftPosition) {
+            currentLeftPosition++;
+            servoLeft.write(currentLeftPosition);
+        } else if (currentLeftPosition > targetLeftPosition) {
+            currentLeftPosition--;
+            servoLeft.write(currentLeftPosition);
+        } else {
+            leftReached = true;
+        }
+
+        // Update RIGHT servo
+        if (currentRightPosition < targetRightPosition) {
+            currentRightPosition++;
+            servoRight.write(currentRightPosition);
+        } else if (currentRightPosition > targetRightPosition) {
+            currentRightPosition--;
+            servoRight.write(currentRightPosition);
+        } else {
+            rightReached = true;
+        }
+
+        // Both servos reached target
+        if (leftReached && rightReached) {
+            servosMoving = false;
+            Serial.println("[Servos] Reached target - Left: " + String(currentLeftPosition) + "° | Right: " + String(currentRightPosition) + "°");
+        }
+    }
+}
+
+// Set servo target positions - initiates non-blocking smooth movement
+// leftPos: position for left servo (0-180)
+// When left goes to 180°, right goes to 0° (mirrored)
+void setServoPositions(int leftPos) {
+    // Constrain position to 0-180 degrees
+    leftPos = constrain(leftPos, 0, 180);
+
+    // Calculate mirrored position for right servo
+    int rightPos = 180 - leftPos;
+
+    if (leftPos != currentLeftPosition || rightPos != currentRightPosition) {
+        targetLeftPosition = leftPos;
+        targetRightPosition = rightPos;
+        servosMoving = true;
+        Serial.println("[Servos] Moving - Left: " + String(currentLeftPosition) + "° → " + String(targetLeftPosition) +
+                       "° | Right: " + String(currentRightPosition) + "° → " + String(targetRightPosition) + "°");
+    }
+}
+
 /* ===================== COIN SLOT INTERRUPT HANDLER ===================== */
 void IRAM_ATTR handleCoinPulse() {
     // Only accept pulses when payment is enabled (on payment page)
@@ -956,6 +1037,23 @@ void setup() {
     Serial.println("    ECHO Pin: GPIO " + String(FOAM_ECHO_PIN));
     Serial.println("  Range: 2cm - 500cm each");
     Serial.println("  Reading distance every 5 seconds\n");
+
+    // Initialize servo motors (Tower Pro MG995) - Dual servos
+    servoLeft.attach(SERVO_LEFT_PIN);
+    servoRight.attach(SERVO_RIGHT_PIN);
+
+    servoLeft.write(0);    // Left starts at 0 degrees
+    servoRight.write(180); // Right starts at 180 degrees (mirrored)
+
+    currentLeftPosition = 0;
+    currentRightPosition = 180;
+    targetLeftPosition = 0;
+    targetRightPosition = 180;
+
+    Serial.println("Tower Pro MG995 Servo Motors initialized:");
+    Serial.println("  Left Servo  (GPIO " + String(SERVO_LEFT_PIN) + "): Starting at 0° (moves 0° → 180°)");
+    Serial.println("  Right Servo (GPIO " + String(SERVO_RIGHT_PIN) + "): Starting at 180° (moves 180° → 0°)");
+    Serial.println("  Smooth slow movement (non-blocking)\n");
 
     // Initialize 8-channel relay
     pinMode(RELAY_1_PIN, OUTPUT);
@@ -1039,6 +1137,9 @@ void loop() {
 
     // Handle WebSocket - MUST call loop() even when not connected for handshake
     webSocket.loop();
+
+    // Update servo positions for smooth non-blocking movement (dual servos)
+    updateServoPositions();
 
     // Handle coin insertion with pulse counting and timeout
     if (currentCoinPulses > 0) {
@@ -1194,6 +1295,14 @@ void loop() {
             Serial.println("--- Ultrasonic Sensors ---");
             Serial.println("Atomizer Level: " + String(currentAtomizerDistance) + " cm");
             Serial.println("Foam Level: " + String(currentFoamDistance) + " cm");
+            Serial.println("--- Servo Motors (Dual) ---");
+            Serial.println("Left Servo:");
+            Serial.println("  Current: " + String(currentLeftPosition) + "°");
+            Serial.println("  Target:  " + String(targetLeftPosition) + "°");
+            Serial.println("Right Servo:");
+            Serial.println("  Current: " + String(currentRightPosition) + "°");
+            Serial.println("  Target:  " + String(targetRightPosition) + "°");
+            Serial.println("Moving: " + String(servosMoving ? "Yes" : "No"));
             Serial.println("=====================\n");
         }
         else if (cmd.startsWith("RELAY")) {
@@ -1228,6 +1337,42 @@ void loop() {
                     Serial.println("[ERROR] Invalid relay command format");
                     Serial.println("Use: RELAY_1_ON, RELAY_1_OFF, or RELAY_ALL_OFF");
                 }
+            }
+        }
+        else if (cmd == "SERVO_DEMO") {
+            Serial.println("=== Running Dual Servo Demo ===");
+            Serial.println("Left:  0° → 90° → 180°");
+            Serial.println("Right: 180° → 90° → 0° (mirrored)");
+            Serial.println("Watch the smooth slow mirrored movement!");
+
+            // Move to 0 first (left=0°, right=180°)
+            setServoPositions(0);
+            delay(2000);
+
+            // Move to 90 degrees (left=90°, right=90°)
+            setServoPositions(90);
+            delay(2500);
+
+            // Move to 180 degrees (left=180°, right=0°)
+            setServoPositions(180);
+
+            Serial.println("Demo sequence started! Servos will complete movement");
+            Serial.println("Movement is fully non-blocking - main loop continues running");
+            Serial.println("Use SERVO_0 to return to start position");
+            Serial.println("==========================\n");
+        }
+        else if (cmd.startsWith("SERVO_")) {
+            // Parse SERVO_XXX where XXX is angle for LEFT servo (0-180)
+            // Right servo will mirror automatically
+            String angleStr = cmd.substring(6);
+            int angle = angleStr.toInt();
+
+            if (angle >= 0 && angle <= 180) {
+                setServoPositions(angle);
+            } else {
+                Serial.println("[ERROR] Invalid servo angle: " + angleStr);
+                Serial.println("Valid range: 0-180 degrees");
+                Serial.println("Examples: SERVO_0 (L:0°,R:180°), SERVO_90 (L:90°,R:90°), SERVO_180 (L:180°,R:0°)");
             }
         }
     }
