@@ -7,12 +7,15 @@
  * - HTTPClient (built-in with ESP32)
  * - Preferences (built-in with ESP32)
  * - WebSocketsClient (by Markus Sattler) - Install via Library Manager
+ * - DHT sensor library (by Adafruit) - Install via Library Manager
+ * - Adafruit Unified Sensor - Install via Library Manager
  */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
 #include <WebSocketsClient.h>
+#include <DHT.h>
 
 /* ===================== WIFI ===================== */
 Preferences prefs;
@@ -78,6 +81,17 @@ bool relay5State = false;  // Bottom Exhaust
 bool relay6State = false;  // Diaphragm Pump
 bool relay7State = false;  // Ultrasonic Mist Maker
 bool relay8State = false;  // UVC Light
+
+/* ===================== DHT22 TEMPERATURE & HUMIDITY SENSOR ===================== */
+#define DHT_PIN 9
+#define DHT_TYPE DHT22
+
+DHT dht(DHT_PIN, DHT_TYPE);
+
+float currentTemperature = 0.0;
+float currentHumidity = 0.0;
+unsigned long lastDHTRead = 0;
+const unsigned long DHT_READ_INTERVAL = 2000;  // Read every 2 seconds
 
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
@@ -719,6 +733,38 @@ void allRelaysOff() {
     Serial.println("===============================\n");
 }
 
+/* ===================== DHT22 FUNCTIONS ===================== */
+bool readDHT22() {
+    float temp = dht.readTemperature();  // Celsius
+    float hum = dht.readHumidity();
+
+    if (isnan(temp) || isnan(hum)) {
+        Serial.println("[DHT22] Failed to read from sensor!");
+        return false;  // Reading failed
+    }
+
+    currentTemperature = temp;
+    currentHumidity = hum;
+
+    Serial.println("[DHT22] Temperature: " + String(currentTemperature) + "°C");
+    Serial.println("[DHT22] Humidity: " + String(currentHumidity) + "%");
+    return true;  // Reading successful
+}
+
+void sendDHTDataViaWebSocket() {
+    if (!wsConnected) return;
+
+    String sensorMsg = "{";
+    sensorMsg += "\"type\":\"sensor-data\",";
+    sensorMsg += "\"deviceId\":\"" + deviceId + "\",";
+    sensorMsg += "\"temperature\":" + String(currentTemperature) + ",";
+    sensorMsg += "\"humidity\":" + String(currentHumidity);
+    sensorMsg += "}";
+
+    webSocket.sendTXT(sensorMsg);
+    Serial.println("[WebSocket] Sent sensor data: " + sensorMsg);
+}
+
 /* ===================== COIN SLOT INTERRUPT HANDLER ===================== */
 void IRAM_ATTR handleCoinPulse() {
     // Only accept pulses when payment is enabled (on payment page)
@@ -762,6 +808,11 @@ void setup() {
     Serial.println("=================================\n");
 
     prefs.begin("sscm", false);
+
+    // Initialize DHT22 sensor
+    dht.begin();
+    Serial.println("DHT22 Sensor initialized on GPIO " + String(DHT_PIN));
+    Serial.println("Reading temperature and humidity every 2 seconds\n");
 
     // Initialize 8-channel relay
     pinMode(RELAY_1_PIN, OUTPUT);
@@ -994,6 +1045,9 @@ void loop() {
             Serial.println("Relay 6 (Diaphragm Pump): " + String(relay6State ? "ON" : "OFF"));
             Serial.println("Relay 7 (Mist Maker): " + String(relay7State ? "ON" : "OFF"));
             Serial.println("Relay 8 (UVC Light): " + String(relay8State ? "ON" : "OFF"));
+            Serial.println("--- DHT22 Sensor ---");
+            Serial.println("Temperature: " + String(currentTemperature) + "°C");
+            Serial.println("Humidity: " + String(currentHumidity) + "%");
             Serial.println("=====================\n");
         }
         else if (cmd.startsWith("RELAY")) {
@@ -1126,5 +1180,18 @@ void loop() {
         String statusMsg = "{\"type\":\"status-update\",\"deviceId\":\"" + deviceId + "\"}";
         webSocket.sendTXT(statusMsg);
         Serial.println("[WebSocket] Sent status update: " + statusMsg);
+    }
+
+    /* ================= DHT22 AUTOMATIC READING ================= */
+    if (millis() - lastDHTRead >= DHT_READ_INTERVAL) {
+        lastDHTRead = millis();
+
+        // Read DHT22 sensor
+        bool readSuccess = readDHT22();
+
+        // Send data via WebSocket only if reading was successful
+        if (readSuccess && wsConnected) {
+            sendDHTDataViaWebSocket();
+        }
     }
 }
