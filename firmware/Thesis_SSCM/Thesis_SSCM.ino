@@ -88,10 +88,24 @@ bool relay8State = false;  // UVC Light
 
 DHT dht(DHT_PIN, DHT_TYPE);
 
-float currentTemperature = 0.0;
-float currentHumidity = 0.0;
+int currentTemperature = 0;
+int currentHumidity = 0;
 unsigned long lastDHTRead = 0;
-const unsigned long DHT_READ_INTERVAL = 2000;  // Read every 2 seconds
+const unsigned long DHT_READ_INTERVAL = 5000;  // Read every 5 seconds
+
+/* ===================== JSN-SR20-Y1 ULTRASONIC DISTANCE SENSORS ===================== */
+// Sensor 1: Atomizer Level
+#define ATOMIZER_TRIG_PIN 10
+#define ATOMIZER_ECHO_PIN 11
+
+// Sensor 2: Foam Level
+#define FOAM_TRIG_PIN 12
+#define FOAM_ECHO_PIN 13
+
+int currentAtomizerDistance = 0;  // Atomizer liquid level in cm
+int currentFoamDistance = 0;      // Foam level in cm
+unsigned long lastUltrasonicRead = 0;
+const unsigned long ULTRASONIC_READ_INTERVAL = 5000;  // Read every 5 seconds
 
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
@@ -129,7 +143,7 @@ const char WIFI_HTML[] PROGMEM = R"rawliteral(
     .card {
       width: 100%;
       max-width: 360px;
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255,\\255, 0.15);
       backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 20px;
@@ -743,8 +757,8 @@ bool readDHT22() {
         return false;  // Reading failed
     }
 
-    currentTemperature = temp;
-    currentHumidity = hum;
+    currentTemperature = (int)temp;
+    currentHumidity = (int)hum;
 
     Serial.println("[DHT22] Temperature: " + String(currentTemperature) + "°C");
     Serial.println("[DHT22] Humidity: " + String(currentHumidity) + "%");
@@ -763,6 +777,86 @@ void sendDHTDataViaWebSocket() {
 
     webSocket.sendTXT(sensorMsg);
     Serial.println("[WebSocket] Sent sensor data: " + sensorMsg);
+}
+
+/* ===================== ULTRASONIC FUNCTIONS ===================== */
+bool readAtomizerLevel() {
+    // Manual trigger for better reliability with JSN-SR20-Y1
+    digitalWrite(ATOMIZER_TRIG_PIN, LOW);
+    delayMicroseconds(5);  // Ensure clean LOW state
+    digitalWrite(ATOMIZER_TRIG_PIN, HIGH);
+    delayMicroseconds(20); // 20us pulse (JSN-SR20-Y1 needs at least 10us)
+    digitalWrite(ATOMIZER_TRIG_PIN, LOW);
+    
+    // Wait for echo with longer timeout (30ms = 5m max distance)
+    unsigned long duration = pulseIn(ATOMIZER_ECHO_PIN, HIGH, 30000);
+    
+    // Check for invalid reading (0 = timeout or no echo)
+    if (duration == 0) {
+        Serial.println("[Atomizer Level] No echo received (timeout)");
+        Serial.println("[Atomizer Level] Check: 1) Wiring 2) 5V power 3) Level shifter 4) Object in range");
+        return false;
+    }
+    
+    // Calculate distance: duration in microseconds, speed of sound = 343 m/s
+    // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
+    
+    // Validate range (JSN-SR20-Y1: 2cm to 500cm)
+    if (distance < 2 || distance > 500) {
+        Serial.println("[Atomizer Level] Out of valid range: " + String(distance) + " cm");
+        return false;
+    }
+    
+    currentAtomizerDistance = distance;
+    Serial.println("[Atomizer Level] Distance to liquid: " + String(currentAtomizerDistance) + " cm (pulse: " + String(duration) + " us)");
+    return true;
+}
+
+bool readFoamLevel() {
+    // Manual trigger for better reliability with JSN-SR20-Y1
+    digitalWrite(FOAM_TRIG_PIN, LOW);
+    delayMicroseconds(5);  // Ensure clean LOW state
+    digitalWrite(FOAM_TRIG_PIN, HIGH);
+    delayMicroseconds(20); // 20us pulse (JSN-SR20-Y1 needs at least 10us)
+    digitalWrite(FOAM_TRIG_PIN, LOW);
+    
+    // Wait for echo with longer timeout (30ms = 5m max distance)
+    unsigned long duration = pulseIn(FOAM_ECHO_PIN, HIGH, 30000);
+    
+    // Check for invalid reading (0 = timeout or no echo)
+    if (duration == 0) {
+        Serial.println("[Foam Level] No echo received (timeout)");
+        Serial.println("[Foam Level] Check: 1) Wiring 2) 5V power 3) Level shifter 4) Object in range");
+        return false;
+    }
+    
+    // Calculate distance: duration in microseconds, speed of sound = 343 m/s
+    // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
+    int distance = (duration * 0.034) / 2;
+    
+    // Validate range (JSN-SR20-Y1: 2cm to 500cm)
+    if (distance < 2 || distance > 500) {
+        Serial.println("[Foam Level] Out of valid range: " + String(distance) + " cm");
+        return false;
+    }
+    
+    currentFoamDistance = distance;
+    Serial.println("[Foam Level] Distance to foam: " + String(currentFoamDistance) + " cm (pulse: " + String(duration) + " us)");
+    return true;
+}
+
+void sendUltrasonicDataViaWebSocket() {
+    if (!wsConnected) return;
+
+    String distanceMsg = "{";
+    distanceMsg += "\"type\":\"distance-data\",";
+    distanceMsg += "\"deviceId\":\"" + deviceId + "\",";
+    distanceMsg += "\"atomizerDistance\":" + String(currentAtomizerDistance) + ",";
+    distanceMsg += "\"foamDistance\":" + String(currentFoamDistance);
+    distanceMsg += "}";
+
+    webSocket.sendTXT(distanceMsg);
+    Serial.println("[WebSocket] Sent distance data: " + distanceMsg);
 }
 
 /* ===================== COIN SLOT INTERRUPT HANDLER ===================== */
@@ -813,6 +907,25 @@ void setup() {
     dht.begin();
     Serial.println("DHT22 Sensor initialized on GPIO " + String(DHT_PIN));
     Serial.println("Reading temperature and humidity every 2 seconds\n");
+
+    // Initialize JSN-SR20-Y1 ultrasonic sensors
+    pinMode(ATOMIZER_TRIG_PIN, OUTPUT);
+    pinMode(ATOMIZER_ECHO_PIN, INPUT);
+    digitalWrite(ATOMIZER_TRIG_PIN, LOW);
+    
+    pinMode(FOAM_TRIG_PIN, OUTPUT);
+    pinMode(FOAM_ECHO_PIN, INPUT);
+    digitalWrite(FOAM_TRIG_PIN, LOW);
+    
+    Serial.println("JSN-SR20-Y1 Ultrasonic Sensors initialized:");
+    Serial.println("  Sensor 1 - Atomizer Level:");
+    Serial.println("    TRIG Pin: GPIO " + String(ATOMIZER_TRIG_PIN));
+    Serial.println("    ECHO Pin: GPIO " + String(ATOMIZER_ECHO_PIN));
+    Serial.println("  Sensor 2 - Foam Level:");
+    Serial.println("    TRIG Pin: GPIO " + String(FOAM_TRIG_PIN));
+    Serial.println("    ECHO Pin: GPIO " + String(FOAM_ECHO_PIN));
+    Serial.println("  Range: 2cm - 500cm each");
+    Serial.println("  Reading distance every 5 seconds\n");
 
     // Initialize 8-channel relay
     pinMode(RELAY_1_PIN, OUTPUT);
@@ -1048,6 +1161,9 @@ void loop() {
             Serial.println("--- DHT22 Sensor ---");
             Serial.println("Temperature: " + String(currentTemperature) + "°C");
             Serial.println("Humidity: " + String(currentHumidity) + "%");
+            Serial.println("--- Ultrasonic Sensors ---");
+            Serial.println("Atomizer Level: " + String(currentAtomizerDistance) + " cm");
+            Serial.println("Foam Level: " + String(currentFoamDistance) + " cm");
             Serial.println("=====================\n");
         }
         else if (cmd.startsWith("RELAY")) {
@@ -1192,6 +1308,21 @@ void loop() {
         // Send data via WebSocket only if reading was successful
         if (readSuccess && wsConnected) {
             sendDHTDataViaWebSocket();
+        }
+    }
+
+    /* ================= ULTRASONIC AUTOMATIC READING ================= */
+    if (millis() - lastUltrasonicRead >= ULTRASONIC_READ_INTERVAL) {
+        lastUltrasonicRead = millis();
+
+        // Read both ultrasonic sensors
+        bool atomizerSuccess = readAtomizerLevel();
+        delay(50);  // Small delay between readings to avoid interference
+        bool foamSuccess = readFoamLevel();
+
+        // Send data via WebSocket if at least one reading was successful
+        if ((atomizerSuccess || foamSuccess) && wsConnected) {
+            sendUltrasonicDataViaWebSocket();
         }
     }
 }
