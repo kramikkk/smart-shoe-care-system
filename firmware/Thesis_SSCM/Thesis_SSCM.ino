@@ -86,6 +86,16 @@ bool relay6State = false;  // Diaphragm Pump
 bool relay7State = false;  // Ultrasonic Mist Maker
 bool relay8State = false;  // UVC Light
 
+/* ===================== DRYING SERVICE ===================== */
+bool dryingActive = false;
+unsigned long dryingStartTime = 0;
+unsigned long dryingDuration = 0;  // Duration in milliseconds
+String currentCareType = "";
+String currentShoeType = "";
+String currentServiceType = "";
+const unsigned long DRYING_STATUS_UPDATE_INTERVAL = 1000;  // Send updates every second
+unsigned long lastDryingStatusUpdate = 0;
+
 /* ===================== DHT22 TEMPERATURE & HUMIDITY SENSOR ===================== */
 #define DHT_PIN 9
 #define DHT_TYPE DHT22
@@ -789,6 +799,45 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     Serial.println("[WebSocket] Invalid relay-control message format");
                 }
             }
+            else if (message.indexOf("\"type\":\"start-service\"") != -1) {
+                // Parse start-service command
+                // Expected format: {"type":"start-service","deviceId":"xxx","shoeType":"mesh","serviceType":"drying","careType":"normal"}
+
+                // Extract shoeType
+                int shoeTypeIndex = message.indexOf("\"shoeType\":\"");
+                String shoeType = "";
+                if (shoeTypeIndex != -1) {
+                    int start = shoeTypeIndex + 12; // length of "\"shoeType\":\""
+                    int end = message.indexOf("\"", start);
+                    shoeType = message.substring(start, end);
+                }
+
+                // Extract serviceType
+                int serviceTypeIndex = message.indexOf("\"serviceType\":\"");
+                String serviceType = "";
+                if (serviceTypeIndex != -1) {
+                    int start = serviceTypeIndex + 15; // length of "\"serviceType\":\""
+                    int end = message.indexOf("\"", start);
+                    serviceType = message.substring(start, end);
+                }
+
+                // Extract careType
+                int careTypeIndex = message.indexOf("\"careType\":\"");
+                String careType = "";
+                if (careTypeIndex != -1) {
+                    int start = careTypeIndex + 12; // length of "\"careType\":\""
+                    int end = message.indexOf("\"", start);
+                    careType = message.substring(start, end);
+                }
+
+                // Start the service based on serviceType
+                if (serviceType == "drying") {
+                    startDryingService(shoeType, serviceType, careType);
+                    Serial.println("[WebSocket] Starting drying service: " + shoeType + ", " + careType);
+                } else {
+                    Serial.println("[WebSocket] Service type '" + serviceType + "' not yet implemented");
+                }
+            }
             break;
         }
 
@@ -862,6 +911,121 @@ void allRelaysOff() {
         setRelay(i, false);
     }
     Serial.println("===============================\n");
+}
+
+/* ===================== DRYING SERVICE FUNCTIONS ===================== */
+void startDryingService(String shoeType, String serviceType, String careType) {
+    // Determine duration based on care type (in milliseconds)
+    if (careType == "gentle") {
+        dryingDuration = 60000;  // 60 seconds
+    } else if (careType == "normal") {
+        dryingDuration = 120000;  // 120 seconds
+    } else if (careType == "strong") {
+        dryingDuration = 180000;  // 180 seconds
+    } else {
+        dryingDuration = 120000;  // Default to normal (120 seconds)
+    }
+
+    currentShoeType = shoeType;
+    currentServiceType = serviceType;
+    currentCareType = careType;
+    dryingActive = true;
+    dryingStartTime = millis();
+    lastDryingStatusUpdate = millis();
+
+    // Turn ON relays for drying (Blower Fan and PTC Heater)
+    setRelay(3, true);  // Centrifugal Blower Fan
+    setRelay(4, true);  // PTC Ceramic Heater
+
+    Serial.println("\n=== DRYING SERVICE STARTED ===");
+    Serial.println("Shoe Type: " + shoeType);
+    Serial.println("Service Type: " + serviceType);
+    Serial.println("Care Type: " + careType);
+    Serial.println("Duration: " + String(dryingDuration / 1000) + " seconds");
+    Serial.println("Relay 3 (Blower Fan): ON");
+    Serial.println("Relay 4 (PTC Heater): ON");
+    Serial.println("==============================\n");
+
+    // Send service started confirmation via WebSocket
+    sendDryingStatusUpdate();
+}
+
+void stopDryingService() {
+    if (!dryingActive) return;
+
+    dryingActive = false;
+
+    // Turn OFF relays
+    setRelay(3, false);  // Centrifugal Blower Fan
+    setRelay(4, false);  // PTC Ceramic Heater
+
+    Serial.println("\n=== DRYING SERVICE COMPLETED ===");
+    Serial.println("Relay 3 (Blower Fan): OFF");
+    Serial.println("Relay 4 (PTC Heater): OFF");
+    Serial.println("================================\n");
+
+    // Send completion status via WebSocket
+    if (wsConnected && isPaired) {
+        String msg = "{";
+        msg += "\"type\":\"service-complete\",";
+        msg += "\"deviceId\":\"" + deviceId + "\",";
+        msg += "\"serviceType\":\"" + currentServiceType + "\",";
+        msg += "\"shoeType\":\"" + currentShoeType + "\",";
+        msg += "\"careType\":\"" + currentCareType + "\"";
+        msg += "}";
+        webSocket.sendTXT(msg);
+        Serial.println("[WebSocket] Service complete: " + msg);
+    }
+
+    // Clear service data
+    currentShoeType = "";
+    currentServiceType = "";
+    currentCareType = "";
+}
+
+void handleDryingService() {
+    if (!dryingActive) return;
+
+    unsigned long elapsed = millis() - dryingStartTime;
+
+    // Check if service duration is complete
+    if (elapsed >= dryingDuration) {
+        stopDryingService();
+        return;
+    }
+
+    // Send status updates every second
+    if (millis() - lastDryingStatusUpdate >= DRYING_STATUS_UPDATE_INTERVAL) {
+        lastDryingStatusUpdate = millis();
+        sendDryingStatusUpdate();
+    }
+}
+
+void sendDryingStatusUpdate() {
+    if (!wsConnected || !isPaired) return;
+
+    unsigned long elapsed = millis() - dryingStartTime;
+    unsigned long remaining = 0;
+
+    if (elapsed < dryingDuration) {
+        remaining = (dryingDuration - elapsed) / 1000;  // Convert to seconds
+    }
+
+    int progress = (elapsed * 100) / dryingDuration;
+    if (progress > 100) progress = 100;
+
+    String msg = "{";
+    msg += "\"type\":\"service-status\",";
+    msg += "\"deviceId\":\"" + deviceId + "\",";
+    msg += "\"serviceType\":\"" + currentServiceType + "\",";
+    msg += "\"shoeType\":\"" + currentShoeType + "\",";
+    msg += "\"careType\":\"" + currentCareType + "\",";
+    msg += "\"active\":" + String(dryingActive ? "true" : "false") + ",";
+    msg += "\"progress\":" + String(progress) + ",";
+    msg += "\"timeRemaining\":" + String(remaining);
+    msg += "}";
+
+    webSocket.sendTXT(msg);
 }
 
 /* ===================== DHT22 FUNCTIONS ===================== */
@@ -2378,4 +2542,8 @@ void loop() {
             sendUltrasonicDataViaWebSocket();
         }
     }
+
+    /* ================= DRYING SERVICE HANDLING ================= */
+    // Handle drying service timer and relay control
+    handleDryingService();
 }
