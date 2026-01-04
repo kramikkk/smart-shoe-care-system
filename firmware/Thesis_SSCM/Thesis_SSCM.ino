@@ -124,6 +124,22 @@ bool servosMoving = false;      // Are servos currently moving
 unsigned long lastServoUpdate = 0;
 const unsigned long SERVO_UPDATE_INTERVAL = 15;  // Update servos every 15ms for smooth slow movement
 
+/* ===================== DRV8871 DC MOTOR DRIVERS - DUAL MOTORS ===================== */
+// Left DC Motor
+#define MOTOR_LEFT_IN1_PIN 20   // GPIO 20 - Left motor IN1
+#define MOTOR_LEFT_IN2_PIN 21   // GPIO 21 - Left motor IN2
+
+// Right DC Motor
+#define MOTOR_RIGHT_IN1_PIN 47  // GPIO 47 - Right motor IN1
+#define MOTOR_RIGHT_IN2_PIN 48  // GPIO 48 - Right motor IN2
+
+// PWM configuration for motor speed control
+const int MOTOR_PWM_FREQ = 1000;      // 1kHz PWM frequency
+const int MOTOR_PWM_RESOLUTION = 8;   // 8-bit resolution (0-255)
+
+int currentLeftMotorSpeed = 0;   // Left motor speed (-255 to 255, negative = reverse)
+int currentRightMotorSpeed = 0;  // Right motor speed (-255 to 255, negative = reverse)
+
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
 String deviceId = "";
@@ -970,6 +986,97 @@ void setServoPositions(int leftPos) {
     }
 }
 
+/* ===================== DRV8871 DC MOTOR CONTROL - DUAL MOTORS ===================== */
+// Set LEFT motor speed and direction
+void setLeftMotorSpeed(int speed) {
+    speed = constrain(speed, -255, 255);
+    currentLeftMotorSpeed = speed;
+
+    if (speed > 0) {
+        ledcWrite(MOTOR_LEFT_IN1_PIN, speed);
+        ledcWrite(MOTOR_LEFT_IN2_PIN, 0);
+        Serial.println("[Left Motor] Forward - Speed: " + String(speed) + "/255");
+    } else if (speed < 0) {
+        ledcWrite(MOTOR_LEFT_IN1_PIN, 0);
+        ledcWrite(MOTOR_LEFT_IN2_PIN, abs(speed));
+        Serial.println("[Left Motor] Reverse - Speed: " + String(abs(speed)) + "/255");
+    } else {
+        ledcWrite(MOTOR_LEFT_IN1_PIN, 0);
+        ledcWrite(MOTOR_LEFT_IN2_PIN, 0);
+        Serial.println("[Left Motor] Stopped");
+    }
+}
+
+// Set RIGHT motor speed and direction
+void setRightMotorSpeed(int speed) {
+    speed = constrain(speed, -255, 255);
+    currentRightMotorSpeed = speed;
+
+    if (speed > 0) {
+        ledcWrite(MOTOR_RIGHT_IN1_PIN, speed);
+        ledcWrite(MOTOR_RIGHT_IN2_PIN, 0);
+        Serial.println("[Right Motor] Forward - Speed: " + String(speed) + "/255");
+    } else if (speed < 0) {
+        ledcWrite(MOTOR_RIGHT_IN1_PIN, 0);
+        ledcWrite(MOTOR_RIGHT_IN2_PIN, abs(speed));
+        Serial.println("[Right Motor] Reverse - Speed: " + String(abs(speed)) + "/255");
+    } else {
+        ledcWrite(MOTOR_RIGHT_IN1_PIN, 0);
+        ledcWrite(MOTOR_RIGHT_IN2_PIN, 0);
+        Serial.println("[Right Motor] Stopped");
+    }
+}
+
+// Set BOTH motors to same speed (tank drive straight)
+void setMotorsSameSpeed(int speed) {
+    setLeftMotorSpeed(speed);
+    setRightMotorSpeed(speed);
+}
+
+// Stop LEFT motor with brake
+void leftMotorBrake() {
+    ledcWrite(MOTOR_LEFT_IN1_PIN, 255);
+    ledcWrite(MOTOR_LEFT_IN2_PIN, 255);
+    currentLeftMotorSpeed = 0;
+    Serial.println("[Left Motor] Brake applied");
+}
+
+// Stop RIGHT motor with brake
+void rightMotorBrake() {
+    ledcWrite(MOTOR_RIGHT_IN1_PIN, 255);
+    ledcWrite(MOTOR_RIGHT_IN2_PIN, 255);
+    currentRightMotorSpeed = 0;
+    Serial.println("[Right Motor] Brake applied");
+}
+
+// Stop BOTH motors with brake
+void motorsBrake() {
+    leftMotorBrake();
+    rightMotorBrake();
+}
+
+// Stop LEFT motor with coast
+void leftMotorCoast() {
+    ledcWrite(MOTOR_LEFT_IN1_PIN, 0);
+    ledcWrite(MOTOR_LEFT_IN2_PIN, 0);
+    currentLeftMotorSpeed = 0;
+    Serial.println("[Left Motor] Coast");
+}
+
+// Stop RIGHT motor with coast
+void rightMotorCoast() {
+    ledcWrite(MOTOR_RIGHT_IN1_PIN, 0);
+    ledcWrite(MOTOR_RIGHT_IN2_PIN, 0);
+    currentRightMotorSpeed = 0;
+    Serial.println("[Right Motor] Coast");
+}
+
+// Stop BOTH motors with coast
+void motorsCoast() {
+    leftMotorCoast();
+    rightMotorCoast();
+}
+
 /* ===================== COIN SLOT INTERRUPT HANDLER ===================== */
 void IRAM_ATTR handleCoinPulse() {
     // Only accept pulses when payment is enabled (on payment page)
@@ -1054,6 +1161,26 @@ void setup() {
     Serial.println("  Left Servo  (GPIO " + String(SERVO_LEFT_PIN) + "): Starting at 0° (moves 0° → 180°)");
     Serial.println("  Right Servo (GPIO " + String(SERVO_RIGHT_PIN) + "): Starting at 180° (moves 180° → 0°)");
     Serial.println("  Smooth slow movement (non-blocking)\n");
+
+    // Initialize DRV8871 DC Motor Drivers (Dual Motors) with PWM
+    ledcAttach(MOTOR_LEFT_IN1_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
+    ledcAttach(MOTOR_LEFT_IN2_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
+    ledcAttach(MOTOR_RIGHT_IN1_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
+    ledcAttach(MOTOR_RIGHT_IN2_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
+
+    // Start with both motors stopped (coast) - SAFETY: Motors will NOT run automatically
+    motorsCoast();
+
+    Serial.println("DRV8871 DC Motor Drivers initialized (Dual Motors):");
+    Serial.println("  Left Motor:");
+    Serial.println("    IN1 Pin: GPIO " + String(MOTOR_LEFT_IN1_PIN));
+    Serial.println("    IN2 Pin: GPIO " + String(MOTOR_LEFT_IN2_PIN));
+    Serial.println("  Right Motor:");
+    Serial.println("    IN1 Pin: GPIO " + String(MOTOR_RIGHT_IN1_PIN));
+    Serial.println("    IN2 Pin: GPIO " + String(MOTOR_RIGHT_IN2_PIN));
+    Serial.println("  PWM Frequency: " + String(MOTOR_PWM_FREQ) + " Hz");
+    Serial.println("  Speed Range: -255 (full reverse) to 255 (full forward)");
+    Serial.println("  Both motors stopped - ONLY run when commanded\n");
 
     // Initialize 8-channel relay
     pinMode(RELAY_1_PIN, OUTPUT);
@@ -1303,6 +1430,25 @@ void loop() {
             Serial.println("  Current: " + String(currentRightPosition) + "°");
             Serial.println("  Target:  " + String(targetRightPosition) + "°");
             Serial.println("Moving: " + String(servosMoving ? "Yes" : "No"));
+            Serial.println("--- DC Motors (DRV8871 Dual) ---");
+            Serial.println("Left Motor:");
+            Serial.println("  Speed: " + String(currentLeftMotorSpeed) + "/255");
+            if (currentLeftMotorSpeed > 0) {
+                Serial.println("  Direction: Forward");
+            } else if (currentLeftMotorSpeed < 0) {
+                Serial.println("  Direction: Reverse");
+            } else {
+                Serial.println("  Direction: Stopped");
+            }
+            Serial.println("Right Motor:");
+            Serial.println("  Speed: " + String(currentRightMotorSpeed) + "/255");
+            if (currentRightMotorSpeed > 0) {
+                Serial.println("  Direction: Forward");
+            } else if (currentRightMotorSpeed < 0) {
+                Serial.println("  Direction: Reverse");
+            } else {
+                Serial.println("  Direction: Stopped");
+            }
             Serial.println("=====================\n");
         }
         else if (cmd.startsWith("RELAY")) {
@@ -1373,6 +1519,66 @@ void loop() {
                 Serial.println("[ERROR] Invalid servo angle: " + angleStr);
                 Serial.println("Valid range: 0-180 degrees");
                 Serial.println("Examples: SERVO_0 (L:0°,R:180°), SERVO_90 (L:90°,R:90°), SERVO_180 (L:180°,R:0°)");
+            }
+        }
+        else if (cmd.startsWith("MOTOR_LEFT_")) {
+            // Left motor commands
+            String subCmd = cmd.substring(11);  // Remove "MOTOR_LEFT_"
+
+            if (subCmd == "BRAKE") {
+                leftMotorBrake();
+            } else if (subCmd == "COAST" || subCmd == "STOP") {
+                leftMotorCoast();
+            } else {
+                int speed = subCmd.toInt();
+                if (speed >= -255 && speed <= 255) {
+                    setLeftMotorSpeed(speed);
+                } else {
+                    Serial.println("[ERROR] Invalid speed: " + subCmd);
+                }
+            }
+        }
+        else if (cmd.startsWith("MOTOR_RIGHT_")) {
+            // Right motor commands
+            String subCmd = cmd.substring(12);  // Remove "MOTOR_RIGHT_"
+
+            if (subCmd == "BRAKE") {
+                rightMotorBrake();
+            } else if (subCmd == "COAST" || subCmd == "STOP") {
+                rightMotorCoast();
+            } else {
+                int speed = subCmd.toInt();
+                if (speed >= -255 && speed <= 255) {
+                    setRightMotorSpeed(speed);
+                } else {
+                    Serial.println("[ERROR] Invalid speed: " + subCmd);
+                }
+            }
+        }
+        else if (cmd.startsWith("MOTOR_")) {
+            // Both motors same speed commands
+            String subCmd = cmd.substring(6);  // Remove "MOTOR_"
+
+            if (subCmd == "BRAKE") {
+                motorsBrake();
+            } else if (subCmd == "COAST" || subCmd == "STOP") {
+                motorsCoast();
+            } else {
+                int speed = subCmd.toInt();
+                if (speed >= -255 && speed <= 255) {
+                    setMotorsSameSpeed(speed);
+                } else {
+                    Serial.println("[ERROR] Invalid motor speed: " + subCmd);
+                    Serial.println("Valid range: -255 (full reverse) to 255 (full forward)");
+                    Serial.println("Examples:");
+                    Serial.println("  MOTOR_255        - Both motors full forward");
+                    Serial.println("  MOTOR_LEFT_255   - Left motor full forward");
+                    Serial.println("  MOTOR_RIGHT_255  - Right motor full forward");
+                    Serial.println("  MOTOR_LEFT_-128  - Left motor half reverse");
+                    Serial.println("  MOTOR_BRAKE      - Both motors brake");
+                    Serial.println("  MOTOR_LEFT_BRAKE - Left motor brake");
+                    Serial.println("  MOTOR_COAST      - Both motors coast");
+                }
             }
         }
     }
