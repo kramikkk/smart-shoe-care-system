@@ -9,6 +9,10 @@ type SensorData = {
   atomizerDistance: number
   foamDistance: number
   lastUpdate: Date | null
+  serviceActive: boolean
+  serviceType: string
+  serviceProgress: number
+  serviceTimeRemaining: number
 }
 
 type SensorDataContextType = {
@@ -25,7 +29,11 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
     humidity: 0,
     atomizerDistance: 0,
     foamDistance: 0,
-    lastUpdate: null
+    lastUpdate: null,
+    serviceActive: false,
+    serviceType: '',
+    serviceProgress: 0,
+    serviceTimeRemaining: 0
   })
   const [isConnected, setIsConnected] = useState(false)
 
@@ -80,6 +88,31 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
               ...prev,
               atomizerDistance: message.atomizerDistance || prev.atomizerDistance,
               foamDistance: message.foamDistance || prev.foamDistance,
+              lastUpdate: new Date()
+            }))
+          }
+
+          // Handle service status updates
+          if (message.type === 'service-status') {
+            console.log('[SensorData] Received service status:', message)
+            setSensorData(prev => ({
+              ...prev,
+              serviceActive: message.active,
+              serviceType: message.serviceType || '',
+              serviceProgress: message.progress || 0,
+              serviceTimeRemaining: message.timeRemaining || 0,
+              lastUpdate: new Date()
+            }))
+          }
+
+          // Handle service complete
+          if (message.type === 'service-complete') {
+            console.log('[SensorData] Service complete')
+            setSensorData(prev => ({
+              ...prev,
+              serviceActive: false,
+              serviceProgress: 100,
+              serviceTimeRemaining: 0,
               lastUpdate: new Date()
             }))
           }

@@ -62,6 +62,8 @@ const unsigned long BILL_COMPLETE_TIMEOUT = 300;        // 300ms to confirm bill
 
 /* ===================== PAYMENT CONTROL ===================== */
 bool paymentEnabled = false;  // Only accept payments when explicitly enabled from frontend
+unsigned long paymentEnableTime = 0;  // Timestamp when payment relay was turned on
+const unsigned long PAYMENT_STABILIZATION_DELAY = 3000;  // 3 second delay after relay turns on
 
 /* ===================== 8-CHANNEL RELAY ===================== */
 #define RELAY_1_PIN 3   // Channel 1: Bill Acceptor
@@ -740,6 +742,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             else if (message.indexOf("\"type\":\"enable-payment\"") != -1) {
                 // Frontend enabled payment system - enable coin/bill acceptance
                 paymentEnabled = true;
+                paymentEnableTime = millis();  // Record when relay turned on
 
                 // Turn ON Relay 1 (Bill + Coin power)
                 digitalWrite(RELAY_1_PIN, RELAY_ON);
@@ -747,7 +750,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
                 Serial.println("\n=== PAYMENT SYSTEM ENABLED ===");
                 Serial.println("Relay 1 (Bill + Coin): ON");
-                Serial.println("Ready to accept coins and bills");
+                Serial.println("Stabilizing for " + String(PAYMENT_STABILIZATION_DELAY / 1000) + " seconds...");
+                Serial.println("Will accept payments after stabilization");
                 Serial.println("===============================\n");
             }
             else if (message.indexOf("\"type\":\"disable-payment\"") != -1) {
@@ -1565,6 +1569,11 @@ void IRAM_ATTR handleCoinPulse() {
 
     unsigned long currentTime = millis();
 
+    // Stabilization delay: ignore pulses for first few seconds after relay turns on
+    if (currentTime - paymentEnableTime < PAYMENT_STABILIZATION_DELAY) {
+        return;
+    }
+
     // Debounce: ignore if less than COIN_PULSE_DEBOUNCE_TIME has passed
     if (currentTime - lastCoinPulseTime > COIN_PULSE_DEBOUNCE_TIME) {
         lastCoinPulseTime = currentTime;
@@ -1580,6 +1589,11 @@ void IRAM_ATTR handleBillPulse() {
     }
 
     unsigned long currentTime = millis();
+
+    // Stabilization delay: ignore pulses for first few seconds after relay turns on
+    if (currentTime - paymentEnableTime < PAYMENT_STABILIZATION_DELAY) {
+        return;
+    }
 
     // Debounce: ignore if less than BILL_PULSE_DEBOUNCE_TIME has passed
     if (currentTime - lastBillPulseTime > BILL_PULSE_DEBOUNCE_TIME) {
