@@ -10,6 +10,7 @@
  * - DHT sensor library (by Adafruit) - Install via Library Manager
  * - Adafruit Unified Sensor - Install via Library Manager
  * - ESP32Servo (by Kevin Harrington) - Install via Library Manager
+ * - Adafruit NeoPixel (by Adafruit) - Install via Library Manager
  */
 
 #include <WiFi.h>
@@ -18,6 +19,7 @@
 #include <WebSocketsClient.h>
 #include <DHT.h>
 #include <ESP32Servo.h>
+#include <Adafruit_NeoPixel.h>
 
 /* ===================== WIFI ===================== */
 Preferences prefs;
@@ -171,6 +173,18 @@ int stepper2Speed = 800;            // Speed: 800 steps/sec = 80mm/s (MAXIMUM fo
 bool stepper2Moving = false;        // Is stepper currently moving
 unsigned long lastStepper2Update = 0;
 unsigned long stepper2StepInterval = 1250;  // Microseconds between steps (calculated from speed)
+
+/* ===================== WS2812B RGB LED STRIP (NeoPixel) ===================== */
+#define RGB_DATA_PIN 38      // GPIO 38 - WS2812B data pin
+#define RGB_NUM_LEDS 58      // Number of LEDs in the strip
+
+// Create NeoPixel strip object
+Adafruit_NeoPixel strip(RGB_NUM_LEDS, RGB_DATA_PIN, NEO_GRB + NEO_KHZ800);
+
+// Current color values
+int currentRed = 0;
+int currentGreen = 0;
+int currentBlue = 0;
 
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
@@ -1320,6 +1334,52 @@ void updateStepper2Position() {
     }
 }
 
+/* ===================== RGB LED STRIP CONTROL ===================== */
+
+// Set RGB color for entire strip (0-255 for each channel)
+void setRGBColor(int red, int green, int blue) {
+    currentRed = constrain(red, 0, 255);
+    currentGreen = constrain(green, 0, 255);
+    currentBlue = constrain(blue, 0, 255);
+
+    // Set all LEDs to the same color
+    uint32_t color = strip.Color(currentRed, currentGreen, currentBlue);
+    for (int i = 0; i < RGB_NUM_LEDS; i++) {
+        strip.setPixelColor(i, color);
+    }
+    strip.show();  // Update the strip
+
+    Serial.println("[WS2812B] Color set - R:" + String(currentRed) +
+                   " G:" + String(currentGreen) +
+                   " B:" + String(currentBlue));
+}
+
+// Preset colors
+void rgbWhite() {
+    setRGBColor(255, 255, 255);
+    Serial.println("[WS2812B] WHITE");
+}
+
+void rgbBlue() {
+    setRGBColor(0, 0, 255);
+    Serial.println("[WS2812B] BLUE");
+}
+
+void rgbGreen() {
+    setRGBColor(0, 255, 0);
+    Serial.println("[WS2812B] GREEN");
+}
+
+void rgbViolet() {
+    setRGBColor(238, 130, 238);  // Violet color
+    Serial.println("[WS2812B] VIOLET");
+}
+
+void rgbOff() {
+    setRGBColor(0, 0, 0);
+    Serial.println("[WS2812B] OFF (all LEDs off)");
+}
+
 /* ===================== COIN SLOT INTERRUPT HANDLER ===================== */
 void IRAM_ATTR handleCoinPulse() {
     // Only accept pulses when payment is enabled (on payment page)
@@ -1466,6 +1526,18 @@ void setup() {
     Serial.println("  Default Speed: " + String(stepper2Speed) + " steps/sec (80mm/s)");
     Serial.println("  Current Position: " + String(currentStepper2Position) + " steps");
     Serial.println("  Motor ALWAYS ENABLED - Ready to move!\n");
+
+    // Initialize WS2812B LED Strip (NeoPixel)
+    strip.begin();           // Initialize NeoPixel strip object
+    strip.setBrightness(100); // Set moderate brightness to reduce power draw (0-255)
+    strip.show();            // Initialize all pixels to 'off'
+
+    Serial.println("WS2812B LED Strip initialized (NeoPixel):");
+    Serial.println("  Data Pin:    GPIO " + String(RGB_DATA_PIN));
+    Serial.println("  LED Count:   " + String(RGB_NUM_LEDS) + " LEDs");
+    Serial.println("  Type:        WS2812B (GRB, 800KHz)");
+    Serial.println("  Brightness:  100 (reduced to prevent overload)");
+    Serial.println("  Initial State: OFF (all LEDs black)\n");
 
     // Initialize 8-channel relay
     pinMode(RELAY_1_PIN, OUTPUT);
@@ -2108,6 +2180,62 @@ void loop() {
                 Serial.println("  STEPPER2_MOVE_2000     - Move forward 2000 steps");
                 Serial.println("  STEPPER2_GOTO_0        - Return to home position");
                 Serial.println("  STEPPER2_STOP          - Emergency stop");
+            }
+        }
+        else if (cmd.startsWith("RGB_")) {
+            // RGB LED Strip commands
+            String subCmd = cmd.substring(4);  // Remove "RGB_"
+
+            if (subCmd == "WHITE") {
+                rgbWhite();
+            }
+            else if (subCmd == "BLUE") {
+                rgbBlue();
+            }
+            else if (subCmd == "GREEN") {
+                rgbGreen();
+            }
+            else if (subCmd == "VIOLET") {
+                rgbViolet();
+            }
+            else if (subCmd == "OFF") {
+                rgbOff();
+            }
+            else if (subCmd.startsWith("CUSTOM_")) {
+                // RGB_CUSTOM_R_G_B - set custom color (e.g., RGB_CUSTOM_255_128_64)
+                String rgbStr = subCmd.substring(7); // Remove "CUSTOM_"
+
+                // Parse R_G_B values
+                int firstUnderscore = rgbStr.indexOf('_');
+                int secondUnderscore = rgbStr.indexOf('_', firstUnderscore + 1);
+
+                if (firstUnderscore > 0 && secondUnderscore > firstUnderscore) {
+                    int red = rgbStr.substring(0, firstUnderscore).toInt();
+                    int green = rgbStr.substring(firstUnderscore + 1, secondUnderscore).toInt();
+                    int blue = rgbStr.substring(secondUnderscore + 1).toInt();
+                    setRGBColor(red, green, blue);
+                } else {
+                    Serial.println("[ERROR] Invalid RGB custom format. Use: RGB_CUSTOM_R_G_B");
+                    Serial.println("Example: RGB_CUSTOM_255_128_64");
+                }
+            }
+            else {
+                Serial.println("[ERROR] Unknown RGB command: " + cmd);
+                Serial.println("\n=== RGB LED STRIP COMMANDS ===");
+                Serial.println("Preset Colors:");
+                Serial.println("  RGB_WHITE        - Turn on white light");
+                Serial.println("  RGB_BLUE         - Turn on blue light");
+                Serial.println("  RGB_GREEN        - Turn on green light");
+                Serial.println("  RGB_VIOLET       - Turn on violet light");
+                Serial.println("  RGB_OFF          - Turn off all lights");
+                Serial.println("\nCustom Color:");
+                Serial.println("  RGB_CUSTOM_R_G_B - Set custom color (0-255 each)");
+                Serial.println("\nExamples:");
+                Serial.println("  RGB_WHITE        - Full white");
+                Serial.println("  RGB_BLUE         - Full blue");
+                Serial.println("  RGB_CUSTOM_255_0_0     - Full red");
+                Serial.println("  RGB_CUSTOM_255_128_0   - Orange");
+                Serial.println("  RGB_OFF          - Turn off");
             }
         }
     }
