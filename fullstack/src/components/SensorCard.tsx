@@ -83,11 +83,11 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
     if (sensorData.foamDistance !== 0) {
       console.log('[SensorCard] Foam distance:', sensorData.foamDistance)
     }
-    
+
     // Convert distance to percentage (assuming 50cm = empty, 5cm = full)
     const maxDistance = 50 // cm (empty)
     const minDistance = 5  // cm (full)
-    const level = sensorData.foamDistance > 0 ? Math.max(0, Math.min(100, 
+    const level = sensorData.foamDistance > 0 ? Math.max(0, Math.min(100,
       ((maxDistance - sensorData.foamDistance) / (maxDistance - minDistance)) * 100
     )) : 0
     displayValue = `${Math.round(level)}%`
@@ -101,7 +101,29 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
       displayStatus = 'Normal'
     }
   }
-  
+
+  if (id === 'systemStatus') {
+    if (!isConnected) {
+      displayValue = 'Offline'
+      displayStatus = 'Critical'
+      displayPercentage = 0
+    } else if (sensorData.serviceActive) {
+      // Format time remaining as MM:SS
+      const mins = Math.floor(sensorData.serviceTimeRemaining / 60)
+      const secs = sensorData.serviceTimeRemaining % 60
+      displayValue = `${sensorData.serviceType.charAt(0).toUpperCase() + sensorData.serviceType.slice(1)}`
+      displayPercentage = sensorData.serviceProgress
+      displayStatus = 'Active'
+      // Update the range to show timer
+      sensor.range = `Timer: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    } else {
+      displayValue = 'Idle'
+      displayStatus = 'Normal'
+      displayPercentage = 0
+      sensor.range = 'Timer: 00:00'
+    }
+  }
+
   const getBadgeClass = (status: string) => {
     switch (status.toLowerCase()) {
       case "normal":
