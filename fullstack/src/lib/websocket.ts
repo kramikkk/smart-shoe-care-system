@@ -157,6 +157,30 @@ export function createWebSocketServer(server: Server) {
           // Broadcast to all clients subscribed to this device
           broadcastToDevice(distanceDeviceId, message)
         }
+
+        // Handle start-service command from frontend
+        else if (message.type === 'start-service' && message.deviceId) {
+          const serviceDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Start service on ${serviceDeviceId}: ${message.serviceType} (${message.careType})`)
+          // Forward to ESP32 device
+          broadcastToDevice(serviceDeviceId, message)
+        }
+
+        // Handle service status updates from ESP32
+        else if (message.type === 'service-status' && message.deviceId) {
+          const statusDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Service status from ${statusDeviceId}: ${message.progress}% complete, ${message.timeRemaining}s remaining`)
+          // Broadcast to all clients subscribed to this device
+          broadcastToDevice(statusDeviceId, message)
+        }
+
+        // Handle service complete notification from ESP32
+        else if (message.type === 'service-complete' && message.deviceId) {
+          const completeDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Service complete on ${completeDeviceId}: ${message.serviceType}`)
+          // Broadcast to all clients subscribed to this device
+          broadcastToDevice(completeDeviceId, message)
+        }
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)
       }

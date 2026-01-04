@@ -37,6 +37,8 @@ const CustomProgress = () => {
 
   const [timeRemaining, setTimeRemaining] = useState(() => getServiceDuration(service, care))
   const totalTime = getServiceDuration(service, care)
+  const [wsConnected, setWsConnected] = useState(false)
+  const [serviceStarted, setServiceStarted] = useState(false)
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
 
@@ -46,6 +48,66 @@ const CustomProgress = () => {
     setTimeRemaining(newDuration)
   }, [service, care])
 
+  // WebSocket connection to send start-service command and receive updates
+  useEffect(() => {
+    const deviceId = localStorage.getItem('kiosk_device_id')
+    if (!deviceId) return
+
+    let intentionalClose = false
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
+    const ws = new WebSocket(wsUrl)
+
+    ws.onopen = () => {
+      setWsConnected(true)
+      ws.send(JSON.stringify({ type: 'subscribe', deviceId }))
+
+      // Send start-service command to ESP32
+      ws.send(JSON.stringify({
+        type: 'start-service',
+        deviceId,
+        shoeType: shoe,
+        serviceType: service,
+        careType: care
+      }))
+      setServiceStarted(true)
+      console.log(`[Progress] Service started: ${service} (${care})`)
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data)
+
+        // Handle service status updates from ESP32
+        if (message.type === 'service-status') {
+          console.log(`[Progress] Status update: ${message.progress}% complete, ${message.timeRemaining}s remaining`)
+          setTimeRemaining(message.timeRemaining)
+        }
+
+        // Handle service complete notification
+        else if (message.type === 'service-complete') {
+          console.log(`[Progress] Service complete!`)
+          setTimeRemaining(0)
+        }
+      } catch (error) {
+        console.error('[Progress] Error parsing message:', error)
+      }
+    }
+
+    ws.onerror = () => setWsConnected(false)
+    ws.onclose = () => {
+      if (!intentionalClose) setWsConnected(false)
+    }
+
+    return () => {
+      intentionalClose = true
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close()
+      }
+    }
+  }, [shoe, service, care])
+
+  // Fallback local timer (in case WebSocket is not available)
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeRemaining((prev) => {
@@ -138,13 +200,21 @@ const CustomProgress = () => {
       </h2>
 
       {/* Shoe Type & Care Type Badges */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-3 mb-4">
         <span className="inline-block px-5 py-1.5 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full text-base font-semibold text-purple-800 shadow-sm">
           {getShoeTypeName()} Type
         </span>
         <span className="inline-block px-5 py-1.5 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-full text-base font-semibold text-blue-800 shadow-sm">
           {getCareTypeName()} Care
         </span>
+      </div>
+
+      {/* Connection Status */}
+      <div className="flex items-center justify-center gap-2 mb-6">
+        <div className={`w-2 h-2 rounded-full ${wsConnected && serviceStarted ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <p className="text-xs text-gray-600">
+          {wsConnected && serviceStarted ? 'Connected to device' : 'Connecting...'}
+        </p>
       </div>
 
       {/* Time Remaining */}
