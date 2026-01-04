@@ -64,21 +64,21 @@ const unsigned long BILL_COMPLETE_TIMEOUT = 300;        // 300ms to confirm bill
 bool paymentEnabled = false;  // Only accept payments when explicitly enabled from frontend
 
 /* ===================== 8-CHANNEL RELAY ===================== */
-#define RELAY_1_PIN 6   // Channel 1: Bill Acceptor
-#define RELAY_2_PIN 7   // Channel 2: Coin Slot
-#define RELAY_3_PIN 15  // Channel 3: Centrifugal Blower Fan
-#define RELAY_4_PIN 16  // Channel 4: PTC Ceramic Heater
-#define RELAY_5_PIN 17  // Channel 5: Bottom Exhaust
-#define RELAY_6_PIN 18  // Channel 6: Diaphragm Pump
-#define RELAY_7_PIN 8   // Channel 7: Ultrasonic Mist Maker
-#define RELAY_8_PIN 3   // Channel 8: UVC Light
+#define RELAY_1_PIN 3   // Channel 1: Bill Acceptor
+#define RELAY_2_PIN 8   // Channel 2: Coin Slot
+#define RELAY_3_PIN 18  // Channel 3: Centrifugal Blower Fan
+#define RELAY_4_PIN 17  // Channel 4: PTC Ceramic Heater
+#define RELAY_5_PIN 16  // Channel 5: Bottom Exhaust
+#define RELAY_6_PIN 15  // Channel 6: Diaphragm Pump
+#define RELAY_7_PIN 7   // Channel 7: Ultrasonic Mist Maker
+#define RELAY_8_PIN 6   // Channel 8: UVC Light
 
 // Most relay modules are active LOW (LOW = ON, HIGH = OFF)
 #define RELAY_ON HIGH
 #define RELAY_OFF LOW
 
-bool relay1State = false;  // Bill Acceptor
-bool relay2State = false;  // Coin Slot
+bool relay1State = false;  // Bill + Coin (combined power for both acceptors)
+bool relay2State = false;  // Solenoid Lock
 bool relay3State = false;  // Centrifugal Blower Fan
 bool relay4State = false;  // PTC Ceramic Heater
 bool relay5State = false;  // Bottom Exhaust
@@ -728,16 +728,28 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 }
             }
             else if (message.indexOf("\"type\":\"enable-payment\"") != -1) {
-                // Frontend entered payment page - enable payment system
+                // Frontend enabled payment system - enable coin/bill acceptance
                 paymentEnabled = true;
+
+                // Turn ON Relay 1 (Bill + Coin power)
+                digitalWrite(RELAY_1_PIN, RELAY_ON);
+                relay1State = true;
+
                 Serial.println("\n=== PAYMENT SYSTEM ENABLED ===");
+                Serial.println("Relay 1 (Bill + Coin): ON");
                 Serial.println("Ready to accept coins and bills");
                 Serial.println("===============================\n");
             }
             else if (message.indexOf("\"type\":\"disable-payment\"") != -1) {
-                // Frontend left payment page - disable payment system
+                // Frontend disabled payment system - disable coin/bill acceptance
                 paymentEnabled = false;
+
+                // Turn OFF Relay 1 (Bill + Coin power)
+                digitalWrite(RELAY_1_PIN, RELAY_OFF);
+                relay1State = false;
+
                 Serial.println("\n=== PAYMENT SYSTEM DISABLED ===");
+                Serial.println("Relay 1 (Bill + Coin): OFF");
                 Serial.println("Ignoring coins and bills");
                 Serial.println("================================\n");
                 // Reset any partial coin/bill counts
@@ -1552,15 +1564,16 @@ void setup() {
     // Turn all relays OFF initially
     allRelaysOff();
     Serial.println("8-Channel Relay initialized:");
-    Serial.println("  CH1 (GPIO 6):  Bill Acceptor");
-    Serial.println("  CH2 (GPIO 7):  Coin Slot");
-    Serial.println("  CH3 (GPIO 15): Centrifugal Blower Fan");
-    Serial.println("  CH4 (GPIO 16): PTC Ceramic Heater");
-    Serial.println("  CH5 (GPIO 17): Bottom Exhaust");
-    Serial.println("  CH6 (GPIO 18): Diaphragm Pump");
-    Serial.println("  CH7 (GPIO 8):  Ultrasonic Mist Maker");
-    Serial.println("  CH8 (GPIO 3):  UVC Light");
-    Serial.println("All relays set to OFF\n");
+    Serial.println("  CH1 (GPIO 3):  Bill + Coin (auto ON when payment enabled)");
+    Serial.println("  CH2 (GPIO 8):  Solenoid Lock");
+    Serial.println("  CH3 (GPIO 18): Centrifugal Blower Fan");
+    Serial.println("  CH4 (GPIO 17): PTC Ceramic Heater");
+    Serial.println("  CH5 (GPIO 16): Bottom Exhaust");
+    Serial.println("  CH6 (GPIO 15): Diaphragm Pump");
+    Serial.println("  CH7 (GPIO 7):  Ultrasonic Mist Maker");
+    Serial.println("  CH8 (GPIO 6):  UVC Light");
+    Serial.println("All relays set to OFF");
+    Serial.println("NOTE: CH1 will auto-turn ON when payment system is enabled\n");
 
     // Initialize coin slot pin
     pinMode(COIN_SLOT_PIN, INPUT_PULLUP);
