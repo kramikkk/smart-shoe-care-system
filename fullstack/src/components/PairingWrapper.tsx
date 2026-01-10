@@ -122,6 +122,10 @@ export default function PairingWrapper({ children }: PairingWrapperProps) {
             // Update state with new device data
             setIsPaired(message.data.paired)
             setPairingCode(message.data.pairingCode || '')
+          } else if (message.type === 'device-online') {
+            // ESP32 has come online and sent a status update
+            console.log('[WebSocket] Device is online:', message.deviceId)
+            setIsPaired(message.paired)
           }
         } catch (error) {
           console.error('[WebSocket] Error parsing message:', error)

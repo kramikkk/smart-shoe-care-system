@@ -25,6 +25,8 @@ const Auto = () => {
   const totalTime = getPackageDuration(care)
   const [timeRemaining, setTimeRemaining] = useState(totalTime)
   const [currentStage, setCurrentStage] = useState<'cleaning' | 'drying' | 'sterilizing'>('cleaning')
+  const [wsConnected, setWsConnected] = useState(false)
+  const [lastSentStage, setLastSentStage] = useState<string>('')
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
 
@@ -53,6 +55,78 @@ const Auto = () => {
   }
 
   const stageDurations = getStageDurations()
+
+  // WebSocket connection to send stage changes to ESP32
+  // Use a ref to store the WebSocket so we can send commands through it
+  const wsRef = React.useRef<WebSocket | null>(null)
+  const lastSentStageRef = React.useRef<string>('')
+
+  useEffect(() => {
+    const deviceId = localStorage.getItem('kiosk_device_id')
+    if (!deviceId) return
+
+    let intentionalClose = false
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
+    const ws = new WebSocket(wsUrl)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      setWsConnected(true)
+      ws.send(JSON.stringify({ type: 'subscribe', deviceId }))
+      console.log('[Auto Mode] WebSocket connected')
+
+      // Send initial start-service command for cleaning stage
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'start-service',
+            deviceId,
+            shoeType: shoe,
+            serviceType: 'cleaning',
+            careType: care
+          }))
+          lastSentStageRef.current = 'cleaning'
+          setLastSentStage('cleaning')
+          console.log('[Auto Mode] Started cleaning stage')
+        }
+      }, 100) // Small delay to ensure subscription is processed first
+    }
+
+    ws.onerror = () => setWsConnected(false)
+    ws.onclose = () => {
+      wsRef.current = null
+      if (!intentionalClose) setWsConnected(false)
+    }
+
+    return () => {
+      intentionalClose = true
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close()
+      }
+      wsRef.current = null
+    }
+  }, [shoe, care])
+
+  // Send stage change command when stage updates (using existing connection)
+  useEffect(() => {
+    if (!wsConnected || currentStage === lastSentStageRef.current) return
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+
+    const deviceId = localStorage.getItem('kiosk_device_id')
+    if (!deviceId) return
+
+    wsRef.current.send(JSON.stringify({
+      type: 'start-service',
+      deviceId,
+      shoeType: shoe,
+      serviceType: currentStage,
+      careType: care
+    }))
+    lastSentStageRef.current = currentStage
+    setLastSentStage(currentStage)
+    console.log(`[Auto Mode] Stage changed to: ${currentStage}`)
+  }, [currentStage, wsConnected, shoe, care])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -180,13 +254,21 @@ const Auto = () => {
       </h2>
 
       {/* Shoe Type & Care Type Badges */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-3 mb-4">
         <span className="inline-block px-5 py-1.5 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full text-base font-semibold text-purple-800 shadow-sm">
           {getShoeTypeName()} Type
         </span>
         <span className="inline-block px-5 py-1.5 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-full text-base font-semibold text-blue-800 shadow-sm">
           {getCareTypeName()} Care
         </span>
+      </div>
+
+      {/* Connection Status */}
+      <div className="flex items-center justify-center gap-2 mb-6">
+        <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <p className="text-xs text-gray-600">
+          {wsConnected ? 'Connected to device' : 'Connecting...'}
+        </p>
       </div>
 
       {/* Time Remaining */}

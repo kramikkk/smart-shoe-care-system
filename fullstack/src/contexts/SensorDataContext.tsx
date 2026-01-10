@@ -116,6 +116,12 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
               lastUpdate: new Date()
             }))
           }
+
+          // Handle device online notification (ESP32 connected)
+          if (message.type === 'device-online') {
+            console.log('[SensorData] ESP32 device is online')
+            setIsConnected(true)
+          }
         } catch (error) {
           console.error('[SensorData] Error parsing message:', error)
         }

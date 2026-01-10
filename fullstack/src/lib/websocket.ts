@@ -101,6 +101,15 @@ export function createWebSocketServer(server: Server) {
               paired: updatedDevice.paired,
               pairingCode: updatedDevice.pairingCode
             }))
+
+            // Broadcast device online status to all subscribed clients (tablets)
+            // This ensures tablets know the ESP32 is connected/alive
+            broadcastToDevice(updateDeviceId, {
+              type: 'device-online',
+              deviceId: updateDeviceId,
+              paired: updatedDevice.paired,
+              lastSeen: new Date().toISOString()
+            })
           } catch (error) {
             console.error(`[WebSocket] Failed to update device ${updateDeviceId}:`, error)
             ws.send(JSON.stringify({
