@@ -66,8 +66,8 @@ unsigned long paymentEnableTime = 0;  // Timestamp when payment relay was turned
 const unsigned long PAYMENT_STABILIZATION_DELAY = 3000;  // 3 second delay after relay turns on
 
 /* ===================== 8-CHANNEL RELAY ===================== */
-#define RELAY_1_PIN 3   // Channel 1: Bill Acceptor
-#define RELAY_2_PIN 8   // Channel 2: Coin Slot
+#define RELAY_1_PIN 3   // Channel 1: Bill + Coin (combined power for both acceptors)
+#define RELAY_2_PIN 8   // Channel 2: Solenoid Lock
 #define RELAY_3_PIN 18  // Channel 3: Centrifugal Blower Fan
 #define RELAY_4_PIN 17  // Channel 4: PTC Ceramic Heater
 #define RELAY_5_PIN 16  // Channel 5: Bottom Exhaust
@@ -88,15 +88,20 @@ bool relay6State = false;  // Diaphragm Pump
 bool relay7State = false;  // Ultrasonic Mist Maker
 bool relay8State = false;  // UVC Light
 
-/* ===================== DRYING SERVICE ===================== */
-bool dryingActive = false;
-unsigned long dryingStartTime = 0;
-unsigned long dryingDuration = 0;  // Duration in milliseconds
+/* ===================== SERVICE CONTROL ===================== */
+bool serviceActive = false;
+unsigned long serviceStartTime = 0;
+unsigned long serviceDuration = 0;  // Duration in milliseconds
 String currentCareType = "";
 String currentShoeType = "";
 String currentServiceType = "";
-const unsigned long DRYING_STATUS_UPDATE_INTERVAL = 1000;  // Send updates every second
-unsigned long lastDryingStatusUpdate = 0;
+const unsigned long SERVICE_STATUS_UPDATE_INTERVAL = 1000;  // Send updates every second
+unsigned long lastServiceStatusUpdate = 0;
+
+/* ===================== CLEANING SERVICE STATE ===================== */
+// Cleaning mode: Stepper moves 0 → 480mm → 0 while diaphragm pump runs
+const long CLEANING_MAX_POSITION = 4800;  // 480mm * 10 steps/mm = 4800 steps
+int cleaningPhase = 0;  // 0: not cleaning, 1: moving to max, 2: returning to 0
 
 /* ===================== DHT22 TEMPERATURE & HUMIDITY SENSOR ===================== */
 #define DHT_PIN 9
@@ -382,13 +387,16 @@ void handleWiFiPortal() {
     WiFiClient client = wifiServer.available();
     if (!client) return;
 
-    // Non-blocking: only read if data is immediately available
+    // Wait briefly for client to send request (non-blocking with timeout)
+    unsigned long timeout = millis() + 100; // 100ms timeout
+    while (!client.available() && millis() < timeout) {
+        delay(1);
+    }
+
+    // Read the request
     String request = "";
     if (client.available()) {
         request = client.readString();
-    } else {
-        // No data ready - return to keep loop non-blocking
-        return;
     }
 
     // Check POST data
@@ -653,34 +661,29 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
         }
 
         case WStype_CONNECTED: {
-            Serial.println("[WebSocket] Connected to server");
+            Serial.println("[WebSocket] Connected");
             wsConnected = true;
 
             // Subscribe to device updates
             String subscribeMsg = "{\"type\":\"subscribe\",\"deviceId\":\"" + deviceId + "\"}";
             webSocket.sendTXT(subscribeMsg);
-            Serial.println("[WebSocket] Sent subscription: " + subscribeMsg);
             break;
         }
 
         case WStype_TEXT: {
-            Serial.printf("[WebSocket] Received: %s\n", payload);
-
             // Parse JSON response
             String message = String((char*)payload);
 
             if (message.indexOf("\"type\":\"subscribed\"") != -1) {
-                Serial.println("[WebSocket] Successfully subscribed to device updates");
+                Serial.println("[WebSocket] Subscribed");
 
                 // Send initial status update immediately after subscribing
                 String statusMsg = "{\"type\":\"status-update\",\"deviceId\":\"" + deviceId + "\"}";
                 webSocket.sendTXT(statusMsg);
-                Serial.println("[WebSocket] Sent initial status update");
             }
             else if (message.indexOf("\"type\":\"status-ack\"") != -1) {
                 // Acknowledgment of status update with paired status sync
                 if (message.indexOf("\"success\":true") != -1) {
-                    Serial.println("[WebSocket] Status update acknowledged");
 
                     // Sync paired status from database
                     bool dbPaired = (message.indexOf("\"paired\":true") != -1);
@@ -795,12 +798,12 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     // Set the relay
                     if (channel >= 1 && channel <= 8) {
                         setRelay(channel, state);
-                        Serial.println("[WebSocket] Relay control: CH" + String(channel) + " -> " + (state ? "ON" : "OFF"));
+                        Serial.println("[WebSocket] Relay CH" + String(channel) + " -> " + (state ? "ON" : "OFF"));
                     } else {
-                        Serial.println("[WebSocket] Invalid relay channel: " + String(channel));
+                        Serial.println("[WebSocket] Invalid relay CH" + String(channel));
                     }
                 } else {
-                    Serial.println("[WebSocket] Invalid relay-control message format");
+                    Serial.println("[WebSocket] Bad relay format");
                 }
             }
             else if (message.indexOf("\"type\":\"start-service\"") != -1) {
@@ -834,19 +837,19 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     careType = message.substring(start, end);
                 }
 
-                // Start the service based on serviceType
-                if (serviceType == "drying") {
-                    startDryingService(shoeType, serviceType, careType);
-                    Serial.println("[WebSocket] Starting drying service: " + shoeType + ", " + careType);
+                // Start the service (handles all service types: cleaning, drying, sterilizing)
+                if (serviceType == "cleaning" || serviceType == "drying" || serviceType == "sterilizing") {
+                    startService(shoeType, serviceType, careType);
+                    Serial.println("[WebSocket] Start: " + serviceType + " | " + shoeType + " | " + careType);
                 } else {
-                    Serial.println("[WebSocket] Service type '" + serviceType + "' not yet implemented");
+                    Serial.println("[WebSocket] Unknown service: " + serviceType);
                 }
             }
             break;
         }
 
         case WStype_ERROR: {
-            Serial.println("[WebSocket] Error occurred");
+            Serial.println("[WebSocket] Error");
             wsConnected = false;
             break;
         }
@@ -859,7 +862,7 @@ void connectWebSocket() {
     // Include deviceId as query parameter for server authentication
     String wsPath = "/api/ws?deviceId=" + deviceId;
 
-    Serial.println("[WebSocket] Connecting to ws://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + wsPath);
+    Serial.println("[WebSocket] Connecting to " + String(BACKEND_HOST) + ":" + String(BACKEND_PORT));
     webSocket.begin(BACKEND_HOST, BACKEND_PORT, wsPath);
     webSocket.onEvent(webSocketEvent);
     webSocket.setReconnectInterval(5000);
@@ -917,56 +920,131 @@ void allRelaysOff() {
     Serial.println("===============================\n");
 }
 
-/* ===================== DRYING SERVICE FUNCTIONS ===================== */
-void startDryingService(String shoeType, String serviceType, String careType) {
-    // Determine duration based on care type (in milliseconds)
-    if (careType == "gentle") {
-        dryingDuration = 60000;  // 60 seconds
-    } else if (careType == "normal") {
-        dryingDuration = 120000;  // 120 seconds
-    } else if (careType == "strong") {
-        dryingDuration = 180000;  // 180 seconds
+/* ===================== SERVICE FUNCTIONS ===================== */
+void startService(String shoeType, String serviceType, String careType) {
+    // Turn OFF all service-related relays and RGB before starting new service
+    // This ensures clean transition between services in auto mode
+    if (serviceActive) {
+        Serial.println("[Service] Stopping previous service...");
+        // Turn off RGB
+        rgbOff();
+        // Turn off all service relays (CH3-CH8)
+        setRelay(3, false);  // Blower Fan
+        setRelay(4, false);  // PTC Heater
+        setRelay(5, false);  // Bottom Exhaust
+        setRelay(6, false);  // Diaphragm Pump
+        setRelay(7, false);  // Mist Maker
+        setRelay(8, false);  // UVC Light
+    }
+
+    // Determine duration based on service and care type (in milliseconds)
+    if (serviceType == "cleaning") {
+        serviceDuration = 300000;  // Cleaning always 300 seconds (5 minutes) for all care types
+    } else if (serviceType == "drying") {
+        if (careType == "gentle") {
+            serviceDuration = 60000;  // 60 seconds
+        } else if (careType == "normal") {
+            serviceDuration = 120000;  // 120 seconds
+        } else if (careType == "strong") {
+            serviceDuration = 180000;  // 180 seconds
+        } else {
+            serviceDuration = 120000;  // Default to normal (120 seconds)
+        }
+    } else if (serviceType == "sterilizing") {
+        if (careType == "gentle") {
+            serviceDuration = 60000;  // 60 seconds
+        } else if (careType == "normal") {
+            serviceDuration = 120000;  // 120 seconds
+        } else if (careType == "strong") {
+            serviceDuration = 180000;  // 180 seconds
+        } else {
+            serviceDuration = 120000;  // Default to normal (120 seconds)
+        }
     } else {
-        dryingDuration = 120000;  // Default to normal (120 seconds)
+        serviceDuration = 120000;  // Default to 120 seconds
     }
 
     currentShoeType = shoeType;
     currentServiceType = serviceType;
     currentCareType = careType;
-    dryingActive = true;
-    dryingStartTime = millis();
-    lastDryingStatusUpdate = millis();
+    serviceActive = true;
+    serviceStartTime = millis();
+    lastServiceStatusUpdate = millis();
 
-    // Turn ON relays for drying (Blower Fan and PTC Heater)
-    setRelay(3, true);  // Centrifugal Blower Fan
-    setRelay(4, true);  // PTC Ceramic Heater
-
-    Serial.println("\n=== DRYING SERVICE STARTED ===");
+    Serial.println("\n=== SERVICE STARTED ===");
     Serial.println("Shoe Type: " + shoeType);
     Serial.println("Service Type: " + serviceType);
     Serial.println("Care Type: " + careType);
-    Serial.println("Duration: " + String(dryingDuration / 1000) + " seconds");
-    Serial.println("Relay 3 (Blower Fan): ON");
-    Serial.println("Relay 4 (PTC Heater): ON");
-    Serial.println("==============================\n");
+    Serial.println("Duration: " + String(serviceDuration / 1000) + " seconds");
+
+    // Set RGB light color based on service type
+    if (serviceType == "cleaning") {
+        rgbBlue();  // Blue for cleaning
+        Serial.println("RGB Light: BLUE");
+    } else if (serviceType == "drying") {
+        rgbGreen();  // Green for drying
+        Serial.println("RGB Light: GREEN");
+    } else if (serviceType == "sterilizing") {
+        rgbViolet();  // Dark violet for sterilizing
+        Serial.println("RGB Light: VIOLET");
+    }
+
+    // Turn ON relays based on service type
+    if (serviceType == "cleaning") {
+        // Start cleaning sequence: stepper moves 0 → 480mm → 0, diaphragm pump ON
+        setRelay(6, true);  // Diaphragm Pump
+        Serial.println("Relay 6 (Diaphragm Pump): ON");
+
+        // Start stepper moving to max position
+        cleaningPhase = 1;  // Phase 1: moving to max
+        stepperMoveTo(CLEANING_MAX_POSITION);
+        Serial.println("[Cleaning] Stepper moving to " + String(CLEANING_MAX_POSITION / 10) + "mm");
+    } else if (serviceType == "drying") {
+        setRelay(3, true);  // Centrifugal Blower Fan
+        setRelay(4, true);  // PTC Ceramic Heater
+        Serial.println("Relay 3 (Blower Fan): ON");
+        Serial.println("Relay 4 (PTC Heater): ON");
+    } else if (serviceType == "sterilizing") {
+        setRelay(7, true);  // Ultrasonic Mist Maker
+        setRelay(8, true);  // UVC Light
+        Serial.println("Relay 7 (Mist Maker): ON");
+        Serial.println("Relay 8 (UVC Light): ON");
+    }
+
+    Serial.println("=======================\n");
 
     // Send service started confirmation via WebSocket
-    sendDryingStatusUpdate();
+    sendServiceStatusUpdate();
 }
 
-void stopDryingService() {
-    if (!dryingActive) return;
+void stopService() {
+    if (!serviceActive) return;
 
-    dryingActive = false;
+    serviceActive = false;
 
-    // Turn OFF relays
-    setRelay(3, false);  // Centrifugal Blower Fan
-    setRelay(4, false);  // PTC Ceramic Heater
+    // Turn OFF RGB light
+    rgbOff();
+    Serial.println("RGB Light: OFF");
 
-    Serial.println("\n=== DRYING SERVICE COMPLETED ===");
-    Serial.println("Relay 3 (Blower Fan): OFF");
-    Serial.println("Relay 4 (PTC Heater): OFF");
-    Serial.println("================================\n");
+    // Turn OFF relays based on service type
+    if (currentServiceType == "cleaning") {
+        setRelay(6, false);  // Diaphragm Pump
+        // Stop stepper and return to home position
+        cleaningPhase = 0;
+        stepperMoveTo(0);  // Return to home
+        Serial.println("[Cleaning] Returning stepper to home position");
+    } else if (currentServiceType == "drying") {
+        setRelay(3, false);  // Centrifugal Blower Fan
+        setRelay(4, false);  // PTC Ceramic Heater
+    } else if (currentServiceType == "sterilizing") {
+        setRelay(7, false);  // Ultrasonic Mist Maker
+        setRelay(8, false);  // UVC Light
+    }
+
+    Serial.println("\n=== SERVICE COMPLETED ===");
+    Serial.println("Service Type: " + currentServiceType);
+    Serial.println("All relays turned OFF");
+    Serial.println("=========================\n");
 
     // Send completion status via WebSocket
     if (wsConnected && isPaired) {
@@ -978,7 +1056,7 @@ void stopDryingService() {
         msg += "\"careType\":\"" + currentCareType + "\"";
         msg += "}";
         webSocket.sendTXT(msg);
-        Serial.println("[WebSocket] Service complete: " + msg);
+        Serial.println("[WebSocket] Complete: " + currentServiceType);
     }
 
     // Clear service data
@@ -987,35 +1065,53 @@ void stopDryingService() {
     currentCareType = "";
 }
 
-void handleDryingService() {
-    if (!dryingActive) return;
+void handleService() {
+    if (!serviceActive) return;
 
-    unsigned long elapsed = millis() - dryingStartTime;
+    unsigned long elapsed = millis() - serviceStartTime;
 
     // Check if service duration is complete
-    if (elapsed >= dryingDuration) {
-        stopDryingService();
+    if (elapsed >= serviceDuration) {
+        stopService();
         return;
     }
 
+    // Handle cleaning mode stepper movement (one round trip: 0 → max → 0)
+    if (currentServiceType == "cleaning" && cleaningPhase > 0) {
+        // Check if stepper reached target position
+        if (!stepperMoving) {
+            if (cleaningPhase == 1) {
+                // Reached max position, now return to 0
+                cleaningPhase = 2;
+                stepperMoveTo(0);
+                Serial.println("[Cleaning] Stepper at max, returning to 0");
+            } else if (cleaningPhase == 2) {
+                // Reached home position, stepper movement complete
+                cleaningPhase = 0;  // Done with stepper movement
+                setRelay(6, false);  // Turn OFF diaphragm pump
+                Serial.println("[Cleaning] Stepper at home - pump OFF");
+            }
+        }
+    }
+
     // Send status updates every second
-    if (millis() - lastDryingStatusUpdate >= DRYING_STATUS_UPDATE_INTERVAL) {
-        lastDryingStatusUpdate = millis();
-        sendDryingStatusUpdate();
+    if (millis() - lastServiceStatusUpdate >= SERVICE_STATUS_UPDATE_INTERVAL) {
+        lastServiceStatusUpdate = millis();
+        sendServiceStatusUpdate();
     }
 }
 
-void sendDryingStatusUpdate() {
+void sendServiceStatusUpdate() {
     if (!wsConnected || !isPaired) return;
 
-    unsigned long elapsed = millis() - dryingStartTime;
+    unsigned long elapsed = millis() - serviceStartTime;
     unsigned long remaining = 0;
 
-    if (elapsed < dryingDuration) {
-        remaining = (dryingDuration - elapsed) / 1000;  // Convert to seconds
+    if (elapsed < serviceDuration) {
+        remaining = (serviceDuration - elapsed) / 1000;  // Convert to seconds
     }
 
-    int progress = (elapsed * 100) / dryingDuration;
+    int progress = (elapsed * 100) / serviceDuration;
     if (progress > 100) progress = 100;
 
     String msg = "{";
@@ -1024,7 +1120,7 @@ void sendDryingStatusUpdate() {
     msg += "\"serviceType\":\"" + currentServiceType + "\",";
     msg += "\"shoeType\":\"" + currentShoeType + "\",";
     msg += "\"careType\":\"" + currentCareType + "\",";
-    msg += "\"active\":" + String(dryingActive ? "true" : "false") + ",";
+    msg += "\"active\":" + String(serviceActive ? "true" : "false") + ",";
     msg += "\"progress\":" + String(progress) + ",";
     msg += "\"timeRemaining\":" + String(remaining);
     msg += "}";
@@ -1045,8 +1141,7 @@ bool readDHT22() {
     currentTemperature = (int)temp;
     currentHumidity = (int)hum;
 
-    Serial.println("[DHT22] Temperature: " + String(currentTemperature) + "°C");
-    Serial.println("[DHT22] Humidity: " + String(currentHumidity) + "%");
+    Serial.println("[DHT22] Temp: " + String(currentTemperature) + "°C | Humidity: " + String(currentHumidity) + "%");
     return true;  // Reading successful
 }
 
@@ -1062,7 +1157,6 @@ void sendDHTDataViaWebSocket() {
     sensorMsg += "}";
 
     webSocket.sendTXT(sensorMsg);
-    Serial.println("[WebSocket] Sent sensor data: " + sensorMsg);
 }
 
 /* ===================== ULTRASONIC FUNCTIONS ===================== */
@@ -1079,23 +1173,21 @@ bool readAtomizerLevel() {
     
     // Check for invalid reading (0 = timeout or no echo)
     if (duration == 0) {
-        Serial.println("[Atomizer Level] No echo received (timeout)");
-        Serial.println("[Atomizer Level] Check: 1) Wiring 2) 5V power 3) Level shifter 4) Object in range");
+        Serial.println("[Atomizer] Error: No echo");
         return false;
     }
-    
+
     // Calculate distance: duration in microseconds, speed of sound = 343 m/s
     // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
     int distance = (duration * 0.034) / 2;
-    
+
     // Validate range (JSN-SR20-Y1: 2cm to 500cm)
     if (distance < 2 || distance > 500) {
-        Serial.println("[Atomizer Level] Out of valid range: " + String(distance) + " cm");
+        Serial.println("[Atomizer] Out of range: " + String(distance) + " cm");
         return false;
     }
-    
+
     currentAtomizerDistance = distance;
-    Serial.println("[Atomizer Level] Distance to liquid: " + String(currentAtomizerDistance) + " cm (pulse: " + String(duration) + " us)");
     return true;
 }
 
@@ -1106,29 +1198,27 @@ bool readFoamLevel() {
     digitalWrite(FOAM_TRIG_PIN, HIGH);
     delayMicroseconds(20); // 20us pulse (JSN-SR20-Y1 needs at least 10us)
     digitalWrite(FOAM_TRIG_PIN, LOW);
-    
+
     // Wait for echo with longer timeout (30ms = 5m max distance)
     unsigned long duration = pulseIn(FOAM_ECHO_PIN, HIGH, 30000);
-    
+
     // Check for invalid reading (0 = timeout or no echo)
     if (duration == 0) {
-        Serial.println("[Foam Level] No echo received (timeout)");
-        Serial.println("[Foam Level] Check: 1) Wiring 2) 5V power 3) Level shifter 4) Object in range");
+        Serial.println("[Foam] Error: No echo");
         return false;
     }
-    
+
     // Calculate distance: duration in microseconds, speed of sound = 343 m/s
     // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
     int distance = (duration * 0.034) / 2;
-    
+
     // Validate range (JSN-SR20-Y1: 2cm to 500cm)
     if (distance < 2 || distance > 500) {
-        Serial.println("[Foam Level] Out of valid range: " + String(distance) + " cm");
+        Serial.println("[Foam] Out of range: " + String(distance) + " cm");
         return false;
     }
-    
+
     currentFoamDistance = distance;
-    Serial.println("[Foam Level] Distance to foam: " + String(currentFoamDistance) + " cm (pulse: " + String(duration) + " us)");
     return true;
 }
 
@@ -1144,7 +1234,6 @@ void sendUltrasonicDataViaWebSocket() {
     distanceMsg += "}";
 
     webSocket.sendTXT(distanceMsg);
-    Serial.println("[WebSocket] Sent distance data: " + distanceMsg);
 }
 
 /* ===================== SERVO MOTOR CONTROL (NON-BLOCKING) - DUAL SERVOS ===================== */
@@ -1852,9 +1941,7 @@ void loop() {
             if (isPaired && wsConnected) {
                 String coinMsg = "{\"type\":\"coin-inserted\",\"deviceId\":\"" + deviceId + "\",\"coinValue\":" + String(coinValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
                 webSocket.sendTXT(coinMsg);
-                Serial.println("[WebSocket] Sent coin event: " + coinMsg);
-            } else {
-                Serial.println("[WebSocket] Not sending coin event - device not paired or not connected");
+                Serial.println("[WebSocket] Coin: " + String(coinValue) + " PHP sent");
             }
 
             // Reset pulse counter for next coin
@@ -1896,9 +1983,7 @@ void loop() {
             if (isPaired && wsConnected) {
                 String billMsg = "{\"type\":\"bill-inserted\",\"deviceId\":\"" + deviceId + "\",\"billValue\":" + String(billValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
                 webSocket.sendTXT(billMsg);
-                Serial.println("[WebSocket] Sent bill event: " + billMsg);
-            } else {
-                Serial.println("[WebSocket] Not sending bill event - device not paired or not connected");
+                Serial.println("[WebSocket] Bill: " + String(billValue) + " PHP sent");
             }
 
             // Reset pulse counter for next bill
@@ -2525,7 +2610,7 @@ void loop() {
         // Send status update via WebSocket (non-blocking)
         String statusMsg = "{\"type\":\"status-update\",\"deviceId\":\"" + deviceId + "\"}";
         webSocket.sendTXT(statusMsg);
-        Serial.println("[WebSocket] Sent status update: " + statusMsg);
+        // Silent - keep-alive doesn't need logging
     }
 
     /* ================= DHT22 AUTOMATIC READING ================= */
@@ -2551,13 +2636,18 @@ void loop() {
         bool atomizerSuccess = readAtomizerLevel();
         bool foamSuccess = readFoamLevel();
 
+        // Log combined reading
+        if (atomizerSuccess || foamSuccess) {
+            Serial.println("[Level] Atomizer: " + String(currentAtomizerDistance) + " cm | Foam: " + String(currentFoamDistance) + " cm");
+        }
+
         // Send data via WebSocket if at least one reading was successful
         if ((atomizerSuccess || foamSuccess) && wsConnected) {
             sendUltrasonicDataViaWebSocket();
         }
     }
 
-    /* ================= DRYING SERVICE HANDLING ================= */
-    // Handle drying service timer and relay control
-    handleDryingService();
+    /* ================= SERVICE HANDLING ================= */
+    // Handle service timer, relay control, and RGB lights
+    handleService();
 }
