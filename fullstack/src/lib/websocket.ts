@@ -190,6 +190,86 @@ export function createWebSocketServer(server: Server) {
           // Broadcast to all clients subscribed to this device
           broadcastToDevice(completeDeviceId, message)
         }
+
+        // ===================== ESP32-CAM MESSAGES =====================
+
+        // Handle CAM status updates
+        else if (message.type === 'cam-status' && message.deviceId) {
+          const camDeviceId = message.deviceId as string
+          console.log(`[WebSocket] CAM status from ${camDeviceId}: camera=${message.cameraReady}, classifying=${message.classifying}`)
+          // Broadcast to main board and UI clients
+          // CAM device ID is SSCM-CAM-xxx, main board is SSCM-xxx
+          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
+          broadcastToDevice(mainDeviceId, message)
+          broadcastToDevice(camDeviceId, message)
+        }
+
+        // Handle classification request from frontend or main board
+        else if ((message.type === 'start-classification' || message.type === 'request-classification') && message.deviceId) {
+          const requestDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Classification requested from ${requestDeviceId}`)
+
+          // Determine CAM device ID
+          let camDeviceId: string
+          if (requestDeviceId.startsWith('SSCM-CAM-')) {
+            camDeviceId = requestDeviceId
+          } else if (message.camDeviceId) {
+            camDeviceId = message.camDeviceId as string
+          } else {
+            // Derive from main board ID: SSCM-xxx -> SSCM-CAM-xxx
+            camDeviceId = requestDeviceId.replace('SSCM-', 'SSCM-CAM-')
+          }
+
+          console.log(`[WebSocket] Forwarding classification request to CAM: ${camDeviceId}`)
+          // Forward to CAM
+          broadcastToDevice(camDeviceId, {
+            type: 'start-classification',
+            deviceId: camDeviceId
+          })
+        }
+
+        // Handle classification result from CAM
+        else if (message.type === 'classification-result' && message.deviceId) {
+          const camDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Classification result from ${camDeviceId}: ${message.result} (${(message.confidence * 100).toFixed(1)}%)`)
+
+          // Broadcast to main board: SSCM-CAM-xxx -> SSCM-xxx
+          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
+          broadcastToDevice(mainDeviceId, message)
+
+          // Also broadcast to CAM subscribers (UI)
+          broadcastToDevice(camDeviceId, message)
+        }
+
+        // Handle classification started acknowledgment from CAM
+        else if (message.type === 'classification-started' && message.deviceId) {
+          const camDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Classification started on ${camDeviceId}`)
+          // Broadcast to main board and UI
+          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
+          broadcastToDevice(mainDeviceId, message)
+          broadcastToDevice(camDeviceId, message)
+        }
+
+        // Handle classification error from CAM
+        else if (message.type === 'classification-error' && message.deviceId) {
+          const camDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Classification error from ${camDeviceId}: ${message.error}`)
+          // Broadcast to main board and UI
+          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
+          broadcastToDevice(mainDeviceId, message)
+          broadcastToDevice(camDeviceId, message)
+        }
+
+        // Handle classification busy from CAM
+        else if (message.type === 'classification-busy' && message.deviceId) {
+          const camDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Classification busy on ${camDeviceId}`)
+          // Broadcast to main board and UI
+          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
+          broadcastToDevice(mainDeviceId, message)
+          broadcastToDevice(camDeviceId, message)
+        }
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)
       }

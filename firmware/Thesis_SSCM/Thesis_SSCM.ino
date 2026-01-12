@@ -20,6 +20,8 @@
 #include <DHT.h>
 #include <ESP32Servo.h>
 #include <Adafruit_NeoPixel.h>
+#include <esp_now.h>
+#include <esp_wifi.h>
 
 /* ===================== WIFI ===================== */
 Preferences prefs;
@@ -42,6 +44,31 @@ const unsigned long WS_RECONNECT_INTERVAL = 5000; // Try to reconnect every 5 se
 /* ===================== STATUS UPDATE ===================== */
 unsigned long lastStatusUpdate = 0;
 const unsigned long STATUS_UPDATE_INTERVAL = 60000; // Update status every 1 minute
+
+/* ===================== ESP-NOW - ESP32-CAM COMMUNICATION ===================== */
+// Wireless credential transfer to ESP32-CAM via ESP-NOW (no wires needed)
+// CAM device ID is derived from main board: SSCM-ABC123 -> SSCM-CAM-ABC123
+
+// Structure to send WiFi credentials to CAM
+typedef struct {
+  char ssid[32];
+  char password[64];
+  char wsHost[64];
+  uint16_t wsPort;
+  char deviceId[24];  // Main board's device ID
+} WiFiCredentials;
+
+WiFiCredentials camCredentials;
+bool espNowInitialized = false;
+bool credentialsSentToCAM = false;
+
+// Broadcast address (sends to all ESP-NOW devices)
+uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+/* ===================== CLASSIFICATION STATE ===================== */
+// Classification is now handled via WebSocket, not serial
+String lastClassificationResult = "";
+float lastClassificationConfidence = 0.0;
 
 /* ===================== COIN SLOT ===================== */
 #define COIN_SLOT_PIN 5
@@ -321,6 +348,95 @@ const char WIFI_HTML[] PROGMEM = R"rawliteral(
 )rawliteral";
 
 /* ===================== FUNCTIONS ===================== */
+
+/* ===================== ESP-NOW FUNCTIONS ===================== */
+
+// Callback when ESP-NOW data is sent
+// Updated for ESP32 Arduino Core v3.x
+void onDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
+    Serial.print("[ESP-NOW] Send Status: ");
+    if (status == ESP_NOW_SEND_SUCCESS) {
+        Serial.println("Success");
+        credentialsSentToCAM = true;
+    } else {
+        Serial.println("Failed");
+    }
+}
+
+// Initialize ESP-NOW (call after WiFi.mode is set)
+void initESPNow() {
+    if (espNowInitialized) return;
+
+    // ESP-NOW requires WiFi to be initialized
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("[ESP-NOW] Init failed!");
+        return;
+    }
+
+    // Register send callback
+    esp_now_register_send_cb(onDataSent);
+
+    // Add broadcast peer
+    esp_now_peer_info_t peerInfo;
+    memset(&peerInfo, 0, sizeof(peerInfo));
+    memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+    peerInfo.channel = 0;  // Use current WiFi channel
+    peerInfo.encrypt = false;
+
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+        Serial.println("[ESP-NOW] Failed to add broadcast peer");
+        return;
+    }
+
+    espNowInitialized = true;
+    Serial.println("[ESP-NOW] Initialized successfully");
+}
+
+// Send WiFi credentials to ESP32-CAM via ESP-NOW broadcast
+void sendCredentialsToCAM() {
+    if (!espNowInitialized) {
+        Serial.println("[ESP-NOW] Not initialized, cannot send credentials");
+        return;
+    }
+
+    // Get stored WiFi credentials
+    String ssid = prefs.getString("ssid", "");
+    String pass = prefs.getString("pass", "");
+
+    if (ssid.length() == 0) {
+        Serial.println("[ESP-NOW] No WiFi credentials stored");
+        return;
+    }
+
+    // Prepare credentials structure
+    memset(&camCredentials, 0, sizeof(camCredentials));
+    strncpy(camCredentials.ssid, ssid.c_str(), sizeof(camCredentials.ssid) - 1);
+    strncpy(camCredentials.password, pass.c_str(), sizeof(camCredentials.password) - 1);
+
+    // WebSocket server info - use BACKEND_HOST (same server both boards connect to)
+    strncpy(camCredentials.wsHost, BACKEND_HOST, sizeof(camCredentials.wsHost) - 1);
+    camCredentials.wsPort = BACKEND_PORT;
+
+    // Device ID for CAM to derive its own ID
+    strncpy(camCredentials.deviceId, deviceId.c_str(), sizeof(camCredentials.deviceId) - 1);
+
+    Serial.println("\n[ESP-NOW] Broadcasting credentials to ESP32-CAM:");
+    Serial.println("  SSID: " + ssid);
+    Serial.println("  WS Host: " + String(camCredentials.wsHost));
+    Serial.println("  WS Port: " + String(camCredentials.wsPort));
+    Serial.println("  Device ID: " + String(camCredentials.deviceId));
+
+    // Send via ESP-NOW broadcast
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&camCredentials, sizeof(camCredentials));
+
+    if (result == ESP_OK) {
+        Serial.println("[ESP-NOW] Credentials broadcast sent");
+    } else {
+        Serial.println("[ESP-NOW] Error sending credentials: " + String(result));
+    }
+}
+
+/* ===================== WIFI FUNCTIONS ===================== */
 
 String getWiFiListHTML() {
     String options = "";
@@ -845,6 +961,56 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     Serial.println("[WebSocket] Unknown service: " + serviceType);
                 }
             }
+            else if (message.indexOf("\"type\":\"start-classification\"") != -1) {
+                // Frontend requested classification - forward to CAM via backend
+                // Format: {"type":"start-classification","deviceId":"xxx","careType":"normal"}
+
+                Serial.println("\n=== CLASSIFICATION REQUESTED ===");
+                requestClassificationFromCAM();
+                Serial.println("================================\n");
+            }
+            else if (message.indexOf("\"type\":\"classification-result\"") != -1) {
+                // Classification result from ESP32-CAM (via backend)
+                // Format: {"type":"classification-result","deviceId":"SSCM-CAM-xxx","result":"leather","confidence":0.95}
+
+                // Extract result (shoe type)
+                int resultIdx = message.indexOf("\"result\":\"");
+                String shoeType = "";
+                if (resultIdx != -1) {
+                    int start = resultIdx + 10;
+                    int end = message.indexOf("\"", start);
+                    shoeType = message.substring(start, end);
+                }
+
+                // Extract confidence
+                int confIdx = message.indexOf("\"confidence\":");
+                float confidence = 0.0;
+                if (confIdx != -1) {
+                    int start = confIdx + 13;
+                    int end = message.indexOf(",", start);
+                    if (end == -1) end = message.indexOf("}", start);
+                    confidence = message.substring(start, end).toFloat();
+                }
+
+                handleClassificationResultFromWebSocket(shoeType, confidence);
+            }
+            else if (message.indexOf("\"type\":\"classification-error\"") != -1) {
+                // Classification error from CAM
+                Serial.println("[Classification] Error received from CAM");
+
+                int errIdx = message.indexOf("\"error\":\"");
+                if (errIdx != -1) {
+                    int start = errIdx + 9;
+                    int end = message.indexOf("\"", start);
+                    String error = message.substring(start, end);
+                    Serial.println("[Classification] Error: " + error);
+                }
+            }
+            else if (message.indexOf("\"type\":\"cam-status\"") != -1) {
+                // CAM status update
+                bool cameraReady = (message.indexOf("\"cameraReady\":true") != -1);
+                Serial.println("[CAM] Status - Camera Ready: " + String(cameraReady ? "Yes" : "No"));
+            }
             break;
         }
 
@@ -1127,6 +1293,47 @@ void sendServiceStatusUpdate() {
 
     webSocket.sendTXT(msg);
 }
+
+/* ===================== CLASSIFICATION FUNCTIONS ===================== */
+// Note: Classification is now handled via WebSocket through the backend server
+// Flow: Main board -> Backend -> ESP32-CAM -> Backend -> Main board
+// No more direct serial communication with CAM
+
+void requestClassificationFromCAM() {
+    Serial.println("[Classification] Requesting via WebSocket...");
+
+    lastClassificationResult = "";
+    lastClassificationConfidence = 0.0;
+
+    // Request classification from CAM via backend
+    // The backend will route this to the ESP32-CAM
+    if (wsConnected && isPaired) {
+        // Derive CAM device ID from main board ID: SSCM-ABC123 -> SSCM-CAM-ABC123
+        String camDeviceId = "SSCM-CAM-" + deviceId.substring(5);  // Remove "SSCM-" and add "SSCM-CAM-"
+
+        String reqMsg = "{\"type\":\"request-classification\",";
+        reqMsg += "\"deviceId\":\"" + deviceId + "\",";
+        reqMsg += "\"camDeviceId\":\"" + camDeviceId + "\"}";
+        webSocket.sendTXT(reqMsg);
+
+        Serial.println("[Classification] Request sent to backend for CAM: " + camDeviceId);
+    } else {
+        Serial.println("[Classification] Cannot request - not connected or not paired");
+    }
+}
+
+// Handle classification result received from CAM via WebSocket
+void handleClassificationResultFromWebSocket(String shoeType, float confidence) {
+    Serial.println("\n=== CLASSIFICATION RESULT RECEIVED ===");
+    Serial.println("Shoe Type: " + shoeType);
+    Serial.println("Confidence: " + String(confidence * 100, 1) + "%");
+    Serial.println("======================================\n");
+
+    lastClassificationResult = shoeType;
+    lastClassificationConfidence = confidence;
+}
+
+// Note: checkCamSerial() removed - CAM now communicates via WebSocket
 
 /* ===================== DHT22 FUNCTIONS ===================== */
 bool readDHT22() {
@@ -1703,6 +1910,14 @@ void setup() {
 
     prefs.begin("sscm", false);
 
+    // Wait for USB CDC to stabilize
+    delay(2000);
+
+    // Initialize ESP-NOW for wireless communication with ESP32-CAM
+    // Note: ESP-NOW will be fully initialized after WiFi mode is set
+    Serial.println("\n[ESP-NOW] Will initialize after WiFi setup...");
+    Serial.println("[ESP-NOW] Credentials will be broadcast to CAM after WiFi connects");
+
     // Initialize DHT22 sensor
     dht.begin();
     Serial.println("DHT22 Sensor initialized on GPIO " + String(DHT_PIN));
@@ -1892,6 +2107,22 @@ void setup() {
         Serial.println("Device is already paired\n");
     }
 
+    // CRITICAL: Initialize WiFi mode to STA first (required for ESP-NOW)
+    WiFi.mode(WIFI_STA);
+    delay(100);  // Allow WiFi to stabilize
+
+    // Initialize ESP-NOW BEFORE WiFi connection (so we can broadcast to CAM)
+    initESPNow();
+
+    // Small delay to ensure ESP-NOW is ready
+    delay(100);
+
+    // Broadcast credentials immediately (for CAM that's already running)
+    Serial.println("[ESP-NOW] Broadcasting initial credentials to CAM...");
+    sendCredentialsToCAM();
+    delay(500);  // Allow broadcast to complete
+
+    // Now attempt WiFi connection
     connectWiFi();
 }
 
@@ -1901,6 +2132,8 @@ void loop() {
 
     // Handle WebSocket - MUST call loop() even when not connected for handshake
     webSocket.loop();
+
+    // Note: ESP32-CAM communication is now via WebSocket (no serial)
 
     // Update servo positions for smooth non-blocking movement (dual servos)
     updateServoPositions();
@@ -2106,6 +2339,11 @@ void loop() {
                 long stepsRemaining = abs(targetStepper2Position - currentStepper2Position);
                 Serial.println("Steps Remaining: " + String(stepsRemaining));
             }
+            Serial.println("--- ESP32-CAM (Classification via WebSocket) ---");
+            Serial.println("ESP-NOW Initialized: " + String(espNowInitialized ? "Yes" : "No"));
+            Serial.println("Credentials Sent to CAM: " + String(credentialsSentToCAM ? "Yes" : "No"));
+            Serial.println("Last Result: " + lastClassificationResult);
+            Serial.println("Last Confidence: " + String(lastClassificationConfidence * 100, 1) + "%");
             Serial.println("=====================\n");
         }
         else if (cmd.startsWith("RELAY")) {
@@ -2514,6 +2752,26 @@ void loop() {
                 Serial.println("  RGB_OFF          - Turn off");
             }
         }
+        else if (cmd.startsWith("CAM_")) {
+            // ESP32-CAM commands (via WebSocket)
+            String subCmd = cmd.substring(4);
+
+            if (subCmd == "BROADCAST") {
+                Serial.println("[CAM] Broadcasting credentials via ESP-NOW...");
+                sendCredentialsToCAM();
+            }
+            else if (subCmd == "CLASSIFY") {
+                Serial.println("[CAM] Requesting classification via WebSocket...");
+                requestClassificationFromCAM();
+            }
+            else {
+                Serial.println("[ERROR] Unknown CAM command: " + cmd);
+                Serial.println("\n=== ESP32-CAM COMMANDS (WebSocket) ===");
+                Serial.println("  CAM_BROADCAST - Broadcast WiFi credentials via ESP-NOW");
+                Serial.println("  CAM_CLASSIFY  - Request classification via WebSocket");
+                Serial.println("======================================\n");
+            }
+        }
     }
 
     // Handle WiFi portal
@@ -2552,6 +2810,11 @@ void loop() {
 
         // Connect to WebSocket for real-time updates
         connectWebSocket();
+
+        // Broadcast credentials again (in case CAM booted after main board)
+        Serial.println("[ESP-NOW] Re-broadcasting credentials to CAM (WiFi connected)...");
+        delay(100);
+        sendCredentialsToCAM();
     }
 
     /* WiFi retry logic */
