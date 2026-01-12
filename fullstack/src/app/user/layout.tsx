@@ -1,5 +1,6 @@
 import './kiosk.css'
 import PairingWrapper from '@/components/PairingWrapper'
+import { WebSocketProvider } from '@/contexts/WebSocketContext'
 
 export default function UserLayout({
     children,
@@ -8,10 +9,12 @@ export default function UserLayout({
 }>) {
 
     return (
-        <PairingWrapper>
-            <div className="h-screen w-screen bg-gradient-to-r from-green-200 via-cyan-200 to-blue-400 text-gray-900 flex items-center justify-center">
-                {children}
-            </div>
-        </PairingWrapper>
+        <WebSocketProvider>
+            <PairingWrapper>
+                <div className="h-screen w-screen bg-gradient-to-r from-green-200 via-cyan-200 to-blue-400 text-gray-900 flex items-center justify-center">
+                    {children}
+                </div>
+            </PairingWrapper>
+        </WebSocketProvider>
     );
 }
