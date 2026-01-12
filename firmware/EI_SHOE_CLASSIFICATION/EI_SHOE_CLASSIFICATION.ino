@@ -85,6 +85,10 @@ bool wifiConnected = false;
 bool wsConnected = false;
 String camDeviceId = "";  // Derived from main board ID: SSCM-ABC123 -> SSCM-CAM-ABC123
 
+// Main board MAC address for pairing verification
+uint8_t mainBoardMac[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+bool mainBoardPaired = false;
+
 // WiFi/WebSocket reconnection
 unsigned long lastWsReconnect = 0;
 const unsigned long WS_RECONNECT_INTERVAL = 5000;
@@ -93,7 +97,7 @@ const unsigned long WS_RECONNECT_INTERVAL = 5000;
 bool classificationInProgress = false;
 
 /* ===================== CLASSIFICATION SETTINGS ===================== */
-#define NUM_SCANS 10         // Number of scans to perform (increased for better accuracy)
+#define NUM_SCANS 5          // Number of scans to perform
 #define SCAN_DELAY_MS 300    // Delay between scans in ms
 
 /* Constant defines -------------------------------------------------------- */
@@ -149,6 +153,38 @@ bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf
 // Updated for ESP32 Arduino Core v3.x
 void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
     Serial.println("\n[ESP-NOW] Data received!");
+    
+    // Get sender MAC address
+    uint8_t* senderMac = recv_info->src_addr;
+    Serial.print("[ESP-NOW] From MAC: ");
+    for (int i = 0; i < 6; i++) {
+        Serial.printf("%02X", senderMac[i]);
+        if (i < 5) Serial.print(":");
+    }
+    Serial.println();
+    
+    // If already paired, verify sender is the paired main board
+    if (mainBoardPaired) {
+        bool macMatch = true;
+        for (int i = 0; i < 6; i++) {
+            if (senderMac[i] != mainBoardMac[i]) {
+                macMatch = false;
+                break;
+            }
+        }
+        
+        if (!macMatch) {
+            Serial.println("[ESP-NOW] REJECTED: Not from paired main board");
+            Serial.print("[ESP-NOW] Expected MAC: ");
+            for (int i = 0; i < 6; i++) {
+                Serial.printf("%02X", mainBoardMac[i]);
+                if (i < 5) Serial.print(":");
+            }
+            Serial.println();
+            return;  // Ignore messages from other devices
+        }
+        Serial.println("[ESP-NOW] MAC verified - from paired main board");
+    }
 
     if (len == sizeof(WiFiCredentials)) {
         memcpy(&receivedCredentials, data, sizeof(WiFiCredentials));
@@ -174,6 +210,21 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
         prefs.putString("wsHost", String(receivedCredentials.wsHost));
         prefs.putUInt("wsPort", receivedCredentials.wsPort);
         prefs.putString("camId", camDeviceId);
+        
+        // Store main board MAC for pairing (prevents accepting from other devices)
+        if (!mainBoardPaired) {
+            memcpy(mainBoardMac, senderMac, 6);
+            prefs.putBytes("mainMac", mainBoardMac, 6);
+            mainBoardPaired = true;
+            
+            Serial.println("[ESP-NOW] Paired with main board MAC:");
+            Serial.print("  ");
+            for (int i = 0; i < 6; i++) {
+                Serial.printf("%02X", mainBoardMac[i]);
+                if (i < 5) Serial.print(":");
+            }
+            Serial.println();
+        }
 
         credentialsReceived = true;
         Serial.println("[ESP-NOW] Credentials stored. Connecting to WiFi...");
@@ -345,12 +396,26 @@ void setup()
     // Initialize preferences
     prefs.begin("cam", false);
 
-    // Check for stored credentials
+    // Check for stored credentials and pairing
     camDeviceId = prefs.getString("camId", "");
     if (camDeviceId.length() > 0) {
         Serial.println("[Startup] Found stored credentials");
         Serial.println("[Startup] CAM Device ID: " + camDeviceId);
         credentialsReceived = true;
+    }
+    
+    // Load paired main board MAC
+    size_t macLen = prefs.getBytes("mainMac", mainBoardMac, 6);
+    if (macLen == 6 && (mainBoardMac[0] != 0x00 || mainBoardMac[1] != 0x00)) {
+        mainBoardPaired = true;
+        Serial.print("[Startup] Paired with main board MAC: ");
+        for (int i = 0; i < 6; i++) {
+            Serial.printf("%02X", mainBoardMac[i]);
+            if (i < 5) Serial.print(":");
+        }
+        Serial.println();
+    } else {
+        Serial.println("[Startup] No main board pairing - will accept first valid credentials");
     }
 
     // Initialize WiFi in STA mode (required for ESP-NOW + WiFi coexistence)
@@ -511,6 +576,19 @@ void loop()
             Serial.println("Device ID: " + camDeviceId);
             Serial.println("Credentials: " + String(credentialsReceived ? "Yes" : "Waiting for ESP-NOW"));
             Serial.println("Scans per classification: " + String(NUM_SCANS));
+            
+            // Show pairing status
+            if (mainBoardPaired) {
+                Serial.print("Paired with main board: ");
+                for (int i = 0; i < 6; i++) {
+                    Serial.printf("%02X", mainBoardMac[i]);
+                    if (i < 5) Serial.print(":");
+                }
+                Serial.println();
+            } else {
+                Serial.println("Pairing: Not paired (will accept first credentials)");
+            }
+            
             Serial.println("==================\n");
         }
         else if (cmd == "CLEAR") {
@@ -520,7 +598,17 @@ void loop()
             wifiConnected = false;
             wsConnected = false;
             camDeviceId = "";
-            Serial.println("Credentials cleared. Restart to apply.");
+            mainBoardPaired = false;
+            memset(mainBoardMac, 0, 6);
+            Serial.println("Credentials AND pairing cleared. Restart to apply.");
+        }
+        else if (cmd == "UNPAIR") {
+            Serial.println("Clearing main board pairing...");
+            prefs.remove("mainMac");
+            mainBoardPaired = false;
+            memset(mainBoardMac, 0, 6);
+            Serial.println("Pairing cleared. CAM will accept credentials from any main board.");
+            Serial.println("Restart or wait for next credential broadcast.");
         }
         else if (cmd == "WIFI") {
             Serial.println("WiFi Status: " + String(WiFi.status()));

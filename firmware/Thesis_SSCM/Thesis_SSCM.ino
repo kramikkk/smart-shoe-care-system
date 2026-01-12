@@ -62,7 +62,11 @@ WiFiCredentials camCredentials;
 bool espNowInitialized = false;
 bool credentialsSentToCAM = false;
 
-// Broadcast address (sends to all ESP-NOW devices)
+// CAM MAC address for direct pairing (prevents cross-device interference)
+uint8_t camMacAddress[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+bool camMacPaired = false;
+
+// Broadcast address (only used during initial pairing discovery)
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 /* ===================== CLASSIFICATION STATE ===================== */
@@ -358,6 +362,12 @@ void onDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
     if (status == ESP_NOW_SEND_SUCCESS) {
         Serial.println("Success");
         credentialsSentToCAM = true;
+        
+        // If this was a successful broadcast, it means CAM received it
+        // Store the MAC if we got an ACK (only works with unicast)
+        if (camMacPaired) {
+            Serial.println("[ESP-NOW] Credentials sent to paired CAM");
+        }
     } else {
         Serial.println("Failed");
     }
@@ -376,15 +386,39 @@ void initESPNow() {
     // Register send callback
     esp_now_register_send_cb(onDataSent);
 
-    // Add broadcast peer
+    // Load paired CAM MAC from preferences
+    size_t macLen = prefs.getBytes("camMac", camMacAddress, 6);
+    if (macLen == 6 && (camMacAddress[0] != 0x00 || camMacAddress[1] != 0x00)) {
+        camMacPaired = true;
+        Serial.print("[ESP-NOW] Found paired CAM MAC: ");
+        for (int i = 0; i < 6; i++) {
+            Serial.printf("%02X", camMacAddress[i]);
+            if (i < 5) Serial.print(":");
+        }
+        Serial.println();
+    } else {
+        Serial.println("[ESP-NOW] No paired CAM MAC - will use broadcast for pairing");
+    }
+
+    // Add peer (either paired CAM MAC or broadcast for discovery)
     esp_now_peer_info_t peerInfo;
     memset(&peerInfo, 0, sizeof(peerInfo));
-    memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+    
+    if (camMacPaired) {
+        // Use paired CAM MAC for direct communication
+        memcpy(peerInfo.peer_addr, camMacAddress, 6);
+        Serial.println("[ESP-NOW] Added paired CAM as peer");
+    } else {
+        // Use broadcast for initial pairing discovery
+        memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+        Serial.println("[ESP-NOW] Added broadcast peer for pairing discovery");
+    }
+    
     peerInfo.channel = 0;  // Use current WiFi channel
     peerInfo.encrypt = false;
 
     if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-        Serial.println("[ESP-NOW] Failed to add broadcast peer");
+        Serial.println("[ESP-NOW] Failed to add peer");
         return;
     }
 
@@ -420,14 +454,27 @@ void sendCredentialsToCAM() {
     // Device ID for CAM to derive its own ID
     strncpy(camCredentials.deviceId, deviceId.c_str(), sizeof(camCredentials.deviceId) - 1);
 
-    Serial.println("\n[ESP-NOW] Broadcasting credentials to ESP32-CAM:");
+    Serial.println("\n[ESP-NOW] Sending credentials to ESP32-CAM:");
     Serial.println("  SSID: " + ssid);
     Serial.println("  WS Host: " + String(camCredentials.wsHost));
     Serial.println("  WS Port: " + String(camCredentials.wsPort));
     Serial.println("  Device ID: " + String(camCredentials.deviceId));
+    
+    // Send to paired CAM MAC or broadcast if not paired
+    uint8_t* targetMac = camMacPaired ? camMacAddress : broadcastAddress;
+    if (camMacPaired) {
+        Serial.print("  Target MAC: ");
+        for (int i = 0; i < 6; i++) {
+            Serial.printf("%02X", targetMac[i]);
+            if (i < 5) Serial.print(":");
+        }
+        Serial.println(" (paired)");
+    } else {
+        Serial.println("  Target: BROADCAST (pairing mode)");
+    }
 
-    // Send via ESP-NOW broadcast
-    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&camCredentials, sizeof(camCredentials));
+    // Send via ESP-NOW
+    esp_err_t result = esp_now_send(targetMac, (uint8_t *)&camCredentials, sizeof(camCredentials));
 
     if (result == ESP_OK) {
         Serial.println("[ESP-NOW] Credentials broadcast sent");
