@@ -81,11 +81,6 @@ export default function ClassifyPage() {
           confidence: message.confidence
         })
         setState('success')
-
-        // Auto-navigate to payment after 2 seconds
-        setTimeout(() => {
-          router.push(`/user/payment?service=package&shoe=${encodeURIComponent(message.result)}&care=normal`)
-        }, 2000)
       }
       else if (message.type === 'classification-started') {
         console.log('[Classify] Classification started on CAM')
@@ -112,11 +107,42 @@ export default function ClassifyPage() {
   }, [isConnected, deviceId, sendMessage, subscribe, onMessage, router]) // Removed 'state' to prevent re-triggering
 
   const handleRetry = () => {
+    classificationSentRef.current = false // Reset the flag
     setState('connecting')
     setError('')
     setResult(null)
-    // Reload the page to restart the process
-    window.location.reload()
+    
+    if (!deviceId || deviceId === 'No device configured') {
+      setError('Device not configured')
+      setState('error')
+      return
+    }
+
+    // Restart classification process
+    setTimeout(() => {
+      if (isConnected && !classificationSentRef.current) {
+        classificationSentRef.current = true
+        setState('classifying')
+        sendMessage({
+          type: 'start-classification',
+          deviceId: deviceId
+        })
+        console.log('[Classify] Classification request sent (retry)')
+
+        timeoutRef.current = setTimeout(() => {
+          if (state === 'classifying') {
+            setError('Classification timed out. Please try again.')
+            setState('error')
+          }
+        }, 30000)
+      }
+    }, 500)
+  }
+
+  const handleProceedToPayment = () => {
+    if (result) {
+      router.replace(`/user/payment?service=package&shoe=${encodeURIComponent(result.shoeType)}&care=normal`)
+    }
   }
 
   const handleCancel = () => {
@@ -188,9 +214,6 @@ export default function ClassifyPage() {
               <p className="text-gray-500">
                 Confidence: {(result.confidence * 100).toFixed(1)}%
               </p>
-              <p className="text-sm text-gray-400 mt-4">
-                Redirecting to payment...
-              </p>
             </>
           )}
           {state === 'error' && (
@@ -202,6 +225,23 @@ export default function ClassifyPage() {
         </div>
 
         {/* Buttons */}
+        {state === 'success' && (
+          <div className="flex gap-4 justify-center">
+            <Button
+              onClick={handleRetry}
+              variant="outline"
+              className="px-6 py-3"
+            >
+              Retry Classification
+            </Button>
+            <Button
+              onClick={handleProceedToPayment}
+              className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+            >
+              Proceed to Payment
+            </Button>
+          </div>
+        )}
         {state === 'error' && (
           <div className="flex gap-4 justify-center">
             <Button
