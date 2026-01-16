@@ -191,36 +191,54 @@ int currentLeftMotorSpeed = 0;   // Left motor speed (-255 to 255, negative = re
 int currentRightMotorSpeed = 0;  // Right motor speed (-255 to 255, negative = reverse)
 
 /* ===================== TB6600 STEPPER MOTOR DRIVER - TOP LINEAR STEPPER ===================== */
-#define STEPPER_STEP_PIN 45     // GPIO 45 - STEP/PULSE pin (PUL+/PUL-)
-#define STEPPER_DIR_PIN 35      // GPIO 35 - DIRECTION pin (DIR+/DIR-)
+#define STEPPER1_STEP_PIN 45     // GPIO 45 - STEP/PULSE pin (PUL+/PUL-)
+#define STEPPER1_DIR_PIN 35      // GPIO 35 - DIRECTION pin (DIR+/DIR-)
 // ENA+ hardwired to GND (motor ALWAYS ENABLED - no ESP32 control needed)
 
 // Top Linear Stepper configuration - Optimized for NEMA11 linear actuator (max 80mm/s)
-const int STEPPER_STEPS_PER_REV = 200;      // NEMA11: 1.8° step angle = 200 steps/rev (FULL STEP)
-const int STEPPER_MICROSTEPS = 1;           // TB6600 FULL STEP mode (fastest, set DIP: OFF-OFF-OFF)
-const int STEPPER_STEPS_PER_MM = 10;        // Lead screw: 20mm pitch (200 steps = 20mm travel)
-const unsigned long STEPPER_MIN_PULSE_WIDTH = 2;  // Minimum 2us pulse (optimized for speed)
+const int STEPPER1_STEPS_PER_REV = 200;      // NEMA11: 1.8° step angle = 200 steps/rev (FULL STEP)
+const int STEPPER1_MICROSTEPS = 1;           // TB6600 FULL STEP mode (fastest, set DIP: OFF-OFF-OFF)
+const int STEPPER1_STEPS_PER_MM = 10;        // Lead screw: 20mm pitch (200 steps = 20mm travel)
+const int STEPPER1_MAX_SPEED = 800;          // Maximum: 800 steps/sec = 80mm/s
+const unsigned long STEPPER1_MIN_PULSE_WIDTH = 2;  // Minimum 2us pulse (optimized for speed)
 
 // Top Linear Stepper state
-long currentStepperPosition = 0;    // Current position in steps
-long targetStepperPosition = 0;     // Target position in steps
-int stepperSpeed = 800;             // Speed: 800 steps/sec = 80mm/s (MAXIMUM for this motor!)
-bool stepperMoving = false;         // Is stepper currently moving
-unsigned long lastStepperUpdate = 0;
-unsigned long stepperStepInterval = 1250;  // Microseconds between steps (calculated from speed)
+long currentStepper1Position = 0;    // Current position in steps
+long targetStepper1Position = 0;     // Target position in steps
+int stepper1Speed = 800;             // Speed: 800 steps/sec = 80mm/s (MAXIMUM for this motor!)
+bool stepper1Moving = false;         // Is stepper currently moving
+unsigned long lastStepper1Update = 0;
+unsigned long stepper1StepInterval = 1250;  // Microseconds between steps (calculated from speed)
 
 /* ===================== TB6600 STEPPER MOTOR DRIVER - SIDE LINEAR STEPPER (DOUBLE) ===================== */
 #define STEPPER2_STEP_PIN 36    // GPIO 36 - STEP/PULSE pin (PUL+/PUL-)
 #define STEPPER2_DIR_PIN 37     // GPIO 37 - DIRECTION pin (DIR+/DIR-)
 // ENA+ hardwired to GND (motor ALWAYS ENABLED - no ESP32 control needed)
 
+// Mini Linear Rail Guide Slide Actuator Specifications:
+// - Material: Aluminium alloy
+// - Effective Travel: 100mm
+// - Screw Rod Diameter: 6mm
+// - Helical Pitch (Lead): 1mm per revolution
+// - Step Angle: 1.8° (200 steps/revolution)
+// - Steps per mm: 200 (1mm pitch ÷ 200 steps = 0.005mm per step)
+// - Max Speed: 120mm/s = 24,000 steps/sec
+// - Current: 0.6A
+// - Holding Torque: 6N.cm
+const int STEPPER2_STEPS_PER_REV = 200;     // 1.8° step angle = 200 steps/rev
+const int STEPPER2_MICROSTEPS = 1;          // TB6600 FULL STEP mode (fastest)
+const int STEPPER2_STEPS_PER_MM = 200;      // 1mm lead screw pitch = 200 steps/mm
+const int STEPPER2_MAX_SPEED = 24000;       // Maximum: 24,000 steps/sec = 120mm/s
+const long STEPPER2_MAX_POSITION = 20000;   // 100mm * 200 steps/mm = 20,000 steps
+const unsigned long STEPPER2_MIN_PULSE_WIDTH = 2;  // Minimum 2us pulse (optimized for speed)
+
 // Side Linear Stepper (Double) state
 long currentStepper2Position = 0;   // Current position in steps
 long targetStepper2Position = 0;    // Target position in steps
-int stepper2Speed = 800;            // Speed: 800 steps/sec = 80mm/s (MAXIMUM for this motor!)
+int stepper2Speed = 1500;           // Default: 1500 steps/sec = 7.5mm/s
 bool stepper2Moving = false;        // Is stepper currently moving
 unsigned long lastStepper2Update = 0;
-unsigned long stepper2StepInterval = 1250;  // Microseconds between steps (calculated from speed)
+unsigned long stepper2StepInterval = 667;  // Microseconds between steps (calculated from speed)
 
 /* ===================== WS2812B RGB LED STRIP (NeoPixel) ===================== */
 #define RGB_DATA_PIN 38      // GPIO 38 - WS2812B data pin
@@ -1210,7 +1228,7 @@ void startService(String shoeType, String serviceType, String careType) {
 
         // Start stepper moving to max position
         cleaningPhase = 1;  // Phase 1: moving to max
-        stepperMoveTo(CLEANING_MAX_POSITION);
+        stepper1MoveTo(CLEANING_MAX_POSITION);
         Serial.println("[Cleaning] Stepper moving to " + String(CLEANING_MAX_POSITION / 10) + "mm");
     } else if (serviceType == "drying") {
         setRelay(3, true);  // Centrifugal Blower Fan
@@ -1244,7 +1262,7 @@ void stopService() {
         setRelay(6, false);  // Diaphragm Pump
         // Stop stepper and return to home position
         cleaningPhase = 0;
-        stepperMoveTo(0);  // Return to home
+        stepper1MoveTo(0);  // Return to home
         Serial.println("[Cleaning] Returning stepper to home position");
     } else if (currentServiceType == "drying") {
         setRelay(3, false);  // Centrifugal Blower Fan
@@ -1292,11 +1310,11 @@ void handleService() {
     // Handle cleaning mode stepper movement (one round trip: 0 → max → 0)
     if (currentServiceType == "cleaning" && cleaningPhase > 0) {
         // Check if stepper reached target position
-        if (!stepperMoving) {
+        if (!stepper1Moving) {
             if (cleaningPhase == 1) {
                 // Reached max position, now return to 0
                 cleaningPhase = 2;
-                stepperMoveTo(0);
+                stepper1MoveTo(0);
                 Serial.println("[Cleaning] Stepper at max, returning to 0");
             } else if (cleaningPhase == 2) {
                 // Reached home position, stepper movement complete
@@ -1650,103 +1668,103 @@ void motorsCoast() {
 // No enable/disable control needed - motor always has holding torque
 
 // Calculate step interval from speed (steps per second)
-void setStepperSpeed(int stepsPerSecond) {
+void setStepper1Speed(int stepsPerSecond) {
     if (stepsPerSecond <= 0) {
-        stepperSpeed = 1;
-    } else if (stepsPerSecond > 800) {
-        stepperSpeed = 800;  // Max speed: 800 steps/sec = 80mm/s (motor specification limit)
+        stepper1Speed = 1;
+    } else if (stepsPerSecond > STEPPER1_MAX_SPEED) {
+        stepper1Speed = STEPPER1_MAX_SPEED;  // Max speed: 800 steps/sec = 80mm/s (motor specification limit)
     } else {
-        stepperSpeed = stepsPerSecond;
+        stepper1Speed = stepsPerSecond;
     }
 
     // Calculate interval in microseconds
-    stepperStepInterval = 1000000UL / stepperSpeed;
-    Serial.println("[Top Linear] Speed: " + String(stepperSpeed) + " steps/sec = " +
-                   String(stepperSpeed / STEPPER_STEPS_PER_MM) + " mm/sec");
+    stepper1StepInterval = 1000000UL / stepper1Speed;
+    Serial.println("[Top Linear] Speed: " + String(stepper1Speed) + " steps/sec = " +
+                   String(stepper1Speed / STEPPER1_STEPS_PER_MM) + " mm/sec");
 }
 
 // Perform a single step in the specified direction - OPTIMIZED FOR SPEED
-void stepperStep(bool direction) {
+void stepper1Step(bool direction) {
     // Set direction
-    digitalWrite(STEPPER_DIR_PIN, direction ? HIGH : LOW);
+    digitalWrite(STEPPER1_DIR_PIN, direction ? HIGH : LOW);
     delayMicroseconds(2);  // Direction setup time (TB6600 needs 2.5us min)
 
     // Generate step pulse (optimized timing)
-    digitalWrite(STEPPER_STEP_PIN, HIGH);
-    delayMicroseconds(STEPPER_MIN_PULSE_WIDTH);
-    digitalWrite(STEPPER_STEP_PIN, LOW);
+    digitalWrite(STEPPER1_STEP_PIN, HIGH);
+    delayMicroseconds(STEPPER1_MIN_PULSE_WIDTH);
+    digitalWrite(STEPPER1_STEP_PIN, LOW);
 
     // Update position
     if (direction) {
-        currentStepperPosition++;
+        currentStepper1Position++;
     } else {
-        currentStepperPosition--;
+        currentStepper1Position--;
     }
 }
 
 // Move stepper to absolute position (non-blocking - initiates movement)
-void stepperMoveTo(long position) {
+void stepper1MoveTo(long position) {
     // Motor is ALWAYS ENABLED (ENA+ hardwired to GND) - ready to move!
 
-    targetStepperPosition = position;
+    targetStepper1Position = position;
 
-    if (targetStepperPosition != currentStepperPosition) {
-        stepperMoving = true;
-        Serial.println("[Top Linear] Moving from " + String(currentStepperPosition) +
-                       " to " + String(targetStepperPosition) +
-                       " steps (" + String(abs(targetStepperPosition - currentStepperPosition)) + " steps)");
+    if (targetStepper1Position != currentStepper1Position) {
+        stepper1Moving = true;
+        Serial.println("[Top Linear] Moving from " + String(currentStepper1Position) +
+                       " to " + String(targetStepper1Position) +
+                       " steps (" + String(abs(targetStepper1Position - currentStepper1Position)) + " steps)");
     } else {
-        Serial.println("[Top Linear] Already at target position: " + String(targetStepperPosition));
+        Serial.println("[Top Linear] Already at target position: " + String(targetStepper1Position));
     }
 }
 
 // Move stepper relative to current position (non-blocking)
-void stepperMoveRelative(long steps) {
-    targetStepperPosition = currentStepperPosition + steps;
-    stepperMoveTo(targetStepperPosition);
+void stepper1MoveRelative(long steps) {
+    targetStepper1Position = currentStepper1Position + steps;
+    stepper1MoveTo(targetStepper1Position);
 }
 
 // Move stepper by millimeters (non-blocking)
-void stepperMoveByMM(float mm) {
-    long steps = (long)(mm * STEPPER_STEPS_PER_MM);
-    stepperMoveRelative(steps);
+void stepper1MoveByMM(float mm) {
+    long steps = (long)(mm * STEPPER1_STEPS_PER_MM);
+    stepper1MoveRelative(steps);
 }
 
 // Stop stepper immediately
-void stepperStop() {
-    targetStepperPosition = currentStepperPosition;
-    stepperMoving = false;
-    Serial.println("[Top Linear] Stopped at position: " + String(currentStepperPosition) + " steps");
+void stepper1Stop() {
+    targetStepper1Position = currentStepper1Position;
+    stepper1Moving = false;
+    Serial.println("[Top Linear] Stopped at position: " + String(currentStepper1Position) + " steps");
 }
 
 // Home the stepper (reset position to zero)
-void stepperHome() {
-    currentStepperPosition = 0;
-    targetStepperPosition = 0;
-    stepperMoving = false;
+void stepper1Home() {
+    currentStepper1Position = 0;
+    targetStepper1Position = 0;
+    stepper1Moving = false;
     Serial.println("[Top Linear] Homed - position reset to 0");
 }
 
 // Non-blocking stepper update - called in loop()
-void updateStepperPosition() {
-    if (!stepperMoving) return;
+void updateStepper1Position() {
+    if (!stepper1Moving) return;
 
     unsigned long currentMicros = micros();
 
     // Check if enough time has passed for the next step
-    if (currentMicros - lastStepperUpdate >= stepperStepInterval) {
-        lastStepperUpdate = currentMicros;
+    if (currentMicros - lastStepper1Update >= stepper1StepInterval) {
+        lastStepper1Update = currentMicros;
 
-        if (currentStepperPosition < targetStepperPosition) {
+        if (currentStepper1Position < targetStepper1Position) {
             // Step forward
-            stepperStep(true);
-        } else if (currentStepperPosition > targetStepperPosition) {
+            stepper1Step(true);
+        } else if (currentStepper1Position > targetStepper1Position) {
             // Step backward
-            stepperStep(false);
+            stepper1Step(false);
         } else {
             // Reached target
-            stepperMoving = false;
-            Serial.println("[Top Linear] Reached target position: " + String(currentStepperPosition) + " steps");
+            stepper1Moving = false;
+            Serial.println("[Top Linear] Reached target position: " + String(currentStepper1Position) + " steps");
         }
     }
 }
@@ -1759,8 +1777,8 @@ void updateStepperPosition() {
 void setStepper2Speed(int stepsPerSecond) {
     if (stepsPerSecond <= 0) {
         stepper2Speed = 1;
-    } else if (stepsPerSecond > 800) {
-        stepper2Speed = 800;  // Max speed: 800 steps/sec = 80mm/s (motor specification limit)
+    } else if (stepsPerSecond > STEPPER2_MAX_SPEED) {
+        stepper2Speed = STEPPER2_MAX_SPEED;  // Max speed: 24,000 steps/sec = 120mm/s (motor specification limit)
     } else {
         stepper2Speed = stepsPerSecond;
     }
@@ -1768,7 +1786,7 @@ void setStepper2Speed(int stepsPerSecond) {
     // Calculate interval in microseconds
     stepper2StepInterval = 1000000UL / stepper2Speed;
     Serial.println("[Side Linear] Speed: " + String(stepper2Speed) + " steps/sec = " +
-                   String(stepper2Speed / STEPPER_STEPS_PER_MM) + " mm/sec");
+                   String(stepper2Speed / STEPPER2_STEPS_PER_MM) + " mm/sec");
 }
 
 // Perform a single step in the specified direction - OPTIMIZED FOR SPEED
@@ -1779,7 +1797,7 @@ void stepper2Step(bool direction) {
 
     // Generate step pulse (optimized timing)
     digitalWrite(STEPPER2_STEP_PIN, HIGH);
-    delayMicroseconds(STEPPER_MIN_PULSE_WIDTH);
+    delayMicroseconds(STEPPER2_MIN_PULSE_WIDTH);
     digitalWrite(STEPPER2_STEP_PIN, LOW);
 
     // Update position
@@ -1814,7 +1832,7 @@ void stepper2MoveRelative(long steps) {
 
 // Move stepper by millimeters (non-blocking)
 void stepper2MoveByMM(float mm) {
-    long steps = (long)(mm * STEPPER_STEPS_PER_MM);
+    long steps = (long)(mm * STEPPER2_STEPS_PER_MM);
     stepper2MoveRelative(steps);
 }
 
@@ -2027,24 +2045,25 @@ void setup() {
     Serial.println("  Both motors stopped - ONLY run when commanded\n");
 
     // Initialize TB6600 Stepper Motor Driver (NEMA11 Linear Stepper)
-    pinMode(STEPPER_STEP_PIN, OUTPUT);
-    pinMode(STEPPER_DIR_PIN, OUTPUT);
-    digitalWrite(STEPPER_STEP_PIN, LOW);
-    digitalWrite(STEPPER_DIR_PIN, LOW);
+    pinMode(STEPPER1_STEP_PIN, OUTPUT);
+    pinMode(STEPPER1_DIR_PIN, OUTPUT);
+    digitalWrite(STEPPER1_STEP_PIN, LOW);
+    digitalWrite(STEPPER1_DIR_PIN, LOW);
     // ENA+ hardwired to GND - motor ALWAYS ENABLED (no pin control needed)
 
     // Set initial speed
-    setStepperSpeed(800);  // 800 steps/second default
+    setStepper1Speed(800);  // 800 steps/second default
 
     Serial.println("TOP LINEAR STEPPER initialized (TB6600 + NEMA11):");
-    Serial.println("  STEP Pin:   GPIO " + String(STEPPER_STEP_PIN) + " (PUL+/PUL-)");
-    Serial.println("  DIR Pin:    GPIO " + String(STEPPER_DIR_PIN) + " (DIR+/DIR-)");
+    Serial.println("  STEP Pin:   GPIO " + String(STEPPER1_STEP_PIN) + " (PUL+/PUL-)");
+    Serial.println("  DIR Pin:    GPIO " + String(STEPPER1_DIR_PIN) + " (DIR+/DIR-)");
     Serial.println("  ENABLE:     ENA+ hardwired to GND (ALWAYS ENABLED)");
-    Serial.println("  Microsteps: 1/" + String(STEPPER_MICROSTEPS) + " (FULL STEP - fastest)");
-    Serial.println("  Steps/Rev: " + String(STEPPER_STEPS_PER_REV * STEPPER_MICROSTEPS) + " steps");
-    Serial.println("  Steps/mm:  " + String(STEPPER_STEPS_PER_MM));
-    Serial.println("  Default Speed: " + String(stepperSpeed) + " steps/sec (80mm/s)");
-    Serial.println("  Current Position: " + String(currentStepperPosition) + " steps");
+    Serial.println("  Microsteps: 1/" + String(STEPPER1_MICROSTEPS) + " (FULL STEP - fastest)");
+    Serial.println("  Steps/Rev: " + String(STEPPER1_STEPS_PER_REV * STEPPER1_MICROSTEPS) + " steps");
+    Serial.println("  Steps/mm:  " + String(STEPPER1_STEPS_PER_MM) + " (20mm lead screw)");
+    Serial.println("  Default Speed: " + String(stepper1Speed) + " steps/sec (" + String(stepper1Speed / STEPPER1_STEPS_PER_MM) + "mm/s)");
+    Serial.println("  Max Speed: " + String(STEPPER1_MAX_SPEED) + " steps/sec (80mm/s)");
+    Serial.println("  Current Position: " + String(currentStepper1Position) + " steps");
     Serial.println("  Motor ALWAYS ENABLED - Ready to move!\n");
 
     // Initialize Side Linear Stepper (Double)
@@ -2055,16 +2074,18 @@ void setup() {
     // ENA+ hardwired to GND - motor ALWAYS ENABLED (no pin control needed)
 
     // Set initial speed
-    setStepper2Speed(800);  // 800 steps/second default
+    setStepper2Speed(1500);  // 1500 steps/second default (7.5mm/s)
 
-    Serial.println("SIDE LINEAR STEPPER (DOUBLE) initialized (TB6600 + NEMA11):");
+    Serial.println("SIDE LINEAR STEPPER (DOUBLE) initialized (Mini Linear Rail Guide):");
     Serial.println("  STEP Pin:   GPIO " + String(STEPPER2_STEP_PIN) + " (PUL+/PUL-)");
     Serial.println("  DIR Pin:    GPIO " + String(STEPPER2_DIR_PIN) + " (DIR+/DIR-)");
     Serial.println("  ENABLE:     ENA+ hardwired to GND (ALWAYS ENABLED)");
-    Serial.println("  Microsteps: 1/" + String(STEPPER_MICROSTEPS) + " (FULL STEP - fastest)");
-    Serial.println("  Steps/Rev: " + String(STEPPER_STEPS_PER_REV * STEPPER_MICROSTEPS) + " steps");
-    Serial.println("  Steps/mm:  " + String(STEPPER_STEPS_PER_MM));
-    Serial.println("  Default Speed: " + String(stepper2Speed) + " steps/sec (80mm/s)");
+    Serial.println("  Microsteps: 1/" + String(STEPPER2_MICROSTEPS) + " (FULL STEP - fastest)");
+    Serial.println("  Steps/Rev: " + String(STEPPER2_STEPS_PER_REV * STEPPER2_MICROSTEPS) + " steps");
+    Serial.println("  Steps/mm:  " + String(STEPPER2_STEPS_PER_MM) + " (1mm lead screw)");
+    Serial.println("  Max Travel: " + String(STEPPER2_MAX_POSITION / STEPPER2_STEPS_PER_MM) + "mm (" + String(STEPPER2_MAX_POSITION) + " steps)");
+    Serial.println("  Default Speed: " + String(stepper2Speed) + " steps/sec (" + String(stepper2Speed / STEPPER2_STEPS_PER_MM) + "mm/s)");
+    Serial.println("  Max Speed: " + String(STEPPER2_MAX_SPEED) + " steps/sec (120mm/s)");
     Serial.println("  Current Position: " + String(currentStepper2Position) + " steps");
     Serial.println("  Motor ALWAYS ENABLED - Ready to move!\n");
 
@@ -2186,7 +2207,7 @@ void loop() {
     updateServoPositions();
 
     // Update stepper motor position for non-blocking movement
-    updateStepperPosition();
+    updateStepper1Position();
     updateStepper2Position();
 
     // Handle coin insertion with pulse counting and timeout
@@ -2368,12 +2389,12 @@ void loop() {
             }
             Serial.println("--- Top Linear Stepper ---");
             Serial.println("Enabled: ALWAYS (ENA+ hardwired to GND - holding torque ON)");
-            Serial.println("Current Position: " + String(currentStepperPosition) + " steps (" + String(currentStepperPosition / 10.0) + "mm)");
-            Serial.println("Target Position:  " + String(targetStepperPosition) + " steps (" + String(targetStepperPosition / 10.0) + "mm)");
-            Serial.println("Speed: " + String(stepperSpeed) + " steps/sec (" + String(stepperSpeed / 10) + "mm/s)");
-            Serial.println("Moving: " + String(stepperMoving ? "Yes" : "No"));
-            if (stepperMoving) {
-                long stepsRemaining = abs(targetStepperPosition - currentStepperPosition);
+            Serial.println("Current Position: " + String(currentStepper1Position) + " steps (" + String(currentStepper1Position / 10.0) + "mm)");
+            Serial.println("Target Position:  " + String(targetStepper1Position) + " steps (" + String(targetStepper1Position / 10.0) + "mm)");
+            Serial.println("Speed: " + String(stepper1Speed) + " steps/sec (" + String(stepper1Speed / 10) + "mm/s)");
+            Serial.println("Moving: " + String(stepper1Moving ? "Yes" : "No"));
+            if (stepper1Moving) {
+                long stepsRemaining = abs(targetStepper1Position - currentStepper1Position);
                 Serial.println("Steps Remaining: " + String(stepsRemaining));
             }
             Serial.println("--- Side Linear Stepper (Double) ---");
@@ -2523,14 +2544,14 @@ void loop() {
                 }
             }
         }
-        else if (cmd.startsWith("STEPPER_")) {
-            // Stepper motor commands
-            String subCmd = cmd.substring(8);  // Remove "STEPPER_"
+        else if (cmd.startsWith("STEPPER1_")) {
+            // Stepper motor 1 commands
+            String subCmd = cmd.substring(9);  // Remove "STEPPER1_"
 
             if (subCmd == "ENABLE" || subCmd == "DISABLE") {
                 Serial.println("[Top Linear] Motor is ALWAYS ENABLED (ENA+ hardwired to GND)");
                 Serial.println("[Top Linear] No enable/disable control available - motor always has holding torque");
-                Serial.println("[Top Linear] Ready to move! Use STEPPER_MOVE_XXX or STEPPER_MM_XXX commands");
+                Serial.println("[Top Linear] Ready to move! Use STEPPER1_MOVE_XXX or STEPPER1_MM_XXX commands");
             }
             else if (subCmd == "TEST_MANUAL") {
                 // Manual test: step motor 10 times slowly
@@ -2538,13 +2559,13 @@ void loop() {
                 Serial.println("[Top Linear] Watch for motor movement or listen for clicking sound from driver");
                 for (int i = 0; i < 10; i++) {
                     // Set direction
-                    digitalWrite(STEPPER_DIR_PIN, HIGH);
+                    digitalWrite(STEPPER1_DIR_PIN, HIGH);
                     delayMicroseconds(5);
 
                     // Generate step pulse
-                    digitalWrite(STEPPER_STEP_PIN, HIGH);
+                    digitalWrite(STEPPER1_STEP_PIN, HIGH);
                     delayMicroseconds(20);
-                    digitalWrite(STEPPER_STEP_PIN, LOW);
+                    digitalWrite(STEPPER1_STEP_PIN, LOW);
                     delayMicroseconds(20);
 
                     Serial.println("[Top Linear] Step " + String(i + 1) + "/10");
@@ -2556,14 +2577,14 @@ void loop() {
             else if (subCmd == "TEST_PINS") {
                 // Test if pins are actually outputting
                 Serial.println("[Top Linear] Pin Output Test (rapid pulses - non-blocking)");
-                Serial.println("[Top Linear] Blinking STEP pin (GPIO " + String(STEPPER_STEP_PIN) + ") 10 times");
+                Serial.println("[Top Linear] Blinking STEP pin (GPIO " + String(STEPPER1_STEP_PIN) + ") 10 times");
                 Serial.println("[Top Linear] Measure with oscilloscope or logic analyzer");
 
                 for (int i = 0; i < 10; i++) {
-                    digitalWrite(STEPPER_STEP_PIN, HIGH);
+                    digitalWrite(STEPPER1_STEP_PIN, HIGH);
                     Serial.println("[Top Linear] STEP pin HIGH (3.3V)");
                     delayMicroseconds(100);  // 100us pulse - visible on scope
-                    digitalWrite(STEPPER_STEP_PIN, LOW);
+                    digitalWrite(STEPPER1_STEP_PIN, LOW);
                     Serial.println("[Top Linear] STEP pin LOW (0V)");
                     delayMicroseconds(100);  // 100us gap
                 }
@@ -2580,9 +2601,9 @@ void loop() {
                 // Send 100 pulses rapidly (~100ms total - non-blocking)
                 int pulseCount = 100;
                 for (int i = 0; i < pulseCount; i++) {
-                    digitalWrite(STEPPER_STEP_PIN, HIGH);
+                    digitalWrite(STEPPER1_STEP_PIN, HIGH);
                     delayMicroseconds(20);
-                    digitalWrite(STEPPER_STEP_PIN, LOW);
+                    digitalWrite(STEPPER1_STEP_PIN, LOW);
                     delayMicroseconds(980);  // ~1000 pulses/sec
                 }
 
@@ -2590,26 +2611,26 @@ void loop() {
                 Serial.println("[Top Linear] Did TB6600 make buzzing noise? Did motor vibrate?");
             }
             else if (subCmd == "STOP") {
-                stepperStop();
+                stepper1Stop();
             }
             else if (subCmd == "HOME") {
-                stepperHome();
+                stepper1Home();
             }
             else if (subCmd == "INFO") {
                 Serial.println("\n=== STEPPER WIRING INFO ===");
                 Serial.println("Current Pin Configuration:");
-                Serial.println("  STEP Pin:   GPIO " + String(STEPPER_STEP_PIN) + " → TB6600 PUL+");
-                Serial.println("  DIR Pin:    GPIO " + String(STEPPER_DIR_PIN) + " → TB6600 DIR+");
+                Serial.println("  STEP Pin:   GPIO " + String(STEPPER1_STEP_PIN) + " → TB6600 PUL+");
+                Serial.println("  DIR Pin:    GPIO " + String(STEPPER1_DIR_PIN) + " → TB6600 DIR+");
                 Serial.println("  ENABLE:     ENA+ → GND (HARDWIRED - motor ALWAYS enabled)");
                 Serial.println("  GND:        ESP32 GND → TB6600 PUL-, DIR-, ENA-");
                 Serial.println("\nCurrent Pin States:");
-                Serial.println("  STEP (GPIO " + String(STEPPER_STEP_PIN) + "): " + String(digitalRead(STEPPER_STEP_PIN) ? "HIGH (3.3V)" : "LOW (0V)"));
-                Serial.println("  DIR (GPIO " + String(STEPPER_DIR_PIN) + "):  " + String(digitalRead(STEPPER_DIR_PIN) ? "HIGH (3.3V)" : "LOW (0V)"));
+                Serial.println("  STEP (GPIO " + String(STEPPER1_STEP_PIN) + "): " + String(digitalRead(STEPPER1_STEP_PIN) ? "HIGH (3.3V)" : "LOW (0V)"));
+                Serial.println("  DIR (GPIO " + String(STEPPER1_DIR_PIN) + "):  " + String(digitalRead(STEPPER1_DIR_PIN) ? "HIGH (3.3V)" : "LOW (0V)"));
                 Serial.println("\nMotor Status:");
                 Serial.println("  Enabled: ALWAYS (ENA+ hardwired to GND)");
-                Serial.println("  Position: " + String(currentStepperPosition) + " steps (" + String(currentStepperPosition / 10.0) + "mm)");
-                Serial.println("  Speed: " + String(stepperSpeed) + " steps/sec (" + String(stepperSpeed / 10) + "mm/s)");
-                Serial.println("  Moving: " + String(stepperMoving ? "YES" : "NO"));
+                Serial.println("  Position: " + String(currentStepper1Position) + " steps (" + String(currentStepper1Position / 10.0) + "mm)");
+                Serial.println("  Speed: " + String(stepper1Speed) + " steps/sec (" + String(stepper1Speed / 10) + "mm/s)");
+                Serial.println("  Moving: " + String(stepper1Moving ? "YES" : "NO"));
                 Serial.println("\nMotor Specifications:");
                 Serial.println("  Type: NEMA11 Linear Actuator");
                 Serial.println("  Step Angle: 1.8° (200 steps/rev)");
@@ -2626,57 +2647,57 @@ void loop() {
                 Serial.println("===========================\n");
             }
             else if (subCmd.startsWith("SPEED_")) {
-                // STEPPER_SPEED_XXX - set speed in steps per second
+                // STEPPER1_SPEED_XXX - set speed in steps per second
                 String speedStr = subCmd.substring(6);
                 int speed = speedStr.toInt();
                 if (speed > 0 && speed <= 800) {
-                    setStepperSpeed(speed);
+                    setStepper1Speed(speed);
                 } else {
                     Serial.println("[ERROR] Invalid stepper speed: " + speedStr);
                     Serial.println("Valid range: 1-800 steps/second (motor max: 80mm/s)");
                 }
             }
             else if (subCmd.startsWith("MOVE_")) {
-                // STEPPER_MOVE_XXX - move relative steps
+                // STEPPER1_MOVE_XXX - move relative steps
                 String stepsStr = subCmd.substring(5);
                 long steps = stepsStr.toInt();
-                stepperMoveRelative(steps);
+                stepper1MoveRelative(steps);
             }
             else if (subCmd.startsWith("GOTO_")) {
-                // STEPPER_GOTO_XXX - move to absolute position
+                // STEPPER1_GOTO_XXX - move to absolute position
                 String posStr = subCmd.substring(5);
                 long position = posStr.toInt();
-                stepperMoveTo(position);
+                stepper1MoveTo(position);
             }
             else if (subCmd.startsWith("MM_")) {
-                // STEPPER_MM_XXX - move by millimeters (can be negative)
+                // STEPPER1_MM_XXX - move by millimeters (can be negative)
                 String mmStr = subCmd.substring(3);
                 float mm = mmStr.toFloat();
-                stepperMoveByMM(mm);
+                stepper1MoveByMM(mm);
             }
             else {
                 Serial.println("[ERROR] Unknown stepper command: " + cmd);
-                Serial.println("\n=== STEPPER MOTOR COMMANDS ===");
+                Serial.println("\n=== STEPPER MOTOR 1 COMMANDS ===");
                 Serial.println("NOTE: Motor is ALWAYS ENABLED (ENA+ hardwired to GND)");
                 Serial.println("\nMovement Commands:");
-                Serial.println("  STEPPER_SPEED_XXX      - Set speed (steps/sec, 1-800 max)");
-                Serial.println("  STEPPER_MOVE_XXX       - Move relative steps (can be negative)");
-                Serial.println("  STEPPER_GOTO_XXX       - Move to absolute position");
-                Serial.println("  STEPPER_MM_XXX         - Move by millimeters (can be negative)");
-                Serial.println("  STEPPER_STOP           - Stop movement immediately");
-                Serial.println("  STEPPER_HOME           - Reset position to 0");
+                Serial.println("  STEPPER1_SPEED_XXX      - Set speed (steps/sec, 1-800 max)");
+                Serial.println("  STEPPER1_MOVE_XXX       - Move relative steps (can be negative)");
+                Serial.println("  STEPPER1_GOTO_XXX       - Move to absolute position");
+                Serial.println("  STEPPER1_MM_XXX         - Move by millimeters (can be negative)");
+                Serial.println("  STEPPER1_STOP           - Stop movement immediately");
+                Serial.println("  STEPPER1_HOME           - Reset position to 0");
                 Serial.println("\nDiagnostic Commands:");
-                Serial.println("  STEPPER_TEST_MANUAL    - Manual test: step 10 times rapidly");
-                Serial.println("  STEPPER_TEST_PINS      - Test pin output (oscilloscope)");
-                Serial.println("  STEPPER_TEST_PULSE     - Send rapid pulses to verify driver");
-                Serial.println("  STEPPER_INFO           - Show wiring and status info");
+                Serial.println("  STEPPER1_TEST_MANUAL    - Manual test: step 10 times rapidly");
+                Serial.println("  STEPPER1_TEST_PINS      - Test pin output (oscilloscope)");
+                Serial.println("  STEPPER1_TEST_PULSE     - Send rapid pulses to verify driver");
+                Serial.println("  STEPPER1_INFO           - Show wiring and status info");
                 Serial.println("\nExamples:");
-                Serial.println("  STEPPER_SPEED_800      - Set to maximum speed (80mm/s)");
-                Serial.println("  STEPPER_MM_480         - Move forward 480mm (full stroke)");
-                Serial.println("  STEPPER_MM_-150        - Move backward 150mm");
-                Serial.println("  STEPPER_MOVE_2000      - Move forward 2000 steps");
-                Serial.println("  STEPPER_GOTO_0         - Return to home position");
-                Serial.println("  STEPPER_STOP           - Emergency stop");
+                Serial.println("  STEPPER1_SPEED_800      - Set to maximum speed (80mm/s)");
+                Serial.println("  STEPPER1_MM_480         - Move forward 480mm (full stroke)");
+                Serial.println("  STEPPER1_MM_-150        - Move backward 150mm");
+                Serial.println("  STEPPER1_MOVE_2000      - Move forward 2000 steps");
+                Serial.println("  STEPPER1_GOTO_0         - Return to home position");
+                Serial.println("  STEPPER1_STOP           - Emergency stop");
             }
         }
         else if (cmd.startsWith("STEPPER2_")) {
@@ -2698,11 +2719,11 @@ void loop() {
                 // STEPPER2_SPEED_XXX - set speed in steps per second
                 String speedStr = subCmd.substring(6);
                 int speed = speedStr.toInt();
-                if (speed > 0 && speed <= 800) {
+                if (speed > 0 && speed <= STEPPER2_MAX_SPEED) {
                     setStepper2Speed(speed);
                 } else {
                     Serial.println("[ERROR] Invalid stepper2 speed: " + speedStr);
-                    Serial.println("Valid range: 1-800 steps/second (motor max: 80mm/s)");
+                    Serial.println("Valid range: 1-" + String(STEPPER2_MAX_SPEED) + " steps/second (motor max: 120mm/s)");
                 }
             }
             else if (subCmd.startsWith("MOVE_")) {
@@ -2728,17 +2749,18 @@ void loop() {
                 Serial.println("\n=== STEPPER MOTOR 2 COMMANDS ===");
                 Serial.println("NOTE: Motor is ALWAYS ENABLED (ENA+ hardwired to GND)");
                 Serial.println("\nMovement Commands:");
-                Serial.println("  STEPPER2_SPEED_XXX     - Set speed (steps/sec, 1-800 max)");
+                Serial.println("  STEPPER2_SPEED_XXX     - Set speed (steps/sec, 1-24000 max)");
                 Serial.println("  STEPPER2_MOVE_XXX      - Move relative steps (can be negative)");
                 Serial.println("  STEPPER2_GOTO_XXX      - Move to absolute position");
                 Serial.println("  STEPPER2_MM_XXX        - Move by millimeters (can be negative)");
                 Serial.println("  STEPPER2_STOP          - Stop movement immediately");
                 Serial.println("  STEPPER2_HOME          - Reset position to 0");
                 Serial.println("\nExamples:");
-                Serial.println("  STEPPER2_SPEED_800     - Set to maximum speed (80mm/s)");
-                Serial.println("  STEPPER2_MM_480        - Move forward 480mm (full stroke)");
-                Serial.println("  STEPPER2_MM_-150       - Move backward 150mm");
-                Serial.println("  STEPPER2_MOVE_2000     - Move forward 2000 steps");
+                Serial.println("  STEPPER2_SPEED_1500    - Set to default speed (7.5mm/s)");
+                Serial.println("  STEPPER2_SPEED_24000   - Set to maximum speed (120mm/s)");
+                Serial.println("  STEPPER2_MM_100        - Move forward 100mm (full stroke)");
+                Serial.println("  STEPPER2_MM_-50        - Move backward 50mm");
+                Serial.println("  STEPPER2_MOVE_2000     - Move forward 2000 steps (10mm)");
                 Serial.println("  STEPPER2_GOTO_0        - Return to home position");
                 Serial.println("  STEPPER2_STOP          - Emergency stop");
             }
