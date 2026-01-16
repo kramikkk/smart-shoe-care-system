@@ -1203,10 +1203,10 @@ void startService(String shoeType, String serviceType, String careType) {
     lastServiceStatusUpdate = millis();
 
     Serial.println("\n=== SERVICE STARTED ===");
-    Serial.println("Shoe Type: " + shoeType);
-    Serial.println("Service Type: " + serviceType);
-    Serial.println("Care Type: " + careType);
-    Serial.println("Duration: " + String(serviceDuration / 1000) + " seconds");
+    Serial.print("Shoe Type: "); Serial.println(shoeType);
+    Serial.print("Service Type: "); Serial.println(serviceType);
+    Serial.print("Care Type: "); Serial.println(careType);
+    Serial.print("Duration: "); Serial.print(serviceDuration / 1000); Serial.println(" seconds");
 
     // Set RGB light color based on service type
     if (serviceType == "cleaning") {
@@ -1229,7 +1229,27 @@ void startService(String shoeType, String serviceType, String careType) {
         // Start stepper moving to max position
         cleaningPhase = 1;  // Phase 1: moving to max
         stepper1MoveTo(CLEANING_MAX_POSITION);
-        Serial.println("[Cleaning] Stepper moving to " + String(CLEANING_MAX_POSITION / 10) + "mm");
+        Serial.print("[Cleaning] Stepper moving to "); 
+        Serial.print(CLEANING_MAX_POSITION / 10); 
+        Serial.println("mm");
+
+        // Move stepper2 (side linear) based on care type (absolute position)
+        long stepper2TargetSteps = 0;
+        if (careType == "strong") {
+            stepper2TargetSteps = 20600;  // 103mm = 103 * 200 steps/mm
+        } else if (careType == "normal") {
+            stepper2TargetSteps = 19600;  // 98mm = 98 * 200 steps/mm
+        } else if (careType == "gentle") {
+            stepper2TargetSteps = 18600;  // 93mm = 93 * 200 steps/mm
+        } else {
+            stepper2TargetSteps = 19600;  // Default to normal (98mm)
+        }
+        stepper2MoveTo(stepper2TargetSteps);
+        Serial.print("[Cleaning] Side stepper moving to "); 
+        Serial.print(stepper2TargetSteps / 200); 
+        Serial.print("mm ("); 
+        Serial.print(careType); 
+        Serial.println(" care)");
     } else if (serviceType == "drying") {
         setRelay(3, true);  // Centrifugal Blower Fan
         setRelay(4, true);  // PTC Ceramic Heater
@@ -1264,6 +1284,9 @@ void stopService() {
         cleaningPhase = 0;
         stepper1MoveTo(0);  // Return to home
         Serial.println("[Cleaning] Returning stepper to home position");
+        // Return stepper2 to home position
+        stepper2MoveTo(0);
+        Serial.println("[Cleaning] Returning side stepper to home position");
     } else if (currentServiceType == "drying") {
         setRelay(3, false);  // Centrifugal Blower Fan
         setRelay(4, false);  // PTC Ceramic Heater
@@ -2196,8 +2219,6 @@ void setup() {
 
 /* ===================== LOOP ===================== */
 void loop() {
-    // NO DELAY - stepper needs maximum speed!
-
     // Handle WebSocket - MUST call loop() even when not connected for handshake
     webSocket.loop();
 
@@ -2982,4 +3003,7 @@ void loop() {
     /* ================= SERVICE HANDLING ================= */
     // Handle service timer, relay control, and RGB lights
     handleService();
+
+    // Small yield to prevent watchdog timeout (allows ESP32 to handle WiFi/system tasks)
+    yield();
 }

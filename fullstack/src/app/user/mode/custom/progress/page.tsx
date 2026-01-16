@@ -16,9 +16,9 @@ const CustomProgress = () => {
   const getServiceDuration = (serviceType: string, careType: string) => {
     const durations: Record<string, Record<string, number>> = {
       cleaning: {
-        gentle: 180,
-        normal: 180,
-        strong: 180 
+        gentle: 300,
+        normal: 300,
+        strong: 300 
       },
       drying: {
         gentle: 60, 
