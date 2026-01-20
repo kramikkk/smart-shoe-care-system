@@ -63,13 +63,16 @@ export default function ClassifyPage() {
         })
         console.log('[Classify] Classification request sent')
 
-        // Set timeout for classification (18 seconds - slightly longer than hardware timeout)
+        // Set timeout for classification (15 seconds - same as hardware timeout)
         timeoutRef.current = setTimeout(() => {
-          if (state === 'classifying') {
-            setError('Classification timed out. Please try again.')
-            setState('error')
-          }
-        }, 18000)
+          setState((currentState) => {
+            if (currentState === 'classifying') {
+              setError('Classification timed out. Please try again.')
+              return 'error'
+            }
+            return currentState
+          })
+        }, 15000)
       }
     }, 500)
 
@@ -145,11 +148,14 @@ export default function ClassifyPage() {
         console.log('[Classify] Classification request sent (retry)')
 
         timeoutRef.current = setTimeout(() => {
-          if (state === 'classifying') {
-            setError('Classification timed out. Please try again.')
-            setState('error')
-          }
-        }, 30000)
+          setState((currentState) => {
+            if (currentState === 'classifying') {
+              setError('Classification timed out. Please try again.')
+              return 'error'
+            }
+            return currentState
+          })
+        }, 15000)
       }
     }, 500)
   }
