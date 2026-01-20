@@ -221,7 +221,7 @@ export function createWebSocketServer(server: Server) {
           }
 
           console.log(`[WebSocket] Forwarding classification request to CAM: ${camDeviceId}`)
-          // Forward to CAM
+          // Forward to CAM only - LED is controlled by enable/disable-classification
           broadcastToDevice(camDeviceId, {
             type: 'start-classification',
             deviceId: camDeviceId
@@ -269,6 +269,26 @@ export function createWebSocketServer(server: Server) {
           const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
           broadcastToDevice(mainDeviceId, message)
           broadcastToDevice(camDeviceId, message)
+        }
+
+        // Handle enable-classification (page enter) from frontend
+        else if (message.type === 'enable-classification' && message.deviceId) {
+          const mainDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Classification page entered, enabling LED for ${mainDeviceId}`)
+          broadcastToDevice(mainDeviceId, {
+            type: 'enable-classification',
+            deviceId: mainDeviceId
+          })
+        }
+
+        // Handle disable-classification (page leave) from frontend
+        else if (message.type === 'disable-classification' && message.deviceId) {
+          const mainDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Classification page exited, disabling LED for ${mainDeviceId}`)
+          broadcastToDevice(mainDeviceId, {
+            type: 'disable-classification',
+            deviceId: mainDeviceId
+          })
         }
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)

@@ -45,6 +45,13 @@ export default function ClassifyPage() {
     subscribe(deviceId)
     subscribe(camDeviceId)
 
+    // Enable classification LED when entering page
+    sendMessage({
+      type: 'enable-classification',
+      deviceId: deviceId
+    })
+    console.log('[Classify] Classification page entered, LED enabled')
+
     // Small delay then send classification request
     setTimeout(() => {
       if (isConnected && !classificationSentRef.current) {
@@ -56,13 +63,13 @@ export default function ClassifyPage() {
         })
         console.log('[Classify] Classification request sent')
 
-        // Set timeout for classification (30 seconds)
+        // Set timeout for classification (18 seconds - slightly longer than hardware timeout)
         timeoutRef.current = setTimeout(() => {
           if (state === 'classifying') {
             setError('Classification timed out. Please try again.')
             setState('error')
           }
-        }, 30000)
+        }, 18000)
       }
     }, 500)
 
@@ -101,6 +108,14 @@ export default function ClassifyPage() {
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
+      }
+      // Disable classification LED when leaving page
+      if (isConnected && deviceId) {
+        sendMessage({
+          type: 'disable-classification',
+          deviceId: deviceId
+        })
+        console.log('[Classify] Classification page exited, LED disabled')
       }
       unsubscribe()
     }
