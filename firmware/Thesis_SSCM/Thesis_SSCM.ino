@@ -73,6 +73,7 @@ uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 // Classification is now handled via WebSocket, not serial
 String lastClassificationResult = "";
 float lastClassificationConfidence = 0.0;
+bool classificationLedOn = false;
 
 /* ===================== COIN SLOT ===================== */
 #define COIN_SLOT_PIN 5
@@ -1027,12 +1028,25 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 }
             }
             else if (message.indexOf("\"type\":\"start-classification\"") != -1) {
-                // Frontend requested classification - forward to CAM via backend
-                // Format: {"type":"start-classification","deviceId":"xxx","careType":"normal"}
-
-                Serial.println("\n=== CLASSIFICATION REQUESTED ===");
-                requestClassificationFromCAM();
-                Serial.println("================================\n");
+                // Classification request received - LED is controlled by page enter/leave
+                Serial.println("\n=== CLASSIFICATION STARTED ===");
+                Serial.println("===============================\n");
+            }
+            else if (message.indexOf("\"type\":\"enable-classification\"") != -1) {
+                // User entered classification page - turn on WHITE LED
+                Serial.println("\n=== CLASSIFICATION PAGE ENTERED ===");
+                rgbWhite();
+                classificationLedOn = true;
+                Serial.println("RGB Light: WHITE (camera lighting)");
+                Serial.println("===================================\n");
+            }
+            else if (message.indexOf("\"type\":\"disable-classification\"") != -1) {
+                // User left classification page - turn off LED
+                Serial.println("\n=== CLASSIFICATION PAGE EXITED ===");
+                rgbOff();
+                classificationLedOn = false;
+                Serial.println("RGB Light: OFF");
+                Serial.println("==================================\n");
             }
             else if (message.indexOf("\"type\":\"classification-result\"") != -1) {
                 // Classification result from ESP32-CAM (via backend)
@@ -1058,6 +1072,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 }
 
                 handleClassificationResultFromWebSocket(shoeType, confidence);
+                // LED stays on - controlled by page leave (disable-classification)
             }
             else if (message.indexOf("\"type\":\"classification-error\"") != -1) {
                 // Classification error from CAM
@@ -1070,6 +1085,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     String error = message.substring(start, end);
                     Serial.println("[Classification] Error: " + error);
                 }
+                // LED stays on - controlled by page leave (disable-classification)
             }
             else if (message.indexOf("\"type\":\"cam-status\"") != -1) {
                 // CAM status update

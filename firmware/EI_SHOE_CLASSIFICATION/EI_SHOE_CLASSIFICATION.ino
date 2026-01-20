@@ -99,6 +99,7 @@ bool classificationInProgress = false;
 /* ===================== CLASSIFICATION SETTINGS ===================== */
 #define NUM_SCANS 5          // Number of scans to perform
 #define SCAN_DELAY_MS 300    // Delay between scans in ms
+#define CLASSIFICATION_TIMEOUT_MS 15000  // 15 second timeout for entire classification
 
 /* Constant defines -------------------------------------------------------- */
 #define EI_CAMERA_RAW_FRAME_BUFFER_COLS           320
@@ -461,8 +462,17 @@ String runClassification() {
     // Track confidence for each class across all scans
     float classConfidences[EI_CLASSIFIER_LABEL_COUNT] = {0};
     int successfulScans = 0;
+    unsigned long startTime = millis();
+    bool timedOut = false;
 
     for (int scan = 0; scan < NUM_SCANS; scan++) {
+        // Check timeout
+        if (millis() - startTime >= CLASSIFICATION_TIMEOUT_MS) {
+            Serial.println("[Classification] Timeout - stopping early");
+            timedOut = true;
+            break;
+        }
+
         Serial.println("Scan " + String(scan + 1) + "/" + String(NUM_SCANS) + "...");
 
         snapshot_buf = (uint8_t*)malloc(EI_CAMERA_RAW_FRAME_BUFFER_COLS * EI_CAMERA_RAW_FRAME_BUFFER_ROWS * EI_CAMERA_FRAME_BYTE_SIZE);
@@ -510,6 +520,9 @@ String runClassification() {
     Serial.println("Successful scans: " + String(successfulScans) + "/" + String(NUM_SCANS));
 
     if (successfulScans == 0) {
+        if (timedOut) {
+            return "ERROR:CLASSIFICATION_TIMEOUT";
+        }
         return "ERROR:NO_SUCCESSFUL_SCANS";
     }
 
