@@ -1,133 +1,147 @@
 'use client'
 
 import { Droplets, ShieldCheck, Wind } from 'lucide-react'
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Progress } from "@/components/ui/progress"
-import { Item } from '@/components/ui/item'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useWebSocket } from '@/contexts/WebSocketContext'
+
+// Recommended care types for each shoe type and service
+// Optimized settings for the best care based on material properties
+type CareType = 'gentle' | 'normal' | 'strong'
+type ServiceType = 'cleaning' | 'drying' | 'sterilizing'
+
+interface ShoeRecommendations {
+  cleaning: CareType
+  drying: CareType
+  sterilizing: CareType
+}
+
+const SHOE_CARE_RECOMMENDATIONS: Record<string, ShoeRecommendations> = {
+  // Mesh: Delicate, breathable - gentle cleaning, normal drying, gentle sterilizing
+  mesh: { cleaning: 'gentle', drying: 'normal', sterilizing: 'gentle' },
+  // Canvas: Durable fabric - strong cleaning, normal drying, normal sterilizing
+  canvas: { cleaning: 'strong', drying: 'normal', sterilizing: 'normal' },
+  // Rubber: Very durable, waterproof - strong cleaning, normal drying, strong sterilizing
+  rubber: { cleaning: 'strong', drying: 'normal', sterilizing: 'strong' },
+}
+
+// Default recommendations for unknown shoe types
+const DEFAULT_RECOMMENDATIONS: ShoeRecommendations = {
+  cleaning: 'normal',
+  drying: 'normal',
+  sterilizing: 'normal'
+}
+
+// Duration in seconds for each care type
+const CARE_DURATIONS: Record<CareType, number> = {
+  gentle: 60,
+  normal: 120,
+  strong: 180
+}
 
 const Auto = () => {
   const searchParams = useSearchParams()
   const shoe = searchParams.get('shoe') || 'mesh'
-  const care = searchParams.get('care') || 'normal'
   const router = useRouter()
 
-  // Different durations for package based on care type
-  const getPackageDuration = (careType: string) => {
-    const durations: Record<string, number> = {
-      gentle: 360, // 6 minutes (~90 min in production)
-      normal: 240, // 4 minutes (~60 min in production)
-      strong: 180  // 3 minutes (~45 min in production)
-    }
-    return durations[careType.toLowerCase()] || 240
-  }
+  // Get recommended care types for this shoe type
+  const recommendations = useMemo(() => {
+    const shoeKey = shoe.toLowerCase()
+    return SHOE_CARE_RECOMMENDATIONS[shoeKey] || DEFAULT_RECOMMENDATIONS
+  }, [shoe])
 
-  const totalTime = getPackageDuration(care)
+  // Calculate stage durations based on shoe type recommendations
+  const stageDurations = useMemo(() => ({
+    cleaning: 300, // Cleaning is always 5 minutes
+    drying: CARE_DURATIONS[recommendations.drying],
+    sterilizing: CARE_DURATIONS[recommendations.sterilizing]
+  }), [recommendations])
+
+  // Calculate total time based on recommended care types for each service
+  const totalTime = useMemo(() => {
+    return stageDurations.cleaning + stageDurations.drying + stageDurations.sterilizing
+  }, [stageDurations])
+
   const [timeRemaining, setTimeRemaining] = useState(totalTime)
-  const [currentStage, setCurrentStage] = useState<'cleaning' | 'drying' | 'sterilizing'>('cleaning')
-  const [wsConnected, setWsConnected] = useState(false)
-  const [lastSentStage, setLastSentStage] = useState<string>('')
+  const [currentStage, setCurrentStage] = useState<ServiceType>('cleaning')
+  const [serviceStarted, setServiceStarted] = useState(false)
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
 
-  // Calculate stage durations based on care type
-  const getStageDurations = () => {
-    switch (care.toLowerCase()) {
-      case 'gentle':
-        return {
-          cleaning: 180, // 3 minutes (first half)
-          drying: 90,    // 1.5 minutes (middle)
-          sterilizing: 90 // 1.5 minutes (last)
-        }
-      case 'strong':
-        return {
-          cleaning: 90,  // 1.5 minutes
-          drying: 45,    // 45 seconds
-          sterilizing: 45 // 45 seconds
-        }
-      default: // normal
-        return {
-          cleaning: 120, // 2 minutes
-          drying: 60,    // 1 minute
-          sterilizing: 60 // 1 minute
-        }
-    }
+  // Get the care type for the current stage
+  const getCurrentCareType = (): CareType => {
+    return recommendations[currentStage]
   }
 
-  const stageDurations = getStageDurations()
+  // Use centralized WebSocket context
+  const { isConnected, deviceId, sendMessage, onMessage } = useWebSocket()
+  const lastSentStageRef = useRef<string>('')
 
-  // WebSocket connection to send stage changes to ESP32
-  // Use a ref to store the WebSocket so we can send commands through it
-  const wsRef = React.useRef<WebSocket | null>(null)
-  const lastSentStageRef = React.useRef<string>('')
-
+  // Listen for ESP32 messages
   useEffect(() => {
-    const deviceId = localStorage.getItem('kiosk_device_id')
-    if (!deviceId) return
-
-    let intentionalClose = false
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      setWsConnected(true)
-      ws.send(JSON.stringify({ type: 'subscribe', deviceId }))
-      console.log('[Auto Mode] WebSocket connected')
-
-      // Send initial start-service command for cleaning stage
-      setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'start-service',
-            deviceId,
-            shoeType: shoe,
-            serviceType: 'cleaning',
-            careType: care
-          }))
-          lastSentStageRef.current = 'cleaning'
-          setLastSentStage('cleaning')
-          console.log('[Auto Mode] Started cleaning stage')
-        }
-      }, 100) // Small delay to ensure subscription is processed first
-    }
-
-    ws.onerror = () => setWsConnected(false)
-    ws.onclose = () => {
-      wsRef.current = null
-      if (!intentionalClose) setWsConnected(false)
-    }
-
-    return () => {
-      intentionalClose = true
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close()
+    const unsubscribe = onMessage((message) => {
+      if (message.type === 'service-status') {
+        console.log(`[Auto Mode] ESP32 status: ${message.serviceType} - ${message.progress}% (${message.timeRemaining}s remaining)`)
+      } else if (message.type === 'service-complete') {
+        console.log(`[Auto Mode] ESP32 completed: ${message.serviceType}`)
       }
-      wsRef.current = null
-    }
-  }, [shoe, care])
+    })
+    return unsubscribe
+  }, [onMessage])
 
-  // Send stage change command when stage updates (using existing connection)
+  // Send initial cleaning command when connected
   useEffect(() => {
-    if (!wsConnected || currentStage === lastSentStageRef.current) return
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    if (!isConnected || !deviceId || serviceStarted) return
 
-    const deviceId = localStorage.getItem('kiosk_device_id')
-    if (!deviceId) return
+    const cleaningCareType = recommendations.cleaning
+    const message = {
+      type: 'start-service',
+      deviceId,
+      shoeType: shoe,
+      serviceType: 'cleaning',
+      careType: cleaningCareType
+    }
+    console.log('[Auto Mode] Sending initial cleaning command:', message)
+    sendMessage(message)
+    lastSentStageRef.current = 'cleaning'
+    setServiceStarted(true)
+    console.log(`[Auto Mode] Started cleaning stage with ${cleaningCareType} care`)
+  }, [isConnected, deviceId, serviceStarted, recommendations, shoe, sendMessage])
 
-    wsRef.current.send(JSON.stringify({
+  // Send stage change command when stage updates
+  useEffect(() => {
+    // Skip if service not started yet
+    if (!serviceStarted) return
+
+    // Skip if not connected
+    if (!isConnected) {
+      console.log(`[Auto Mode] Skipping stage send - not connected`)
+      return
+    }
+
+    // Skip if this stage was already sent
+    if (currentStage === lastSentStageRef.current) {
+      return
+    }
+
+    // Use the recommended care type for the current stage
+    const stageCareType = recommendations[currentStage]
+    const message = {
       type: 'start-service',
       deviceId,
       shoeType: shoe,
       serviceType: currentStage,
-      careType: care
-    }))
-    lastSentStageRef.current = currentStage
-    setLastSentStage(currentStage)
-    console.log(`[Auto Mode] Stage changed to: ${currentStage}`)
-  }, [currentStage, wsConnected, shoe, care])
+      careType: stageCareType
+    }
 
+    console.log(`[Auto Mode] Sending stage change command:`, message)
+    sendMessage(message)
+    lastSentStageRef.current = currentStage
+    console.log(`[Auto Mode] Stage command sent: ${currentStage} with ${stageCareType} care`)
+  }, [currentStage, isConnected, serviceStarted, deviceId, shoe, recommendations, sendMessage])
+
+  // Timer only updates timeRemaining
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeRemaining((prev) => {
@@ -135,49 +149,45 @@ const Auto = () => {
           clearInterval(timer)
           return 0
         }
-        
-        const newTime = prev - 1
-        
-        // Update stage based on time remaining and care type
-        const cleaningEnd = totalTime - stageDurations.cleaning
-        const dryingEnd = cleaningEnd - stageDurations.drying
-        
-        if (newTime > cleaningEnd) {
-          setCurrentStage('cleaning')
-        } else if (newTime > dryingEnd) {
-          setCurrentStage('drying')
-        } else {
-          setCurrentStage('sterilizing')
-        }
-        
-        return newTime
+        return prev - 1
       })
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [totalTime, stageDurations])
+  }, [])
+
+  // Separate effect to update stage based on timeRemaining
+  // This ensures stage changes trigger properly and WebSocket commands are sent
+  useEffect(() => {
+    const cleaningEnd = totalTime - stageDurations.cleaning
+    const dryingEnd = cleaningEnd - stageDurations.drying
+
+    let newStage: ServiceType
+    if (timeRemaining > cleaningEnd) {
+      newStage = 'cleaning'
+    } else if (timeRemaining > dryingEnd) {
+      newStage = 'drying'
+    } else {
+      newStage = 'sterilizing'
+    }
+
+    // Only update if stage actually changed
+    if (newStage !== currentStage) {
+      console.log(`[Auto Mode] Stage transition: ${currentStage} -> ${newStage} (time: ${timeRemaining}s)`)
+      setCurrentStage(newStage)
+    }
+  }, [timeRemaining, totalTime, stageDurations, currentStage])
 
   useEffect(() => {
     if (timeRemaining === 0) {
-      router.push(`/user/success/service?shoe=${shoe}&service=package&care=${care}`)
+      router.push(`/user/success/service?shoe=${shoe}&service=package`)
     }
-  }, [timeRemaining, router, shoe, care])
+  }, [timeRemaining, router, shoe])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
-
-  const getStageIcon = () => {
-    switch (currentStage) {
-      case 'cleaning':
-        return <Droplets className="w-32 h-32 text-cyan-600" />
-      case 'drying':
-        return <Wind className="w-32 h-32 text-blue-600" />
-      case 'sterilizing':
-        return <ShieldCheck className="w-32 h-32 text-green-600" />
-    }
   }
 
   const getStageName = () => {
@@ -192,7 +202,8 @@ const Auto = () => {
   }
 
   const getCareTypeName = () => {
-    return care.charAt(0).toUpperCase() + care.slice(1)
+    const careType = getCurrentCareType()
+    return careType.charAt(0).toUpperCase() + careType.slice(1)
   }
 
   const getShoeTypeName = () => {
@@ -265,9 +276,9 @@ const Auto = () => {
 
       {/* Connection Status */}
       <div className="flex items-center justify-center gap-2 mb-6">
-        <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
         <p className="text-xs text-gray-600">
-          {wsConnected ? 'Connected to device' : 'Connecting...'}
+          {isConnected ? 'Connected to device' : 'Connecting...'}
         </p>
       </div>
 

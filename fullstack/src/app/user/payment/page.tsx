@@ -80,11 +80,15 @@ const Payment = () => {
 
   // Determine care type display name
   const getCareName = () => {
-    if (!care) return 'N/A'
+    if (!care) {
+      // For package (auto mode), care type is automatically optimized per shoe type
+      if (service === 'package') return 'Auto'
+      return 'N/A'
+    }
     return care.charAt(0).toUpperCase() + care.slice(1)
   }
 
-  // Get total price
+  // Get total price  
   const getTotalPrice = () => {
     return `₱${serviceDetails.price}`
   }

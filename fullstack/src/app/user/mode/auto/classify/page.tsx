@@ -235,7 +235,8 @@ export default function ClassifyPage() {
 
   const handleProceedToPayment = () => {
     if (result) {
-      router.replace(`/user/payment?service=package&shoe=${encodeURIComponent(result.shoeType)}&care=normal`)
+      // Auto mode determines care type automatically based on shoe type
+      router.replace(`/user/payment?service=package&shoe=${encodeURIComponent(result.shoeType)}`)
     }
   }
 
