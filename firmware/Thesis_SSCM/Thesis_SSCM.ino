@@ -60,6 +60,14 @@ typedef struct {
 } WiFiCredentials;
 
 WiFiCredentials camCredentials;
+
+// Structure to receive pairing acknowledgment from CAM
+typedef struct {
+  char camDeviceId[24];    // CAM's own device ID (e.g., SSCM-CAM-XYZ789)
+  char mainDeviceId[24];   // Echoed main board device ID (for verification)
+  uint8_t ackType;         // 1 = accepted, 2 = rejected
+} PairingAck;
+
 bool espNowInitialized = false;
 bool credentialsSentToCAM = false;
 bool camIsReady = false;  // Track if CAM has confirmed it's ready
@@ -286,6 +294,74 @@ void onDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
     }
 }
 
+// Callback when ESP-NOW data is received (for CAM pairing acknowledgment)
+// Updated for ESP32 Arduino Core v3.x
+void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
+    Serial.println("\n[ESP-NOW] Data received from CAM!");
+
+    // Get sender MAC address
+    uint8_t* senderMac = recv_info->src_addr;
+    Serial.print("[ESP-NOW] From MAC: ");
+    for (int i = 0; i < 6; i++) {
+        Serial.printf("%02X", senderMac[i]);
+        if (i < 5) Serial.print(":");
+    }
+    Serial.println();
+
+    // Check if this is a PairingAck message
+    if (len == sizeof(PairingAck)) {
+        PairingAck ack;
+        memcpy(&ack, data, sizeof(PairingAck));
+
+        Serial.println("[ESP-NOW] Pairing acknowledgment received:");
+        Serial.println("  CAM Device ID: " + String(ack.camDeviceId));
+        Serial.println("  Main Device ID: " + String(ack.mainDeviceId));
+        Serial.println("  Ack Type: " + String(ack.ackType == 1 ? "ACCEPTED" : "REJECTED"));
+
+        // Verify this is for our device
+        if (strcmp(ack.mainDeviceId, deviceId.c_str()) == 0) {
+            if (ack.ackType == 1) {
+                // Credentials accepted - store CAM MAC for direct communication
+                if (!camMacPaired) {
+                    memcpy(camMacAddress, senderMac, 6);
+                    prefs.putBytes("camMac", camMacAddress, 6);
+                    camMacPaired = true;
+
+                    Serial.println("[ESP-NOW] Paired with CAM MAC:");
+                    Serial.print("  ");
+                    for (int i = 0; i < 6; i++) {
+                        Serial.printf("%02X", camMacAddress[i]);
+                        if (i < 5) Serial.print(":");
+                    }
+                    Serial.println();
+
+                    // Update ESP-NOW peer to use direct MAC instead of broadcast
+                    esp_now_del_peer(broadcastAddress);
+                    esp_now_peer_info_t peerInfo;
+                    memset(&peerInfo, 0, sizeof(peerInfo));
+                    memcpy(peerInfo.peer_addr, camMacAddress, 6);
+                    peerInfo.channel = 0;
+                    peerInfo.encrypt = false;
+                    esp_now_add_peer(&peerInfo);
+
+                    Serial.println("[ESP-NOW] Updated to direct CAM communication");
+                }
+
+                // CAM is confirmed ready
+                camIsReady = true;
+                credentialSendAttempts = MAX_CREDENTIAL_ATTEMPTS;  // Stop retrying
+                Serial.println("[ESP-NOW] CAM confirmed ready - pairing complete");
+            } else {
+                Serial.println("[ESP-NOW] CAM rejected credentials (device ID mismatch on CAM side)");
+            }
+        } else {
+            Serial.println("[ESP-NOW] Ack not for this device (expected: " + deviceId + ")");
+        }
+    } else {
+        Serial.println("[ESP-NOW] Unknown data size: " + String(len) + " (expected PairingAck: " + String(sizeof(PairingAck)) + ")");
+    }
+}
+
 // Initialize ESP-NOW (call after WiFi.mode is set)
 void initESPNow() {
     if (espNowInitialized) return;
@@ -298,6 +374,9 @@ void initESPNow() {
 
     // Register send callback
     esp_now_register_send_cb(onDataSent);
+
+    // Register receive callback (for pairing acknowledgment from CAM)
+    esp_now_register_recv_cb(onDataRecv);
 
     // Load paired CAM MAC from preferences
     size_t macLen = prefs.getBytes("camMac", camMacAddress, 6);
