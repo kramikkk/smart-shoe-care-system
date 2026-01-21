@@ -62,6 +62,13 @@ typedef struct {
 WiFiCredentials camCredentials;
 bool espNowInitialized = false;
 bool credentialsSentToCAM = false;
+bool camIsReady = false;  // Track if CAM has confirmed it's ready
+
+// Credential retry logic (for simultaneous boot timing)
+unsigned long lastCredentialSendTime = 0;
+const unsigned long CREDENTIAL_RETRY_INTERVAL = 5000;  // Retry every 5 seconds
+int credentialSendAttempts = 0;
+const int MAX_CREDENTIAL_ATTEMPTS = 6;  // Try for 30 seconds total
 
 // CAM MAC address for direct pairing (prevents cross-device interference)
 uint8_t camMacAddress[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -355,6 +362,11 @@ void sendCredentialsToCAM() {
     // Send to paired CAM MAC or broadcast if not paired
     uint8_t* targetMac = camMacPaired ? camMacAddress : broadcastAddress;
     esp_now_send(targetMac, (uint8_t *)&camCredentials, sizeof(camCredentials));
+    
+    // Track send attempts
+    credentialSendAttempts++;
+    lastCredentialSendTime = millis();
+    Serial.println("[ESP-NOW] Credentials sent to CAM (attempt " + String(credentialSendAttempts) + ")");
 }
 
 /* ===================== WIFI FUNCTIONS ===================== */
@@ -784,6 +796,13 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 // CAM status update
                 bool cameraReady = (message.indexOf("\"cameraReady\":true") != -1);
                 Serial.println("[CAM] Status - Camera Ready: " + String(cameraReady ? "Yes" : "No"));
+                
+                // Stop credential retry if CAM is ready
+                if (cameraReady && !camIsReady) {
+                    camIsReady = true;
+                    credentialSendAttempts = MAX_CREDENTIAL_ATTEMPTS;  // Stop retrying
+                    Serial.println("[ESP-NOW] CAM confirmed ready - stopping credential retry");
+                }
             }
             break;
         }
@@ -1818,8 +1837,8 @@ void setup() {
     initESPNow();
     delay(100);
 
+    // Send credentials immediately, retry logic will handle if CAM not ready
     sendCredentialsToCAM();
-    delay(500);
 
     connectWiFi();
 }
@@ -1887,6 +1906,14 @@ void loop() {
 
             // Reset pulse counter for next bill
             currentBillPulses = 0;
+        }
+    }
+
+    // Retry sending credentials to CAM if not successful yet (handles simultaneous boot)
+    if (!camIsReady && credentialSendAttempts > 0 && credentialSendAttempts < MAX_CREDENTIAL_ATTEMPTS) {
+        if (millis() - lastCredentialSendTime >= CREDENTIAL_RETRY_INTERVAL) {
+            Serial.println("[ESP-NOW] Retrying credential send (CAM may have booted late)...");
+            sendCredentialsToCAM();
         }
     }
 
