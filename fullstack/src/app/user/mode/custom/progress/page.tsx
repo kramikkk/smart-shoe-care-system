@@ -53,55 +53,82 @@ const CustomProgress = () => {
     const deviceId = localStorage.getItem('kiosk_device_id')
     if (!deviceId) return
 
-    let intentionalClose = false
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
-    const ws = new WebSocket(wsUrl)
+    let ws: WebSocket | null = null
+    let isCleanedUp = false
 
-    ws.onopen = () => {
-      setWsConnected(true)
-      ws.send(JSON.stringify({ type: 'subscribe', deviceId }))
+    const connect = () => {
+      if (isCleanedUp) return
 
-      // Send start-service command to ESP32
-      ws.send(JSON.stringify({
-        type: 'start-service',
-        deviceId,
-        shoeType: shoe,
-        serviceType: service,
-        careType: care
-      }))
-      setServiceStarted(true)
-      console.log(`[Progress] Service started: ${service} (${care})`)
-    }
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
+      
+      ws = new WebSocket(wsUrl)
 
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data)
-
-        // Handle service status updates from ESP32
-        if (message.type === 'service-status') {
-          console.log(`[Progress] Status update: ${message.progress}% complete, ${message.timeRemaining}s remaining`)
-          setTimeRemaining(message.timeRemaining)
+      ws.onopen = () => {
+        if (isCleanedUp) {
+          ws?.close()
+          return
         }
+        
+        setWsConnected(true)
+        ws!.send(JSON.stringify({ type: 'subscribe', deviceId }))
 
-        // Handle service complete notification
-        else if (message.type === 'service-complete') {
-          console.log(`[Progress] Service complete!`)
-          setTimeRemaining(0)
+        // Send start-service command to ESP32 (only if not already started)
+        if (!serviceStarted) {
+          ws!.send(JSON.stringify({
+            type: 'start-service',
+            deviceId,
+            shoeType: shoe,
+            serviceType: service,
+            careType: care
+          }))
+          setServiceStarted(true)
+          console.log(`[Progress] Service started: ${service} (${care})`)
         }
-      } catch (error) {
-        console.error('[Progress] Error parsing message:', error)
+      }
+
+      ws.onmessage = (event) => {
+        if (isCleanedUp) return
+        
+        try {
+          const message = JSON.parse(event.data)
+
+          // Handle service status updates from ESP32
+          if (message.type === 'service-status') {
+            console.log(`[Progress] Status update: ${message.progress}% complete, ${message.timeRemaining}s remaining`)
+            setTimeRemaining(message.timeRemaining)
+          }
+
+          // Handle service complete notification
+          else if (message.type === 'service-complete') {
+            console.log(`[Progress] Service complete!`)
+            setTimeRemaining(0)
+          }
+        } catch (error) {
+          console.error('[Progress] Error parsing message:', error)
+        }
+      }
+
+      ws.onerror = (error) => {
+        console.error('[Progress] WebSocket error:', error)
+        if (!isCleanedUp) setWsConnected(false)
+      }
+      
+      ws.onclose = () => {
+        if (!isCleanedUp) {
+          console.log('[Progress] WebSocket closed')
+          setWsConnected(false)
+        }
       }
     }
 
-    ws.onerror = () => setWsConnected(false)
-    ws.onclose = () => {
-      if (!intentionalClose) setWsConnected(false)
-    }
+    // Small delay to avoid race condition with React StrictMode double-mounting
+    const timer = setTimeout(connect, 100)
 
     return () => {
-      intentionalClose = true
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      isCleanedUp = true
+      clearTimeout(timer)
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close()
       }
     }

@@ -99,46 +99,72 @@ const Offline = () => {
     const deviceId = localStorage.getItem('kiosk_device_id')
     if (!deviceId) return
 
-    let intentionalClose = false
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
-    const ws = new WebSocket(wsUrl)
+    let ws: WebSocket | null = null
+    let isCleanedUp = false
 
-    ws.onopen = () => {
-      setWsConnected(true)
-      ws.send(JSON.stringify({ type: 'subscribe', deviceId }))
+    const connect = () => {
+      if (isCleanedUp) return
+
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
       
-      // Enable payment system when entering payment page
-      ws.send(JSON.stringify({ type: 'enable-payment', deviceId }))
-      console.log('[Payment] Payment system enabled')
-    }
+      ws = new WebSocket(wsUrl)
 
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data)
-        if (message.type === 'coin-inserted') {
-          setAmountInserted((prev) => prev + message.coinValue)
-        } else if (message.type === 'bill-inserted') {
-          setAmountInserted((prev) => prev + message.billValue)
+      ws.onopen = () => {
+        if (isCleanedUp) {
+          ws?.close()
+          return
         }
-      } catch (error) {
-        console.error('[Payment] Error parsing message:', error)
+        
+        setWsConnected(true)
+        ws!.send(JSON.stringify({ type: 'subscribe', deviceId }))
+        
+        // Enable payment system when entering payment page
+        ws!.send(JSON.stringify({ type: 'enable-payment', deviceId }))
+        console.log('[Payment] Payment system enabled')
+      }
+
+      ws.onmessage = (event) => {
+        if (isCleanedUp) return
+        
+        try {
+          const message = JSON.parse(event.data)
+          if (message.type === 'coin-inserted') {
+            setAmountInserted((prev) => prev + message.coinValue)
+          } else if (message.type === 'bill-inserted') {
+            setAmountInserted((prev) => prev + message.billValue)
+          }
+        } catch (error) {
+          console.error('[Payment] Error parsing message:', error)
+        }
+      }
+
+      ws.onerror = (error) => {
+        console.error('[Payment] WebSocket error:', error)
+        if (!isCleanedUp) setWsConnected(false)
+      }
+      
+      ws.onclose = () => {
+        if (!isCleanedUp) {
+          console.log('[Payment] WebSocket closed')
+          setWsConnected(false)
+        }
       }
     }
 
-    ws.onerror = () => setWsConnected(false)
-    ws.onclose = () => {
-      if (!intentionalClose) setWsConnected(false)
-    }
+    // Small delay to avoid race condition with React StrictMode double-mounting
+    const timer = setTimeout(connect, 100)
 
     return () => {
-      intentionalClose = true
+      isCleanedUp = true
+      clearTimeout(timer)
+      
       // Disable payment system when leaving payment page
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'disable-payment', deviceId }))
         console.log('[Payment] Payment system disabled')
       }
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close()
       }
     }
