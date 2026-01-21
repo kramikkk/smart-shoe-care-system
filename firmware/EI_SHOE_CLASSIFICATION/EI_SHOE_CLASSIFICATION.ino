@@ -85,9 +85,23 @@ bool wifiConnected = false;
 bool wsConnected = false;
 String camDeviceId = "";  // Derived from main board ID: SSCM-ABC123 -> SSCM-CAM-ABC123
 
+// CAM's own unique device ID (generated from its own chip ID)
+String camOwnDeviceId = "";  // e.g., SSCM-CAM-XYZ789
+
 // Main board MAC address for pairing verification
 uint8_t mainBoardMac[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 bool mainBoardPaired = false;
+
+// Device ID based pairing (factory configured)
+String pairedMainDeviceId = "";  // Configured via SETPAIR command
+bool pairConfigured = false;     // True if SETPAIR has been run
+
+// Structure to send pairing acknowledgment to main board
+typedef struct {
+  char camDeviceId[24];    // CAM's own device ID (e.g., SSCM-CAM-XYZ789)
+  char mainDeviceId[24];   // Echoed main board device ID (for verification)
+  uint8_t ackType;         // 1 = accepted, 2 = rejected
+} PairingAck;
 
 // WiFi/WebSocket reconnection
 unsigned long lastWsReconnect = 0;
@@ -149,12 +163,62 @@ bool ei_camera_init(void);
 void ei_camera_deinit(void);
 bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf) ;
 
+/* ===================== CAM DEVICE ID GENERATION ===================== */
+// Generate CAM's own unique device ID from its chip ID
+String generateCamOwnDeviceId() {
+    uint64_t chipid = ESP.getEfuseMac();
+    char id[24];
+    snprintf(id, sizeof(id), "SSCM-CAM-%02X%02X%02X",
+        (uint8_t)(chipid >> 16), (uint8_t)(chipid >> 8), (uint8_t)chipid);
+    return String(id);
+}
+
+/* ===================== ESP-NOW PAIRING ACK ===================== */
+// Send pairing acknowledgment back to main board
+void sendPairingAck(uint8_t* targetMac, uint8_t ackType) {
+    PairingAck ack;
+    memset(&ack, 0, sizeof(ack));
+
+    // Fill in CAM's own device ID
+    strncpy(ack.camDeviceId, camOwnDeviceId.c_str(), sizeof(ack.camDeviceId) - 1);
+
+    // Echo the main board's device ID from received credentials
+    strncpy(ack.mainDeviceId, receivedCredentials.deviceId, sizeof(ack.mainDeviceId) - 1);
+
+    // Set ack type (1 = accepted, 2 = rejected)
+    ack.ackType = ackType;
+
+    // Add main board as peer if not already added
+    esp_now_peer_info_t peerInfo;
+    memset(&peerInfo, 0, sizeof(peerInfo));
+    memcpy(peerInfo.peer_addr, targetMac, 6);
+    peerInfo.channel = 0;
+    peerInfo.encrypt = false;
+
+    // Check if peer exists, add if not
+    if (!esp_now_is_peer_exist(targetMac)) {
+        esp_now_add_peer(&peerInfo);
+    }
+
+    // Send acknowledgment
+    esp_err_t result = esp_now_send(targetMac, (uint8_t *)&ack, sizeof(ack));
+
+    Serial.print("[ESP-NOW] Sending pairing ack (");
+    Serial.print(ackType == 1 ? "ACCEPTED" : "REJECTED");
+    Serial.print(") to MAC: ");
+    for (int i = 0; i < 6; i++) {
+        Serial.printf("%02X", targetMac[i]);
+        if (i < 5) Serial.print(":");
+    }
+    Serial.println(result == ESP_OK ? " - Sent" : " - Failed");
+}
+
 /* ===================== ESP-NOW CALLBACK ===================== */
 // Called when ESP-NOW data is received
 // Updated for ESP32 Arduino Core v3.x
 void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
     Serial.println("\n[ESP-NOW] Data received!");
-    
+
     // Get sender MAC address
     uint8_t* senderMac = recv_info->src_addr;
     Serial.print("[ESP-NOW] From MAC: ");
@@ -163,8 +227,21 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
         if (i < 5) Serial.print(":");
     }
     Serial.println();
-    
-    // If already paired, verify sender is the paired main board
+
+    // Check data size first
+    if (len != sizeof(WiFiCredentials)) {
+        Serial.println("[ESP-NOW] Invalid data size: " + String(len));
+        return;
+    }
+
+    // Copy credentials to check device ID
+    WiFiCredentials tempCreds;
+    memcpy(&tempCreds, data, sizeof(WiFiCredentials));
+
+    Serial.println("[ESP-NOW] Credentials from: " + String(tempCreds.deviceId));
+
+    // ============ PRIORITY 1: MAC-based pairing verification ============
+    // If already paired via MAC, verify sender MAC matches
     if (mainBoardPaired) {
         bool macMatch = true;
         for (int i = 0; i < 6; i++) {
@@ -173,65 +250,88 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
                 break;
             }
         }
-        
+
         if (!macMatch) {
-            Serial.println("[ESP-NOW] REJECTED: Not from paired main board");
+            Serial.println("[ESP-NOW] REJECTED: Not from paired main board MAC");
             Serial.print("[ESP-NOW] Expected MAC: ");
             for (int i = 0; i < 6; i++) {
                 Serial.printf("%02X", mainBoardMac[i]);
                 if (i < 5) Serial.print(":");
             }
             Serial.println();
-            return;  // Ignore messages from other devices
+            return;  // Silently ignore - already paired to different device
         }
         Serial.println("[ESP-NOW] MAC verified - from paired main board");
     }
 
-    if (len == sizeof(WiFiCredentials)) {
-        memcpy(&receivedCredentials, data, sizeof(WiFiCredentials));
+    // ============ PRIORITY 2: Device ID based pairing (for new pairing) ============
+    // If pair is configured (via SETPAIR) but MAC not yet paired, validate device ID
+    if (!mainBoardPaired && pairConfigured) {
+        if (strcmp(tempCreds.deviceId, pairedMainDeviceId.c_str()) != 0) {
+            Serial.println("[ESP-NOW] REJECTED: Device ID mismatch");
+            Serial.println("  Expected: " + pairedMainDeviceId);
+            Serial.println("  Received: " + String(tempCreds.deviceId));
 
-        Serial.println("[ESP-NOW] WiFi Credentials received:");
-        Serial.println("  SSID: " + String(receivedCredentials.ssid));
-        Serial.println("  WS Host: " + String(receivedCredentials.wsHost));
-        Serial.println("  WS Port: " + String(receivedCredentials.wsPort));
-        Serial.println("  Main Device ID: " + String(receivedCredentials.deviceId));
-
-        // Derive CAM device ID: SSCM-ABC123 -> SSCM-CAM-ABC123
-        String mainId = String(receivedCredentials.deviceId);
-        if (mainId.startsWith("SSCM-")) {
-            camDeviceId = "SSCM-CAM-" + mainId.substring(5);
-        } else {
-            camDeviceId = "SSCM-CAM-UNKNOWN";
+            // Send rejection acknowledgment
+            memcpy(&receivedCredentials, &tempCreds, sizeof(WiFiCredentials));
+            sendPairingAck(senderMac, 2);  // 2 = rejected
+            return;
         }
-        Serial.println("  CAM Device ID: " + camDeviceId);
-
-        // Store credentials in preferences
-        prefs.putString("ssid", String(receivedCredentials.ssid));
-        prefs.putString("pass", String(receivedCredentials.password));
-        prefs.putString("wsHost", String(receivedCredentials.wsHost));
-        prefs.putUInt("wsPort", receivedCredentials.wsPort);
-        prefs.putString("camId", camDeviceId);
-        
-        // Store main board MAC for pairing (prevents accepting from other devices)
-        if (!mainBoardPaired) {
-            memcpy(mainBoardMac, senderMac, 6);
-            prefs.putBytes("mainMac", mainBoardMac, 6);
-            mainBoardPaired = true;
-            
-            Serial.println("[ESP-NOW] Paired with main board MAC:");
-            Serial.print("  ");
-            for (int i = 0; i < 6; i++) {
-                Serial.printf("%02X", mainBoardMac[i]);
-                if (i < 5) Serial.print(":");
-            }
-            Serial.println();
-        }
-
-        credentialsReceived = true;
-        Serial.println("[ESP-NOW] Credentials stored. Connecting to WiFi...");
-    } else {
-        Serial.println("[ESP-NOW] Invalid data size: " + String(len));
+        Serial.println("[ESP-NOW] Device ID verified: " + String(tempCreds.deviceId));
     }
+
+    // ============ PRIORITY 3: Backward compatibility ============
+    // If not paired and not configured, accept first valid credentials (legacy mode)
+    if (!mainBoardPaired && !pairConfigured) {
+        Serial.println("[ESP-NOW] WARNING: Pair not configured - accepting first valid credentials");
+        Serial.println("[ESP-NOW] Use SETPAIR command to configure dedicated pairing");
+    }
+
+    // ============ ACCEPT CREDENTIALS ============
+    memcpy(&receivedCredentials, &tempCreds, sizeof(WiFiCredentials));
+
+    Serial.println("[ESP-NOW] WiFi Credentials ACCEPTED:");
+    Serial.println("  SSID: " + String(receivedCredentials.ssid));
+    Serial.println("  WS Host: " + String(receivedCredentials.wsHost));
+    Serial.println("  WS Port: " + String(receivedCredentials.wsPort));
+    Serial.println("  Main Device ID: " + String(receivedCredentials.deviceId));
+
+    // Derive CAM device ID: SSCM-ABC123 -> SSCM-CAM-ABC123
+    String mainId = String(receivedCredentials.deviceId);
+    if (mainId.startsWith("SSCM-")) {
+        camDeviceId = "SSCM-CAM-" + mainId.substring(5);
+    } else {
+        camDeviceId = "SSCM-CAM-UNKNOWN";
+    }
+    Serial.println("  CAM Device ID: " + camDeviceId);
+
+    // Store credentials in preferences
+    prefs.putString("ssid", String(receivedCredentials.ssid));
+    prefs.putString("pass", String(receivedCredentials.password));
+    prefs.putString("wsHost", String(receivedCredentials.wsHost));
+    prefs.putUInt("wsPort", receivedCredentials.wsPort);
+    prefs.putString("camId", camDeviceId);
+
+    // Store main board MAC for pairing (prevents accepting from other devices)
+    if (!mainBoardPaired) {
+        memcpy(mainBoardMac, senderMac, 6);
+        prefs.putBytes("mainMac", mainBoardMac, 6);
+        mainBoardPaired = true;
+
+        Serial.println("[ESP-NOW] Paired with main board MAC:");
+        Serial.print("  ");
+        for (int i = 0; i < 6; i++) {
+            Serial.printf("%02X", mainBoardMac[i]);
+            if (i < 5) Serial.print(":");
+        }
+        Serial.println();
+    }
+
+    // Send acceptance acknowledgment to main board
+    sendPairingAck(senderMac, 1);  // 1 = accepted
+
+    credentialsReceived = true;
+    Serial.println("[ESP-NOW] Credentials stored. Connecting to WiFi...");
 }
 
 /* ===================== WEBSOCKET EVENT HANDLER ===================== */
@@ -397,26 +497,40 @@ void setup()
     // Initialize preferences
     prefs.begin("cam", false);
 
+    // Generate CAM's own unique device ID from its chip ID
+    camOwnDeviceId = generateCamOwnDeviceId();
+    Serial.println("[Startup] CAM Own Device ID: " + camOwnDeviceId);
+
     // Check for stored credentials and pairing
     camDeviceId = prefs.getString("camId", "");
     if (camDeviceId.length() > 0) {
         Serial.println("[Startup] Found stored credentials");
-        Serial.println("[Startup] CAM Device ID: " + camDeviceId);
+        Serial.println("[Startup] Derived CAM ID (WebSocket): " + camDeviceId);
         credentialsReceived = true;
     }
-    
+
+    // Load device ID based pairing configuration
+    pairConfigured = prefs.getBool("pairCfg", false);
+    if (pairConfigured) {
+        pairedMainDeviceId = prefs.getString("pairId", "");
+        Serial.println("[Startup] Device ID pairing configured: " + pairedMainDeviceId);
+    } else {
+        Serial.println("[Startup] Device ID pairing: NOT CONFIGURED (legacy mode)");
+        Serial.println("[Startup] Use SETPAIR <device-id> to configure dedicated pairing");
+    }
+
     // Load paired main board MAC
     size_t macLen = prefs.getBytes("mainMac", mainBoardMac, 6);
     if (macLen == 6 && (mainBoardMac[0] != 0x00 || mainBoardMac[1] != 0x00)) {
         mainBoardPaired = true;
-        Serial.print("[Startup] Paired with main board MAC: ");
+        Serial.print("[Startup] MAC paired to: ");
         for (int i = 0; i < 6; i++) {
             Serial.printf("%02X", mainBoardMac[i]);
             if (i < 5) Serial.print(":");
         }
         Serial.println();
     } else {
-        Serial.println("[Startup] No main board pairing - will accept first valid credentials");
+        Serial.println("[Startup] MAC pairing: Not yet paired");
     }
 
     // Initialize WiFi in STA mode (required for ESP-NOW + WiFi coexistence)
@@ -449,8 +563,18 @@ void setup()
         }
     }
 
-    Serial.println("\nWaiting for classification commands via WebSocket...");
-    Serial.println("Or type 'TEST' in Serial Monitor to test locally.\n");
+    Serial.println("\n--- Serial Commands ---");
+    Serial.println("TEST/CLASSIFY - Run local classification");
+    Serial.println("STATUS        - Show device status");
+    Serial.println("SETPAIR <id>  - Configure paired main board (e.g., SETPAIR SSCM-ABC123)");
+    Serial.println("GETPAIR       - Show pairing configuration");
+    Serial.println("CLEARPAIR     - Clear device ID pairing (legacy mode)");
+    Serial.println("UNPAIR        - Clear MAC pairing only");
+    Serial.println("CLEAR         - Clear all data");
+    Serial.println("WIFI          - Show WiFi status");
+    Serial.println("-----------------------\n");
+
+    Serial.println("Waiting for classification commands via WebSocket...");
 }
 
 /**
@@ -586,26 +710,34 @@ void loop()
             Serial.println("Camera: " + String(is_initialised ? "Ready" : "Not initialized"));
             Serial.println("WiFi: " + String(wifiConnected ? "Connected" : "Disconnected"));
             Serial.println("WebSocket: " + String(wsConnected ? "Connected" : "Disconnected"));
-            Serial.println("Device ID: " + camDeviceId);
+            Serial.println("CAM Own ID: " + camOwnDeviceId);
+            Serial.println("Derived ID (WS): " + camDeviceId);
             Serial.println("Credentials: " + String(credentialsReceived ? "Yes" : "Waiting for ESP-NOW"));
             Serial.println("Scans per classification: " + String(NUM_SCANS));
-            
-            // Show pairing status
+
+            // Show device ID pairing configuration
+            if (pairConfigured) {
+                Serial.println("Device ID pairing: " + pairedMainDeviceId);
+            } else {
+                Serial.println("Device ID pairing: NOT CONFIGURED (legacy mode)");
+            }
+
+            // Show MAC pairing status
             if (mainBoardPaired) {
-                Serial.print("Paired with main board: ");
+                Serial.print("MAC paired to: ");
                 for (int i = 0; i < 6; i++) {
                     Serial.printf("%02X", mainBoardMac[i]);
                     if (i < 5) Serial.print(":");
                 }
                 Serial.println();
             } else {
-                Serial.println("Pairing: Not paired (will accept first credentials)");
+                Serial.println("MAC pairing: Not yet paired");
             }
-            
+
             Serial.println("==================\n");
         }
         else if (cmd == "CLEAR") {
-            Serial.println("Clearing stored credentials...");
+            Serial.println("Clearing ALL stored data...");
             prefs.clear();
             credentialsReceived = false;
             wifiConnected = false;
@@ -613,15 +745,81 @@ void loop()
             camDeviceId = "";
             mainBoardPaired = false;
             memset(mainBoardMac, 0, 6);
-            Serial.println("Credentials AND pairing cleared. Restart to apply.");
+            pairedMainDeviceId = "";
+            pairConfigured = false;
+            Serial.println("Credentials, MAC pairing, AND device ID pairing cleared.");
+            Serial.println("Restart to apply.");
         }
         else if (cmd == "UNPAIR") {
-            Serial.println("Clearing main board pairing...");
+            Serial.println("Clearing main board MAC pairing...");
             prefs.remove("mainMac");
             mainBoardPaired = false;
             memset(mainBoardMac, 0, 6);
-            Serial.println("Pairing cleared. CAM will accept credentials from any main board.");
+            Serial.println("MAC pairing cleared. CAM will accept credentials from any main board.");
+            Serial.println("Note: Device ID pairing (SETPAIR) still active if configured.");
             Serial.println("Restart or wait for next credential broadcast.");
+        }
+        else if (cmd.startsWith("SETPAIR ")) {
+            // SETPAIR <device-id> - Configure paired main board device ID
+            String newPairedId = cmd.substring(8);
+            newPairedId.trim();
+
+            if (newPairedId.length() > 0) {
+                pairedMainDeviceId = newPairedId;
+                pairConfigured = true;
+                prefs.putString("pairId", pairedMainDeviceId);
+                prefs.putBool("pairCfg", true);
+
+                Serial.println("\n=== PAIRING CONFIGURED ===");
+                Serial.println("CAM own ID: " + camOwnDeviceId);
+                Serial.println("Paired to main board: " + pairedMainDeviceId);
+                Serial.println("CAM will ONLY accept credentials from this device.");
+                Serial.println("==========================\n");
+
+                // Clear existing MAC pairing to allow new pairing with configured device
+                if (mainBoardPaired) {
+                    prefs.remove("mainMac");
+                    mainBoardPaired = false;
+                    memset(mainBoardMac, 0, 6);
+                    Serial.println("[SETPAIR] Cleared existing MAC pairing to allow new pairing.");
+                }
+            } else {
+                Serial.println("Usage: SETPAIR <device-id>");
+                Serial.println("Example: SETPAIR SSCM-ABC123");
+            }
+        }
+        else if (cmd == "GETPAIR") {
+            Serial.println("\n=== PAIRING INFO ===");
+            Serial.println("CAM own Device ID: " + camOwnDeviceId);
+
+            if (pairConfigured) {
+                Serial.println("Configured to pair with: " + pairedMainDeviceId);
+            } else {
+                Serial.println("Device ID pairing: NOT CONFIGURED (will accept any main board)");
+            }
+
+            if (mainBoardPaired) {
+                Serial.print("Currently paired to MAC: ");
+                for (int i = 0; i < 6; i++) {
+                    Serial.printf("%02X", mainBoardMac[i]);
+                    if (i < 5) Serial.print(":");
+                }
+                Serial.println();
+            } else {
+                Serial.println("MAC pairing: Not yet paired");
+            }
+
+            Serial.println("Derived CAM ID (WebSocket): " + camDeviceId);
+            Serial.println("====================\n");
+        }
+        else if (cmd == "CLEARPAIR") {
+            Serial.println("Clearing device ID pairing configuration...");
+            pairedMainDeviceId = "";
+            pairConfigured = false;
+            prefs.remove("pairId");
+            prefs.putBool("pairCfg", false);
+            Serial.println("Device ID pairing cleared. CAM will accept any main board (legacy mode).");
+            Serial.println("Use SETPAIR <device-id> to configure dedicated pairing.");
         }
         else if (cmd == "WIFI") {
             Serial.println("WiFi Status: " + String(WiFi.status()));
