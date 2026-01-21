@@ -13,6 +13,7 @@ type SensorData = {
   serviceType: string
   serviceProgress: number
   serviceTimeRemaining: number
+  camSynced: boolean  // Whether CAM ESP-NOW is synced with main board
 }
 
 type SensorDataContextType = {
@@ -33,7 +34,8 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
     serviceActive: false,
     serviceType: '',
     serviceProgress: 0,
-    serviceTimeRemaining: 0
+    serviceTimeRemaining: 0,
+    camSynced: false
   })
   const [isConnected, setIsConnected] = useState(false)
 
@@ -77,6 +79,17 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
               ...prev,
               temperature: message.temperature || prev.temperature,
               humidity: message.humidity || prev.humidity,
+              camSynced: message.camSynced !== undefined ? message.camSynced : prev.camSynced,
+              lastUpdate: new Date()
+            }))
+          }
+
+          // Handle CAM sync status update
+          if (message.type === 'cam-sync-status') {
+            console.log('[SensorData] CAM sync status:', message.camSynced ? 'SYNCED' : 'NOT_SYNCED')
+            setSensorData(prev => ({
+              ...prev,
+              camSynced: message.camSynced,
               lastUpdate: new Date()
             }))
           }
