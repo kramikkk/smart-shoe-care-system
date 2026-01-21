@@ -972,7 +972,21 @@ void startService(String shoeType, String serviceType, String careType) {
     // Turn OFF all service-related relays and RGB before starting new service
     // This ensures clean transition between services in auto mode
     if (serviceActive) {
-        Serial.println("[Service] Stopping previous service...");
+        Serial.println("[Service] Completing previous service: " + currentServiceType);
+        
+        // Send completion message for the previous service
+        if (wsConnected && isPaired) {
+            String msg = "{";
+            msg += "\"type\":\"service-complete\",";
+            msg += "\"deviceId\":\"" + deviceId + "\",";
+            msg += "\"serviceType\":\"" + currentServiceType + "\",";
+            msg += "\"shoeType\":\"" + currentShoeType + "\",";
+            msg += "\"careType\":\"" + currentCareType + "\"";
+            msg += "}";
+            webSocket.sendTXT(msg);
+            Serial.println("[WebSocket] Sent completion for: " + currentServiceType);
+        }
+        
         // Turn off RGB
         rgbOff();
         // Turn off all service relays (CH3-CH8)
@@ -982,6 +996,14 @@ void startService(String shoeType, String serviceType, String careType) {
         setRelay(6, false);  // Diaphragm Pump
         setRelay(7, false);  // Mist Maker
         setRelay(8, false);  // UVC Light
+
+        // Reset cleaning-specific state if transitioning from cleaning
+        if (currentServiceType == "cleaning") {
+            cleaningPhase = 0;
+            stepper1MoveTo(0);  // Return stepper to home
+            stepper2MoveTo(0);  // Return side stepper to home
+            Serial.println("[Service] Cleaning state reset, steppers returning to home");
+        }
     }
 
     // Determine duration based on service and care type (in milliseconds)
