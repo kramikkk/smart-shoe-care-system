@@ -1475,9 +1475,11 @@ void updateStepper1Position() {
         if (currentStepper1Position < targetStepper1Position) {
             // Step forward
             stepper1Step(true);
+            yield();  // Allow WiFi/WebSocket processing
         } else if (currentStepper1Position > targetStepper1Position) {
             // Step backward
             stepper1Step(false);
+            yield();  // Allow WiFi/WebSocket processing
         } else {
             // Reached target
             stepper1Moving = false;
@@ -2331,37 +2333,43 @@ void loop() {
         // Silent - keep-alive doesn't need logging
     }
 
-    /* ================= DHT22 AUTOMATIC READING ================= */
-    // Only read sensors if device is paired
-    if (isPaired && millis() - lastDHTRead >= DHT_READ_INTERVAL) {
-        lastDHTRead = millis();
+    /* ================= SENSOR READINGS (BLOCKING) ================= */
+    // Skip sensor readings when steppers are moving to prevent motor stuttering
+    // pulseIn() blocks up to 30ms per ultrasonic, DHT22 blocks ~250ms
+    if (!stepper1Moving && !stepper2Moving) {
 
-        // Read DHT22 sensor
-        bool readSuccess = readDHT22();
+        /* ================= DHT22 AUTOMATIC READING ================= */
+        // Only read sensors if device is paired
+        if (isPaired && millis() - lastDHTRead >= DHT_READ_INTERVAL) {
+            lastDHTRead = millis();
 
-        // Send data via WebSocket only if reading was successful
-        if (readSuccess && wsConnected) {
-            sendDHTDataViaWebSocket();
-        }
-    }
+            // Read DHT22 sensor
+            bool readSuccess = readDHT22();
 
-    /* ================= ULTRASONIC AUTOMATIC READING ================= */
-    // Only read sensors if device is paired
-    if (isPaired && millis() - lastUltrasonicRead >= ULTRASONIC_READ_INTERVAL) {
-        lastUltrasonicRead = millis();
-
-        // Read both ultrasonic sensors (non-blocking - pulseIn handles timing)
-        bool atomizerSuccess = readAtomizerLevel();
-        bool foamSuccess = readFoamLevel();
-
-        // Log combined reading
-        if (atomizerSuccess || foamSuccess) {
-            Serial.println("[Level] Atomizer: " + String(currentAtomizerDistance) + " cm | Foam: " + String(currentFoamDistance) + " cm");
+            // Send data via WebSocket only if reading was successful
+            if (readSuccess && wsConnected) {
+                sendDHTDataViaWebSocket();
+            }
         }
 
-        // Send data via WebSocket if at least one reading was successful
-        if ((atomizerSuccess || foamSuccess) && wsConnected) {
-            sendUltrasonicDataViaWebSocket();
+        /* ================= ULTRASONIC AUTOMATIC READING ================= */
+        // Only read sensors if device is paired
+        if (isPaired && millis() - lastUltrasonicRead >= ULTRASONIC_READ_INTERVAL) {
+            lastUltrasonicRead = millis();
+
+            // Read both ultrasonic sensors (pulseIn blocks up to 30ms each)
+            bool atomizerSuccess = readAtomizerLevel();
+            bool foamSuccess = readFoamLevel();
+
+            // Log combined reading
+            if (atomizerSuccess || foamSuccess) {
+                Serial.println("[Level] Atomizer: " + String(currentAtomizerDistance) + " cm | Foam: " + String(currentFoamDistance) + " cm");
+            }
+
+            // Send data via WebSocket if at least one reading was successful
+            if ((atomizerSuccess || foamSuccess) && wsConnected) {
+                sendUltrasonicDataViaWebSocket();
+            }
         }
     }
 
