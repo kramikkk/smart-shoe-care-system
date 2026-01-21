@@ -377,18 +377,11 @@ const char WIFI_HTML[] PROGMEM = R"rawliteral(
 // Callback when ESP-NOW data is sent
 // Updated for ESP32 Arduino Core v3.x
 void onDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
-    Serial.print("[ESP-NOW] Send Status: ");
     if (status == ESP_NOW_SEND_SUCCESS) {
-        Serial.println("Success");
+        Serial.println("[ESP-NOW] Credentials sent to CAM");
         credentialsSentToCAM = true;
-        
-        // If this was a successful broadcast, it means CAM received it
-        // Store the MAC if we got an ACK (only works with unicast)
-        if (camMacPaired) {
-            Serial.println("[ESP-NOW] Credentials sent to paired CAM");
-        }
     } else {
-        Serial.println("Failed");
+        Serial.println("[ESP-NOW] Send failed");
     }
 }
 
@@ -409,14 +402,6 @@ void initESPNow() {
     size_t macLen = prefs.getBytes("camMac", camMacAddress, 6);
     if (macLen == 6 && (camMacAddress[0] != 0x00 || camMacAddress[1] != 0x00)) {
         camMacPaired = true;
-        Serial.print("[ESP-NOW] Found paired CAM MAC: ");
-        for (int i = 0; i < 6; i++) {
-            Serial.printf("%02X", camMacAddress[i]);
-            if (i < 5) Serial.print(":");
-        }
-        Serial.println();
-    } else {
-        Serial.println("[ESP-NOW] No paired CAM MAC - will use broadcast for pairing");
     }
 
     // Add peer (either paired CAM MAC or broadcast for discovery)
@@ -473,33 +458,9 @@ void sendCredentialsToCAM() {
     // Device ID for CAM to derive its own ID
     strncpy(camCredentials.deviceId, deviceId.c_str(), sizeof(camCredentials.deviceId) - 1);
 
-    Serial.println("\n[ESP-NOW] Sending credentials to ESP32-CAM:");
-    Serial.println("  SSID: " + ssid);
-    Serial.println("  WS Host: " + String(camCredentials.wsHost));
-    Serial.println("  WS Port: " + String(camCredentials.wsPort));
-    Serial.println("  Device ID: " + String(camCredentials.deviceId));
-    
     // Send to paired CAM MAC or broadcast if not paired
     uint8_t* targetMac = camMacPaired ? camMacAddress : broadcastAddress;
-    if (camMacPaired) {
-        Serial.print("  Target MAC: ");
-        for (int i = 0; i < 6; i++) {
-            Serial.printf("%02X", targetMac[i]);
-            if (i < 5) Serial.print(":");
-        }
-        Serial.println(" (paired)");
-    } else {
-        Serial.println("  Target: BROADCAST (pairing mode)");
-    }
-
-    // Send via ESP-NOW
-    esp_err_t result = esp_now_send(targetMac, (uint8_t *)&camCredentials, sizeof(camCredentials));
-
-    if (result == ESP_OK) {
-        Serial.println("[ESP-NOW] Credentials broadcast sent");
-    } else {
-        Serial.println("[ESP-NOW] Error sending credentials: " + String(result));
-    }
+    esp_now_send(targetMac, (uint8_t *)&camCredentials, sizeof(camCredentials));
 }
 
 /* ===================== WIFI FUNCTIONS ===================== */
@@ -595,10 +556,6 @@ void handleWiFiPortal() {
 
         ssid = urlDecode(ssid);
         pass = urlDecode(pass);
-
-        Serial.println("=== Saving WiFi Credentials ===");
-        Serial.println("SSID: " + ssid);
-        Serial.println("================================");
 
         prefs.putString("ssid", ssid);
         prefs.putString("pass", pass);
@@ -771,31 +728,20 @@ void sendDeviceRegistration() {
     payload += "\"pairingCode\":\"" + pairingCode + "\"";
     payload += "}";
 
-    Serial.println("=== Registering Device ===");
-    Serial.println("URL: " + url);
-    Serial.println("Payload: " + payload);
-
     int httpCode = http.POST(payload);
 
-    if (httpCode > 0) {
-        Serial.printf("HTTP Response: %d\n", httpCode);
-        if (httpCode == 200 || httpCode == 201) {
-            String response = http.getString();
-            Serial.println("Response: " + response);
-
-            // Check if device is already paired
-            if (response.indexOf("\"paired\":true") != -1) {
-                Serial.println("Device is already paired!");
-                isPaired = true;
-                prefs.putBool("paired", true);
-            } else {
-                Serial.println("Device registered successfully");
-            }
+    if (httpCode == 200 || httpCode == 201) {
+        String response = http.getString();
+        if (response.indexOf("\"paired\":true") != -1) {
+            Serial.println("[HTTP] Device already paired");
+            isPaired = true;
+            prefs.putBool("paired", true);
         }
+    } else if (httpCode > 0) {
+        Serial.println("[HTTP] Registration failed: " + String(httpCode));
     } else {
-        Serial.printf("Registration failed: %s\n", http.errorToString(httpCode).c_str());
+        Serial.println("[HTTP] Registration error: " + http.errorToString(httpCode));
     }
-    Serial.println("==========================");
 
     http.end();
 }
@@ -813,23 +759,10 @@ void sendStatusUpdate() {
     payload += "\"deviceId\":\"" + deviceId + "\"";
     payload += "}";
 
-    Serial.println("=== Updating Device Status ===");
-    Serial.println("URL: " + url);
-    Serial.println("Payload: " + payload);
-
     int httpCode = http.POST(payload);
-
-    if (httpCode > 0) {
-        Serial.printf("HTTP Response: %d\n", httpCode);
-        if (httpCode == 200) {
-            String response = http.getString();
-            Serial.println("Response: " + response);
-            Serial.println("Status updated successfully");
-        }
-    } else {
-        Serial.printf("Status update failed: %s\n", http.errorToString(httpCode).c_str());
+    if (httpCode < 0) {
+        Serial.println("[HTTP] Status update error: " + http.errorToString(httpCode));
     }
-    Serial.println("==============================");
 
     http.end();
 }
@@ -837,16 +770,14 @@ void sendStatusUpdate() {
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
         case WStype_DISCONNECTED: {
-            Serial.println("[WebSocket] Disconnected");
+            Serial.println("[WS] Disconnected");
             wsConnected = false;
             break;
         }
 
         case WStype_CONNECTED: {
-            Serial.println("[WebSocket] Connected");
+            Serial.println("[WS] Connected");
             wsConnected = true;
-
-            // Subscribe to device updates
             String subscribeMsg = "{\"type\":\"subscribe\",\"deviceId\":\"" + deviceId + "\"}";
             webSocket.sendTXT(subscribeMsg);
             break;
@@ -871,87 +802,50 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     bool dbPaired = (message.indexOf("\"paired\":true") != -1);
 
                     if (dbPaired != isPaired) {
-                        Serial.println("\n=== Syncing Paired Status ===");
-                        Serial.println("Local isPaired: " + String(isPaired ? "true" : "false"));
-                        Serial.println("Database paired: " + String(dbPaired ? "true" : "false"));
-
                         if (dbPaired && !isPaired) {
-                            // Database says paired, but ESP32 thinks unpaired - sync to paired
-                            Serial.println("Syncing to PAIRED state");
                             isPaired = true;
                             prefs.putBool("paired", true);
                         } else if (!dbPaired && isPaired) {
-                            // Database says unpaired, but ESP32 thinks paired - sync to unpaired
-                            Serial.println("Syncing to UNPAIRED state - generating new code");
                             isPaired = false;
                             prefs.putBool("paired", false);
                             pairingCode = generatePairingCode();
-                            Serial.println("New Pairing Code: " + pairingCode);
-
-                            // Re-register with new pairing code
                             sendDeviceRegistration();
                         }
-                        Serial.println("==============================\n");
                     }
                 } else {
                     Serial.println("[WebSocket] Status update failed");
                 }
             }
             else if (message.indexOf("\"type\":\"device-update\"") != -1) {
-                // Check if paired
                 if (message.indexOf("\"paired\":true") != -1) {
                     if (!isPaired) {
-                        Serial.println("\n=== Device Paired! ===");
-                        Serial.println("Received pairing confirmation via WebSocket");
-                        Serial.println("======================\n");
+                        Serial.println("[WS] Device paired!");
                         isPaired = true;
                         prefs.putBool("paired", true);
                     }
                 }
                 else if (message.indexOf("\"paired\":false") != -1) {
                     if (isPaired) {
-                        Serial.println("\n=== Device Unpaired! ===");
-                        Serial.println("Device was unpaired, generating new code");
+                        Serial.println("[WS] Device unpaired, new code: " + pairingCode);
                         isPaired = false;
                         prefs.putBool("paired", false);
                         pairingCode = generatePairingCode();
-                        Serial.println("Device ID: " + deviceId);
-                        Serial.println("New Pairing Code: " + pairingCode);
-                        Serial.println("========================\n");
-
-                        // Re-register with new pairing code
                         sendDeviceRegistration();
                     }
                 }
             }
             else if (message.indexOf("\"type\":\"enable-payment\"") != -1) {
-                // Frontend enabled payment system - enable coin/bill acceptance
+                Serial.println("[PAYMENT] Enabled");
                 paymentEnabled = true;
-                paymentEnableTime = millis();  // Record when relay turned on
-
-                // Turn ON Relay 1 (Bill + Coin power)
+                paymentEnableTime = millis();
                 digitalWrite(RELAY_1_PIN, RELAY_ON);
                 relay1State = true;
-
-                Serial.println("\n=== PAYMENT SYSTEM ENABLED ===");
-                Serial.println("Relay 1 (Bill + Coin): ON");
-                Serial.println("Stabilizing for " + String(PAYMENT_STABILIZATION_DELAY / 1000) + " seconds...");
-                Serial.println("Will accept payments after stabilization");
-                Serial.println("===============================\n");
             }
             else if (message.indexOf("\"type\":\"disable-payment\"") != -1) {
-                // Frontend disabled payment system - disable coin/bill acceptance
+                Serial.println("[PAYMENT] Disabled");
                 paymentEnabled = false;
-
-                // Turn OFF Relay 1 (Bill + Coin power)
                 digitalWrite(RELAY_1_PIN, RELAY_OFF);
                 relay1State = false;
-
-                Serial.println("\n=== PAYMENT SYSTEM DISABLED ===");
-                Serial.println("Relay 1 (Bill + Coin): OFF");
-                Serial.println("Ignoring coins and bills");
-                Serial.println("================================\n");
-                // Reset any partial coin/bill counts
                 currentCoinPulses = 0;
                 currentBillPulses = 0;
             }
@@ -1587,7 +1481,6 @@ void updateServoPositions() {
         // Both servos reached target
         if (leftReached && rightReached) {
             servosMoving = false;
-            Serial.println("[Servos] Reached target - Left: " + String(currentLeftPosition) + "° | Right: " + String(currentRightPosition) + "°");
         }
     }
 }
@@ -1606,8 +1499,6 @@ void setServoPositions(int leftPos) {
         targetLeftPosition = leftPos;
         targetRightPosition = rightPos;
         servosMoving = true;
-        Serial.println("[Servos] Moving - Left: " + String(currentLeftPosition) + "° → " + String(targetLeftPosition) +
-                       "° | Right: " + String(currentRightPosition) + "° → " + String(targetRightPosition) + "°");
     }
 }
 
@@ -1620,15 +1511,12 @@ void setLeftMotorSpeed(int speed) {
     if (speed > 0) {
         ledcWrite(MOTOR_LEFT_IN1_PIN, speed);
         ledcWrite(MOTOR_LEFT_IN2_PIN, 0);
-        Serial.println("[Left Motor] Forward - Speed: " + String(speed) + "/255");
     } else if (speed < 0) {
         ledcWrite(MOTOR_LEFT_IN1_PIN, 0);
         ledcWrite(MOTOR_LEFT_IN2_PIN, abs(speed));
-        Serial.println("[Left Motor] Reverse - Speed: " + String(abs(speed)) + "/255");
     } else {
         ledcWrite(MOTOR_LEFT_IN1_PIN, 0);
         ledcWrite(MOTOR_LEFT_IN2_PIN, 0);
-        Serial.println("[Left Motor] Stopped");
     }
 }
 
@@ -1640,15 +1528,12 @@ void setRightMotorSpeed(int speed) {
     if (speed > 0) {
         ledcWrite(MOTOR_RIGHT_IN1_PIN, speed);
         ledcWrite(MOTOR_RIGHT_IN2_PIN, 0);
-        Serial.println("[Right Motor] Forward - Speed: " + String(speed) + "/255");
     } else if (speed < 0) {
         ledcWrite(MOTOR_RIGHT_IN1_PIN, 0);
         ledcWrite(MOTOR_RIGHT_IN2_PIN, abs(speed));
-        Serial.println("[Right Motor] Reverse - Speed: " + String(abs(speed)) + "/255");
     } else {
         ledcWrite(MOTOR_RIGHT_IN1_PIN, 0);
         ledcWrite(MOTOR_RIGHT_IN2_PIN, 0);
-        Serial.println("[Right Motor] Stopped");
     }
 }
 
@@ -1663,7 +1548,6 @@ void leftMotorBrake() {
     ledcWrite(MOTOR_LEFT_IN1_PIN, 255);
     ledcWrite(MOTOR_LEFT_IN2_PIN, 255);
     currentLeftMotorSpeed = 0;
-    Serial.println("[Left Motor] Brake applied");
 }
 
 // Stop RIGHT motor with brake
@@ -1671,7 +1555,6 @@ void rightMotorBrake() {
     ledcWrite(MOTOR_RIGHT_IN1_PIN, 255);
     ledcWrite(MOTOR_RIGHT_IN2_PIN, 255);
     currentRightMotorSpeed = 0;
-    Serial.println("[Right Motor] Brake applied");
 }
 
 // Stop BOTH motors with brake
@@ -1685,7 +1568,6 @@ void leftMotorCoast() {
     ledcWrite(MOTOR_LEFT_IN1_PIN, 0);
     ledcWrite(MOTOR_LEFT_IN2_PIN, 0);
     currentLeftMotorSpeed = 0;
-    Serial.println("[Left Motor] Coast");
 }
 
 // Stop RIGHT motor with coast
@@ -1693,7 +1575,6 @@ void rightMotorCoast() {
     ledcWrite(MOTOR_RIGHT_IN1_PIN, 0);
     ledcWrite(MOTOR_RIGHT_IN2_PIN, 0);
     currentRightMotorSpeed = 0;
-    Serial.println("[Right Motor] Coast");
 }
 
 // Stop BOTH motors with coast
@@ -1718,19 +1599,17 @@ void setStepper1Speed(int stepsPerSecond) {
 
     // Calculate interval in microseconds
     stepper1StepInterval = 1000000UL / stepper1Speed;
-    Serial.println("[Top Linear] Speed: " + String(stepper1Speed) + " steps/sec = " +
-                   String(stepper1Speed / STEPPER1_STEPS_PER_MM) + " mm/sec");
 }
 
 // Perform a single step in the specified direction - OPTIMIZED FOR SPEED
 void stepper1Step(bool direction) {
     // Set direction
     digitalWrite(STEPPER1_DIR_PIN, direction ? HIGH : LOW);
-    delayMicroseconds(2);  // Direction setup time (TB6600 needs 2.5us min)
+    delayMicroseconds(3);  // Direction setup time (TB6600 needs 2.5us min)
 
-    // Generate step pulse (optimized timing)
+    // Generate step pulse
     digitalWrite(STEPPER1_STEP_PIN, HIGH);
-    delayMicroseconds(STEPPER1_MIN_PULSE_WIDTH);
+    delayMicroseconds(2);  // Pulse width (TB6600 needs 2us min)
     digitalWrite(STEPPER1_STEP_PIN, LOW);
 
     // Update position
@@ -1832,11 +1711,11 @@ void setStepper2Speed(int stepsPerSecond) {
 void stepper2Step(bool direction) {
     // Set direction
     digitalWrite(STEPPER2_DIR_PIN, direction ? HIGH : LOW);
-    delayMicroseconds(2);  // Direction setup time (TB6600 needs 2.5us min)
+    delayMicroseconds(3);  // Direction setup time (TB6600 needs 2.5us min)
 
-    // Generate step pulse (optimized timing)
+    // Generate step pulse
     digitalWrite(STEPPER2_STEP_PIN, HIGH);
-    delayMicroseconds(STEPPER2_MIN_PULSE_WIDTH);
+    delayMicroseconds(2);  // Pulse width (TB6600 needs 2us min)
     digitalWrite(STEPPER2_STEP_PIN, LOW);
 
     // Update position
@@ -1903,9 +1782,11 @@ void updateStepper2Position() {
         if (currentStepper2Position < targetStepper2Position) {
             // Step forward
             stepper2Step(true);
+            yield();  // Allow WiFi/WebSocket processing
         } else if (currentStepper2Position > targetStepper2Position) {
             // Step backward
             stepper2Step(false);
+            yield();  // Allow WiFi/WebSocket processing
         } else {
             // Reached target
             stepper2Moving = false;
@@ -2019,13 +1900,9 @@ void setup() {
 
     // Initialize ESP-NOW for wireless communication with ESP32-CAM
     // Note: ESP-NOW will be fully initialized after WiFi mode is set
-    Serial.println("\n[ESP-NOW] Will initialize after WiFi setup...");
-    Serial.println("[ESP-NOW] Credentials will be broadcast to CAM after WiFi connects");
 
     // Initialize DHT22 sensor
     dht.begin();
-    Serial.println("DHT22 Sensor initialized on GPIO " + String(DHT_PIN));
-    Serial.println("Reading temperature and humidity every 2 seconds\n");
 
     // Initialize JSN-SR20-Y1 ultrasonic sensors
     pinMode(ATOMIZER_TRIG_PIN, OUTPUT);
@@ -2035,16 +1912,6 @@ void setup() {
     pinMode(FOAM_TRIG_PIN, OUTPUT);
     pinMode(FOAM_ECHO_PIN, INPUT);
     digitalWrite(FOAM_TRIG_PIN, LOW);
-    
-    Serial.println("JSN-SR20-Y1 Ultrasonic Sensors initialized:");
-    Serial.println("  Sensor 1 - Atomizer Level:");
-    Serial.println("    TRIG Pin: GPIO " + String(ATOMIZER_TRIG_PIN));
-    Serial.println("    ECHO Pin: GPIO " + String(ATOMIZER_ECHO_PIN));
-    Serial.println("  Sensor 2 - Foam Level:");
-    Serial.println("    TRIG Pin: GPIO " + String(FOAM_TRIG_PIN));
-    Serial.println("    ECHO Pin: GPIO " + String(FOAM_ECHO_PIN));
-    Serial.println("  Range: 2cm - 500cm each");
-    Serial.println("  Reading distance every 5 seconds\n");
 
     // Initialize servo motors (Tower Pro MG995) - Dual servos
     servoLeft.attach(SERVO_LEFT_PIN);
@@ -2058,30 +1925,13 @@ void setup() {
     targetLeftPosition = 0;
     targetRightPosition = 180;
 
-    Serial.println("Tower Pro MG995 Servo Motors initialized:");
-    Serial.println("  Left Servo  (GPIO " + String(SERVO_LEFT_PIN) + "): Starting at 0° (moves 0° → 180°)");
-    Serial.println("  Right Servo (GPIO " + String(SERVO_RIGHT_PIN) + "): Starting at 180° (moves 180° → 0°)");
-    Serial.println("  Smooth slow movement (non-blocking)\n");
-
     // Initialize DRV8871 DC Motor Drivers (Dual Motors) with PWM
     ledcAttach(MOTOR_LEFT_IN1_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
     ledcAttach(MOTOR_LEFT_IN2_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
     ledcAttach(MOTOR_RIGHT_IN1_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
     ledcAttach(MOTOR_RIGHT_IN2_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
 
-    // Start with both motors stopped (coast) - SAFETY: Motors will NOT run automatically
     motorsCoast();
-
-    Serial.println("DRV8871 DC Motor Drivers initialized (Dual Motors):");
-    Serial.println("  Left Motor:");
-    Serial.println("    IN1 Pin: GPIO " + String(MOTOR_LEFT_IN1_PIN));
-    Serial.println("    IN2 Pin: GPIO " + String(MOTOR_LEFT_IN2_PIN));
-    Serial.println("  Right Motor:");
-    Serial.println("    IN1 Pin: GPIO " + String(MOTOR_RIGHT_IN1_PIN));
-    Serial.println("    IN2 Pin: GPIO " + String(MOTOR_RIGHT_IN2_PIN));
-    Serial.println("  PWM Frequency: " + String(MOTOR_PWM_FREQ) + " Hz");
-    Serial.println("  Speed Range: -255 (full reverse) to 255 (full forward)");
-    Serial.println("  Both motors stopped - ONLY run when commanded\n");
 
     // Initialize TB6600 Stepper Motor Driver (NEMA11 Linear Stepper)
     pinMode(STEPPER1_STEP_PIN, OUTPUT);
@@ -2092,18 +1942,7 @@ void setup() {
 
     // Set initial speed
     setStepper1Speed(800);  // 800 steps/second default
-
-    Serial.println("TOP LINEAR STEPPER initialized (TB6600 + NEMA11):");
-    Serial.println("  STEP Pin:   GPIO " + String(STEPPER1_STEP_PIN) + " (PUL+/PUL-)");
-    Serial.println("  DIR Pin:    GPIO " + String(STEPPER1_DIR_PIN) + " (DIR+/DIR-)");
-    Serial.println("  ENABLE:     ENA+ hardwired to GND (ALWAYS ENABLED)");
-    Serial.println("  Microsteps: 1/" + String(STEPPER1_MICROSTEPS) + " (FULL STEP - fastest)");
-    Serial.println("  Steps/Rev: " + String(STEPPER1_STEPS_PER_REV * STEPPER1_MICROSTEPS) + " steps");
-    Serial.println("  Steps/mm:  " + String(STEPPER1_STEPS_PER_MM) + " (20mm lead screw)");
-    Serial.println("  Default Speed: " + String(stepper1Speed) + " steps/sec (" + String(stepper1Speed / STEPPER1_STEPS_PER_MM) + "mm/s)");
-    Serial.println("  Max Speed: " + String(STEPPER1_MAX_SPEED) + " steps/sec (80mm/s)");
-    Serial.println("  Current Position: " + String(currentStepper1Position) + " steps");
-    Serial.println("  Motor ALWAYS ENABLED - Ready to move!\n");
+    Serial.println("[Stepper1] Top linear: GPIO " + String(STEPPER1_STEP_PIN) + "/" + String(STEPPER1_DIR_PIN) + ", " + String(stepper1Speed / STEPPER1_STEPS_PER_MM) + "mm/s");
 
     // Initialize Side Linear Stepper (Double)
     pinMode(STEPPER2_STEP_PIN, OUTPUT);
@@ -2114,31 +1953,14 @@ void setup() {
 
     // Set initial speed
     setStepper2Speed(1500);  // 1500 steps/second default (7.5mm/s)
-
-    Serial.println("SIDE LINEAR STEPPER (DOUBLE) initialized (Mini Linear Rail Guide):");
-    Serial.println("  STEP Pin:   GPIO " + String(STEPPER2_STEP_PIN) + " (PUL+/PUL-)");
-    Serial.println("  DIR Pin:    GPIO " + String(STEPPER2_DIR_PIN) + " (DIR+/DIR-)");
-    Serial.println("  ENABLE:     ENA+ hardwired to GND (ALWAYS ENABLED)");
-    Serial.println("  Microsteps: 1/" + String(STEPPER2_MICROSTEPS) + " (FULL STEP - fastest)");
-    Serial.println("  Steps/Rev: " + String(STEPPER2_STEPS_PER_REV * STEPPER2_MICROSTEPS) + " steps");
-    Serial.println("  Steps/mm:  " + String(STEPPER2_STEPS_PER_MM) + " (1mm lead screw)");
-    Serial.println("  Max Travel: " + String(STEPPER2_MAX_POSITION / STEPPER2_STEPS_PER_MM) + "mm (" + String(STEPPER2_MAX_POSITION) + " steps)");
-    Serial.println("  Default Speed: " + String(stepper2Speed) + " steps/sec (" + String(stepper2Speed / STEPPER2_STEPS_PER_MM) + "mm/s)");
-    Serial.println("  Max Speed: " + String(STEPPER2_MAX_SPEED) + " steps/sec (120mm/s)");
-    Serial.println("  Current Position: " + String(currentStepper2Position) + " steps");
-    Serial.println("  Motor ALWAYS ENABLED - Ready to move!\n");
+    Serial.println("[Stepper2] Side linear: GPIO " + String(STEPPER2_STEP_PIN) + "/" + String(STEPPER2_DIR_PIN) + ", " + String(stepper2Speed / STEPPER2_STEPS_PER_MM) + "mm/s");
 
     // Initialize WS2812B LED Strip (NeoPixel)
     strip.begin();           // Initialize NeoPixel strip object
     strip.setBrightness(100); // Set moderate brightness to reduce power draw (0-255)
     strip.show();            // Initialize all pixels to 'off'
 
-    Serial.println("WS2812B LED Strip initialized (NeoPixel):");
-    Serial.println("  Data Pin:    GPIO " + String(RGB_DATA_PIN));
-    Serial.println("  LED Count:   " + String(RGB_NUM_LEDS) + " LEDs");
-    Serial.println("  Type:        WS2812B (GRB, 800KHz)");
-    Serial.println("  Brightness:  100 (reduced to prevent overload)");
-    Serial.println("  Initial State: OFF (all LEDs black)\n");
+    Serial.println("[RGB] " + String(RGB_NUM_LEDS) + " LEDs on GPIO " + String(RGB_DATA_PIN));
 
     // Initialize 8-channel relay
     pinMode(RELAY_1_PIN, OUTPUT);
@@ -2152,53 +1974,27 @@ void setup() {
 
     // Turn all relays OFF initially
     allRelaysOff();
-    Serial.println("8-Channel Relay initialized:");
-    Serial.println("  CH1 (GPIO 3):  Bill + Coin (auto ON when payment enabled)");
-    Serial.println("  CH2 (GPIO 8):  Solenoid Lock");
-    Serial.println("  CH3 (GPIO 18): Centrifugal Blower Fan");
-    Serial.println("  CH4 (GPIO 17): PTC Ceramic Heater");
-    Serial.println("  CH5 (GPIO 16): Bottom Exhaust");
-    Serial.println("  CH6 (GPIO 15): Diaphragm Pump");
-    Serial.println("  CH7 (GPIO 7):  Ultrasonic Mist Maker");
-    Serial.println("  CH8 (GPIO 6):  UVC Light");
-    Serial.println("All relays set to OFF");
-    Serial.println("NOTE: CH1 will auto-turn ON when payment system is enabled\n");
+    Serial.println("[Relay] 8-channel initialized, all OFF");
 
-    // Initialize coin slot pin
+    // Initialize coin acceptor
     pinMode(COIN_SLOT_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(COIN_SLOT_PIN), handleCoinPulse, FALLING);
-    Serial.println("Coin slot initialized on GPIO 5");
-    Serial.println("Supported coin denominations: 1, 5, 10, 20 pesos");
 
-    // Initialize bill acceptor pins
+    // Initialize bill acceptor
     pinMode(BILL_PULSE_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BILL_PULSE_PIN), handleBillPulse, FALLING);
-    Serial.println("Bill acceptor initialized on GPIO 4");
-    Serial.println("Supported bill denominations: 20, 50, 100 pesos");
-    Serial.println("Bill pulse ratio: 1 pulse = 10 pesos");
-    Serial.println("\n*** Payment system will be enabled when user enters payment page ***\n");
 
     // Load totals from preferences
     totalCoinPesos = prefs.getUInt("totalCoinPesos", 0);
     totalBillPesos = prefs.getUInt("totalBillPesos", 0);
     totalPesos = totalCoinPesos + totalBillPesos;
-    Serial.println("Total coins collected: " + String(totalCoinPesos) + " PHP");
-    Serial.println("Total bills collected: " + String(totalBillPesos) + " PHP");
-    Serial.println("Grand total: " + String(totalPesos) + " PHP\n");
 
     // Initialize device ID (persistent)
     deviceId = prefs.getString("deviceId", "");
     if (deviceId.length() == 0) {
         deviceId = generateDeviceId();
         prefs.putString("deviceId", deviceId);
-        Serial.println("Generated new Device ID: " + deviceId);
-    } else {
-        Serial.println("Loaded existing Device ID: " + deviceId);
     }
-
-    // Debug: Print chip ID
-    uint64_t chipid = ESP.getEfuseMac();
-    Serial.printf("Chip ID: %04X%08X\n\n", (uint16_t)(chipid>>32), (uint32_t)chipid);
 
     // Check if device is paired
     isPaired = prefs.getBool("paired", false);
@@ -2206,30 +2002,24 @@ void setup() {
     // Generate pairing code if not paired
     if (!isPaired) {
         pairingCode = generatePairingCode();
-        Serial.println("=== Pairing Information ===");
-        Serial.println("Device ID: " + deviceId);
-        Serial.println("Pairing Code: " + pairingCode);
-        Serial.println("===========================\n");
-    } else {
-        Serial.println("Device is already paired\n");
     }
 
-    // CRITICAL: Initialize WiFi mode to STA first (required for ESP-NOW)
+    Serial.println("\n--- Device Info ---");
+    Serial.println("ID: " + deviceId);
+    Serial.println("Paired: " + String(isPaired ? "Yes" : "No - Code: " + pairingCode));
+    Serial.println("Money: " + String(totalPesos) + " PHP");
+    Serial.println("-------------------\n");
+
+    // Initialize WiFi and ESP-NOW
     WiFi.mode(WIFI_STA);
-    delay(100);  // Allow WiFi to stabilize
-
-    // Initialize ESP-NOW BEFORE WiFi connection (so we can broadcast to CAM)
-    initESPNow();
-
-    // Small delay to ensure ESP-NOW is ready
     delay(100);
 
-    // Broadcast credentials immediately (for CAM that's already running)
-    Serial.println("[ESP-NOW] Broadcasting initial credentials to CAM...");
-    sendCredentialsToCAM();
-    delay(500);  // Allow broadcast to complete
+    initESPNow();
+    delay(100);
 
-    // Now attempt WiFi connection
+    sendCredentialsToCAM();
+    delay(500);
+
     connectWiFi();
 }
 
@@ -2257,32 +2047,15 @@ void loop() {
             unsigned int coinValue = currentCoinPulses;
             totalCoinPesos += coinValue;
             totalPesos = totalCoinPesos + totalBillPesos;
-
-            // Save totals to persistent storage
             prefs.putUInt("totalCoinPesos", totalCoinPesos);
 
-            Serial.println("\n=== COIN INSERTED ===");
-            Serial.println("Coin Value: " + String(coinValue) + " PHP");
-            Serial.println("Pulses Counted: " + String(currentCoinPulses));
-            Serial.println("Total Coins: " + String(totalCoinPesos) + " PHP");
-            Serial.println("Grand Total: " + String(totalPesos) + " PHP");
+            Serial.println("[COIN] " + String(coinValue) + " PHP (Total: " + String(totalPesos) + " PHP)");
 
-            // Warn if unexpected denomination (but still accept it)
-            if (coinValue != 1 && coinValue != 5 && coinValue != 10 && coinValue != 20) {
-                Serial.println("[WARNING] Unexpected coin value: " + String(coinValue) + " PHP");
-                Serial.println("[WARNING] Expected: 1, 5, 10, or 20 pesos");
-                Serial.println("[WARNING] Coin was still counted");
-            }
-            Serial.println("=====================\n");
-
-            // Send coin insertion event via WebSocket (only if paired)
             if (isPaired && wsConnected) {
                 String coinMsg = "{\"type\":\"coin-inserted\",\"deviceId\":\"" + deviceId + "\",\"coinValue\":" + String(coinValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
                 webSocket.sendTXT(coinMsg);
-                Serial.println("[WebSocket] Coin: " + String(coinValue) + " PHP sent");
             }
 
-            // Reset pulse counter for next coin
             currentCoinPulses = 0;
         }
     }
@@ -2303,25 +2076,12 @@ void loop() {
             // Save totals to persistent storage
             prefs.putUInt("totalBillPesos", totalBillPesos);
 
-            Serial.println("\n=== BILL INSERTED ===");
-            Serial.println("Bill Value: " + String(billValue) + " PHP");
-            Serial.println("Pulses Counted: " + String(currentBillPulses) + " (x10)");
-            Serial.println("Total Bills: " + String(totalBillPesos) + " PHP");
-            Serial.println("Grand Total: " + String(totalPesos) + " PHP");
-
-            // Warn if unexpected denomination (but still accept it)
-            if (billValue != 20 && billValue != 50 && billValue != 100) {
-                Serial.println("[WARNING] Unexpected bill value: " + String(billValue) + " PHP");
-                Serial.println("[WARNING] Expected: 20, 50, or 100 pesos");
-                Serial.println("[WARNING] Bill was still counted");
-            }
-            Serial.println("=====================\n");
+            Serial.println("[BILL] " + String(billValue) + " PHP (Total: " + String(totalPesos) + " PHP)");
 
             // Send bill insertion event via WebSocket (only if paired)
             if (isPaired && wsConnected) {
                 String billMsg = "{\"type\":\"bill-inserted\",\"deviceId\":\"" + deviceId + "\",\"billValue\":" + String(billValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
                 webSocket.sendTXT(billMsg);
-                Serial.println("[WebSocket] Bill: " + String(billValue) + " PHP sent");
             }
 
             // Reset pulse counter for next bill
@@ -2335,25 +2095,21 @@ void loop() {
         cmd.trim();
 
         if (cmd == "RESET_WIFI") {
-            Serial.println("=== Clearing WiFi Credentials ===");
             prefs.remove("ssid");
             prefs.remove("pass");
-            Serial.println("Restarting...");
+            Serial.println("WiFi reset, restarting...");
             delay(1000);
             ESP.restart();
         }
         else if (cmd == "RESET_PAIRING") {
-            Serial.println("=== Clearing Pairing Status ===");
             prefs.putBool("paired", false);
             isPaired = false;
             pairingCode = generatePairingCode();
-            Serial.println("New Pairing Code: " + pairingCode);
-            Serial.println("Restarting...");
+            Serial.println("Pairing reset, code: " + pairingCode);
             delay(1000);
             ESP.restart();
         }
         else if (cmd == "RESET_MONEY") {
-            Serial.println("=== Resetting Money Counters ===");
             totalCoinPesos = 0;
             totalBillPesos = 0;
             totalPesos = 0;
@@ -2361,95 +2117,17 @@ void loop() {
             currentBillPulses = 0;
             prefs.putUInt("totalCoinPesos", 0);
             prefs.putUInt("totalBillPesos", 0);
-            Serial.println("All counters reset to 0 PHP");
-            Serial.println("================================\n");
+            Serial.println("Money counters reset");
         }
         else if (cmd == "STATUS") {
-            Serial.println("\n=== Device Status ===");
-            Serial.println("Device ID: " + deviceId);
-            Serial.println("WiFi Connected: " + String(wifiConnected ? "Yes" : "No"));
-            if (wifiConnected) {
-                Serial.println("IP Address: " + WiFi.localIP().toString());
-            }
-            Serial.println("WebSocket: " + String(wsConnected ? "Connected" : "Disconnected"));
-            Serial.println("Paired: " + String(isPaired ? "Yes" : "No"));
-            if (!isPaired) {
-                Serial.println("Pairing Code: " + pairingCode);
-            }
-            Serial.println("--- Payment Status ---");
-            Serial.println("Total Coins: " + String(totalCoinPesos) + " PHP");
-            Serial.println("Total Bills: " + String(totalBillPesos) + " PHP");
-            Serial.println("Grand Total: " + String(totalPesos) + " PHP");
-            Serial.println("Current Coin Pulses: " + String(currentCoinPulses));
-            Serial.println("Current Bill Pulses: " + String(currentBillPulses));
-            Serial.println("--- Relay Status ---");
-            Serial.println("Relay 1 (Bill Acceptor): " + String(relay1State ? "ON" : "OFF"));
-            Serial.println("Relay 2 (Coin Slot): " + String(relay2State ? "ON" : "OFF"));
-            Serial.println("Relay 3 (Blower Fan): " + String(relay3State ? "ON" : "OFF"));
-            Serial.println("Relay 4 (PTC Heater): " + String(relay4State ? "ON" : "OFF"));
-            Serial.println("Relay 5 (Bottom Exhaust): " + String(relay5State ? "ON" : "OFF"));
-            Serial.println("Relay 6 (Diaphragm Pump): " + String(relay6State ? "ON" : "OFF"));
-            Serial.println("Relay 7 (Mist Maker): " + String(relay7State ? "ON" : "OFF"));
-            Serial.println("Relay 8 (UVC Light): " + String(relay8State ? "ON" : "OFF"));
-            Serial.println("--- DHT22 Sensor ---");
-            Serial.println("Temperature: " + String(currentTemperature) + "°C");
-            Serial.println("Humidity: " + String(currentHumidity) + "%");
-            Serial.println("--- Ultrasonic Sensors ---");
-            Serial.println("Atomizer Level: " + String(currentAtomizerDistance) + " cm");
-            Serial.println("Foam Level: " + String(currentFoamDistance) + " cm");
-            Serial.println("--- Servo Motors (Dual) ---");
-            Serial.println("Left Servo:");
-            Serial.println("  Current: " + String(currentLeftPosition) + "°");
-            Serial.println("  Target:  " + String(targetLeftPosition) + "°");
-            Serial.println("Right Servo:");
-            Serial.println("  Current: " + String(currentRightPosition) + "°");
-            Serial.println("  Target:  " + String(targetRightPosition) + "°");
-            Serial.println("Moving: " + String(servosMoving ? "Yes" : "No"));
-            Serial.println("--- DC Motors (DRV8871 Dual) ---");
-            Serial.println("Left Motor:");
-            Serial.println("  Speed: " + String(currentLeftMotorSpeed) + "/255");
-            if (currentLeftMotorSpeed > 0) {
-                Serial.println("  Direction: Forward");
-            } else if (currentLeftMotorSpeed < 0) {
-                Serial.println("  Direction: Reverse");
-            } else {
-                Serial.println("  Direction: Stopped");
-            }
-            Serial.println("Right Motor:");
-            Serial.println("  Speed: " + String(currentRightMotorSpeed) + "/255");
-            if (currentRightMotorSpeed > 0) {
-                Serial.println("  Direction: Forward");
-            } else if (currentRightMotorSpeed < 0) {
-                Serial.println("  Direction: Reverse");
-            } else {
-                Serial.println("  Direction: Stopped");
-            }
-            Serial.println("--- Top Linear Stepper ---");
-            Serial.println("Enabled: ALWAYS (ENA+ hardwired to GND - holding torque ON)");
-            Serial.println("Current Position: " + String(currentStepper1Position) + " steps (" + String(currentStepper1Position / 10.0) + "mm)");
-            Serial.println("Target Position:  " + String(targetStepper1Position) + " steps (" + String(targetStepper1Position / 10.0) + "mm)");
-            Serial.println("Speed: " + String(stepper1Speed) + " steps/sec (" + String(stepper1Speed / 10) + "mm/s)");
-            Serial.println("Moving: " + String(stepper1Moving ? "Yes" : "No"));
-            if (stepper1Moving) {
-                long stepsRemaining = abs(targetStepper1Position - currentStepper1Position);
-                Serial.println("Steps Remaining: " + String(stepsRemaining));
-            }
-            Serial.println("--- Side Linear Stepper (Double) ---");
-            Serial.println("Enabled: ALWAYS (ENA+ hardwired to GND - holding torque ON)");
-            Serial.println("Current Position: " + String(currentStepper2Position) + " steps (" + String(currentStepper2Position / 10.0) + "mm)");
-            Serial.println("Target Position:  " + String(targetStepper2Position) + " steps (" + String(targetStepper2Position / 10.0) + "mm)");
-            Serial.println("Speed: " + String(stepper2Speed) + " steps/sec (" + String(stepper2Speed / 10) + "mm/s)");
-            Serial.println("Moving: " + String(stepper2Moving ? "Yes" : "No"));
-            if (stepper2Moving) {
-                long stepsRemaining = abs(targetStepper2Position - currentStepper2Position);
-                Serial.println("Steps Remaining: " + String(stepsRemaining));
-            }
-            Serial.println("--- ESP32-CAM (Classification via WebSocket) ---");
-            Serial.println("ESP-NOW Initialized: " + String(espNowInitialized ? "Yes" : "No"));
-            Serial.println("Credentials Sent to CAM: " + String(credentialsSentToCAM ? "Yes" : "No"));
-            Serial.println("Last Result: " + lastClassificationResult);
-            Serial.println("Last Confidence: " + String(lastClassificationConfidence * 100, 1) + "%");
-            Serial.println("=====================\n");
+            Serial.println("\nDevice: " + deviceId);
+            Serial.println("WiFi: " + String(wifiConnected ? WiFi.localIP().toString() : "Disconnected"));
+            Serial.println("WS: " + String(wsConnected ? "OK" : "Down"));
+            Serial.println("Paired: " + String(isPaired ? "Yes" : pairingCode));
+            Serial.println("Money: " + String(totalPesos) + " PHP");
+            Serial.println("Temp: " + String(currentTemperature) + "°C, Humidity: " + String(currentHumidity) + "%");
+            Serial.println("Stepper1: " + String(currentStepper1Position / 10.0) + "mm" + (stepper1Moving ? " (moving)" : ""));
+            Serial.println("Stepper2: " + String(currentStepper2Position / 10.0) + "mm" + (stepper2Moving ? " (moving)" : ""));
         }
         else if (cmd.startsWith("RELAY")) {
             // Commands: RELAY_1_ON, RELAY_1_OFF, RELAY_ALL_OFF
@@ -2472,40 +2150,21 @@ void loop() {
                         } else if (action == "OFF") {
                             setRelay(channel, false);
                         } else {
-                            Serial.println("[ERROR] Unknown action: " + action);
-                            Serial.println("Use: RELAY_1_ON, RELAY_1_OFF, or RELAY_ALL_OFF");
+                            Serial.println("[ERROR] Use: RELAY_X_ON/OFF or RELAY_ALL_OFF");
                         }
                     } else {
-                        Serial.println("[ERROR] Invalid channel: " + channelStr);
-                        Serial.println("Valid channels: 1-8");
+                        Serial.println("[ERROR] Invalid channel (1-8)");
                     }
                 } else {
-                    Serial.println("[ERROR] Invalid relay command format");
-                    Serial.println("Use: RELAY_1_ON, RELAY_1_OFF, or RELAY_ALL_OFF");
+                    Serial.println("[ERROR] Use: RELAY_X_ON/OFF or RELAY_ALL_OFF");
                 }
             }
         }
         else if (cmd == "SERVO_DEMO") {
-            Serial.println("=== Running Dual Servo Demo ===");
-            Serial.println("Left:  0° → 90° → 180° (smooth sequence)");
-            Serial.println("Right: 180° → 90° → 0° (mirrored)");
-            Serial.println("Watch the smooth slow mirrored movement!");
-
-            // Move to 0 first (left=0°, right=180°)
             setServoPositions(0);
-            // NO DELAY - servos move smoothly via updateServoPositions() in loop()
-
-            // Move to 90 degrees (left=90°, right=90°)
             setServoPositions(90);
-            // NO DELAY - servos move smoothly via updateServoPositions() in loop()
-
-            // Move to 180 degrees (left=180°, right=0°)
             setServoPositions(180);
-
-            Serial.println("Demo sequence started! Servos moving in real-time");
-            Serial.println("Movement is fully non-blocking - all processes continue running");
-            Serial.println("Use SERVO_0 to return to start position");
-            Serial.println("==========================\n");
+            Serial.println("Servo demo started (0°→90°→180°)");
         }
         else if (cmd.startsWith("SERVO_")) {
             // Parse SERVO_XXX where XXX is angle for LEFT servo (0-180)
@@ -2516,9 +2175,7 @@ void loop() {
             if (angle >= 0 && angle <= 180) {
                 setServoPositions(angle);
             } else {
-                Serial.println("[ERROR] Invalid servo angle: " + angleStr);
-                Serial.println("Valid range: 0-180 degrees");
-                Serial.println("Examples: SERVO_0 (L:0°,R:180°), SERVO_90 (L:90°,R:90°), SERVO_180 (L:180°,R:0°)");
+                Serial.println("[ERROR] Angle 0-180 (use: SERVO_X)");
             }
         }
         else if (cmd.startsWith("MOTOR_LEFT_")) {
@@ -2568,16 +2225,7 @@ void loop() {
                 if (speed >= -255 && speed <= 255) {
                     setMotorsSameSpeed(speed);
                 } else {
-                    Serial.println("[ERROR] Invalid motor speed: " + subCmd);
-                    Serial.println("Valid range: -255 (full reverse) to 255 (full forward)");
-                    Serial.println("Examples:");
-                    Serial.println("  MOTOR_255        - Both motors full forward");
-                    Serial.println("  MOTOR_LEFT_255   - Left motor full forward");
-                    Serial.println("  MOTOR_RIGHT_255  - Right motor full forward");
-                    Serial.println("  MOTOR_LEFT_-128  - Left motor half reverse");
-                    Serial.println("  MOTOR_BRAKE      - Both motors brake");
-                    Serial.println("  MOTOR_LEFT_BRAKE - Left motor brake");
-                    Serial.println("  MOTOR_COAST      - Both motors coast");
+                    Serial.println("[ERROR] Speed -255 to 255 (use: MOTOR_X)");
                 }
             }
         }
@@ -2586,30 +2234,19 @@ void loop() {
             String subCmd = cmd.substring(9);  // Remove "STEPPER1_"
 
             if (subCmd == "ENABLE" || subCmd == "DISABLE") {
-                Serial.println("[Top Linear] Motor is ALWAYS ENABLED (ENA+ hardwired to GND)");
-                Serial.println("[Top Linear] No enable/disable control available - motor always has holding torque");
-                Serial.println("[Top Linear] Ready to move! Use STEPPER1_MOVE_XXX or STEPPER1_MM_XXX commands");
+                Serial.println("[Stepper1] Always enabled (ENA+ hardwired)");
             }
             else if (subCmd == "TEST_MANUAL") {
-                // Manual test: step motor 10 times slowly
-                Serial.println("[Top Linear] Manual Test - stepping 10 times rapidly (non-blocking)");
-                Serial.println("[Top Linear] Watch for motor movement or listen for clicking sound from driver");
+                Serial.println("[Stepper1] Testing 10 steps...");
                 for (int i = 0; i < 10; i++) {
-                    // Set direction
                     digitalWrite(STEPPER1_DIR_PIN, HIGH);
                     delayMicroseconds(5);
-
-                    // Generate step pulse
                     digitalWrite(STEPPER1_STEP_PIN, HIGH);
                     delayMicroseconds(20);
                     digitalWrite(STEPPER1_STEP_PIN, LOW);
                     delayMicroseconds(20);
-
-                    Serial.println("[Top Linear] Step " + String(i + 1) + "/10");
-                    // NO DELAY - rapid test to verify driver response
                 }
-                Serial.println("[Top Linear] Manual test complete (rapid fire)");
-                Serial.println("[Top Linear] Did you hear clicking? Did motor move?");
+                Serial.println("[Stepper1] Test done");
             }
             else if (subCmd == "TEST_PINS") {
                 // Test if pins are actually outputting
@@ -2654,34 +2291,7 @@ void loop() {
                 stepper1Home();
             }
             else if (subCmd == "INFO") {
-                Serial.println("\n=== STEPPER WIRING INFO ===");
-                Serial.println("Current Pin Configuration:");
-                Serial.println("  STEP Pin:   GPIO " + String(STEPPER1_STEP_PIN) + " → TB6600 PUL+");
-                Serial.println("  DIR Pin:    GPIO " + String(STEPPER1_DIR_PIN) + " → TB6600 DIR+");
-                Serial.println("  ENABLE:     ENA+ → GND (HARDWIRED - motor ALWAYS enabled)");
-                Serial.println("  GND:        ESP32 GND → TB6600 PUL-, DIR-, ENA-");
-                Serial.println("\nCurrent Pin States:");
-                Serial.println("  STEP (GPIO " + String(STEPPER1_STEP_PIN) + "): " + String(digitalRead(STEPPER1_STEP_PIN) ? "HIGH (3.3V)" : "LOW (0V)"));
-                Serial.println("  DIR (GPIO " + String(STEPPER1_DIR_PIN) + "):  " + String(digitalRead(STEPPER1_DIR_PIN) ? "HIGH (3.3V)" : "LOW (0V)"));
-                Serial.println("\nMotor Status:");
-                Serial.println("  Enabled: ALWAYS (ENA+ hardwired to GND)");
-                Serial.println("  Position: " + String(currentStepper1Position) + " steps (" + String(currentStepper1Position / 10.0) + "mm)");
-                Serial.println("  Speed: " + String(stepper1Speed) + " steps/sec (" + String(stepper1Speed / 10) + "mm/s)");
-                Serial.println("  Moving: " + String(stepper1Moving ? "YES" : "NO"));
-                Serial.println("\nMotor Specifications:");
-                Serial.println("  Type: NEMA11 Linear Actuator");
-                Serial.println("  Step Angle: 1.8° (200 steps/rev)");
-                Serial.println("  Microstepping: FULL STEP (fastest)");
-                Serial.println("  Lead Screw: 20mm pitch (10 steps/mm)");
-                Serial.println("  Max Speed: 800 steps/sec = 80mm/s");
-                Serial.println("  Stroke Length: 480mm");
-                Serial.println("\nTB6600 DIP Switch Settings:");
-                Serial.println("  SW1-SW3 (Microstep): OFF-OFF-OFF (FULL STEP)");
-                Serial.println("  SW4-SW6 (Current): Set for motor current");
-                Serial.println("\nTB6600 Power (separate from ESP32):");
-                Serial.println("  V+/VCC: 12-48V DC (recommend 24V for this motor)");
-                Serial.println("  GND: Connected to power supply AND ESP32 GND");
-                Serial.println("===========================\n");
+                Serial.println("Pos: " + String(currentStepper1Position / 10.0) + "mm, Speed: " + String(stepper1Speed / 10) + "mm/s, Moving: " + String(stepper1Moving));
             }
             else if (subCmd.startsWith("SPEED_")) {
                 // STEPPER1_SPEED_XXX - set speed in steps per second
@@ -2713,28 +2323,7 @@ void loop() {
                 stepper1MoveByMM(mm);
             }
             else {
-                Serial.println("[ERROR] Unknown stepper command: " + cmd);
-                Serial.println("\n=== STEPPER MOTOR 1 COMMANDS ===");
-                Serial.println("NOTE: Motor is ALWAYS ENABLED (ENA+ hardwired to GND)");
-                Serial.println("\nMovement Commands:");
-                Serial.println("  STEPPER1_SPEED_XXX      - Set speed (steps/sec, 1-800 max)");
-                Serial.println("  STEPPER1_MOVE_XXX       - Move relative steps (can be negative)");
-                Serial.println("  STEPPER1_GOTO_XXX       - Move to absolute position");
-                Serial.println("  STEPPER1_MM_XXX         - Move by millimeters (can be negative)");
-                Serial.println("  STEPPER1_STOP           - Stop movement immediately");
-                Serial.println("  STEPPER1_HOME           - Reset position to 0");
-                Serial.println("\nDiagnostic Commands:");
-                Serial.println("  STEPPER1_TEST_MANUAL    - Manual test: step 10 times rapidly");
-                Serial.println("  STEPPER1_TEST_PINS      - Test pin output (oscilloscope)");
-                Serial.println("  STEPPER1_TEST_PULSE     - Send rapid pulses to verify driver");
-                Serial.println("  STEPPER1_INFO           - Show wiring and status info");
-                Serial.println("\nExamples:");
-                Serial.println("  STEPPER1_SPEED_800      - Set to maximum speed (80mm/s)");
-                Serial.println("  STEPPER1_MM_480         - Move forward 480mm (full stroke)");
-                Serial.println("  STEPPER1_MM_-150        - Move backward 150mm");
-                Serial.println("  STEPPER1_MOVE_2000      - Move forward 2000 steps");
-                Serial.println("  STEPPER1_GOTO_0         - Return to home position");
-                Serial.println("  STEPPER1_STOP           - Emergency stop");
+                Serial.println("[ERROR] Unknown stepper1 command");
             }
         }
         else if (cmd.startsWith("STEPPER2_")) {
@@ -2742,9 +2331,7 @@ void loop() {
             String subCmd = cmd.substring(9);  // Remove "STEPPER2_"
 
             if (subCmd == "ENABLE" || subCmd == "DISABLE") {
-                Serial.println("[Side Linear] Motor is ALWAYS ENABLED (ENA+ hardwired to GND)");
-                Serial.println("[Side Linear] No enable/disable control available - motor always has holding torque");
-                Serial.println("[Side Linear] Ready to move! Use STEPPER2_MOVE_XXX or STEPPER2_MM_XXX commands");
+                Serial.println("[Stepper2] Always enabled (ENA+ hardwired)");
             }
             else if (subCmd == "STOP") {
                 stepper2Stop();
@@ -2782,24 +2369,7 @@ void loop() {
                 stepper2MoveByMM(mm);
             }
             else {
-                Serial.println("[ERROR] Unknown stepper2 command: " + cmd);
-                Serial.println("\n=== STEPPER MOTOR 2 COMMANDS ===");
-                Serial.println("NOTE: Motor is ALWAYS ENABLED (ENA+ hardwired to GND)");
-                Serial.println("\nMovement Commands:");
-                Serial.println("  STEPPER2_SPEED_XXX     - Set speed (steps/sec, 1-24000 max)");
-                Serial.println("  STEPPER2_MOVE_XXX      - Move relative steps (can be negative)");
-                Serial.println("  STEPPER2_GOTO_XXX      - Move to absolute position");
-                Serial.println("  STEPPER2_MM_XXX        - Move by millimeters (can be negative)");
-                Serial.println("  STEPPER2_STOP          - Stop movement immediately");
-                Serial.println("  STEPPER2_HOME          - Reset position to 0");
-                Serial.println("\nExamples:");
-                Serial.println("  STEPPER2_SPEED_1500    - Set to default speed (7.5mm/s)");
-                Serial.println("  STEPPER2_SPEED_24000   - Set to maximum speed (120mm/s)");
-                Serial.println("  STEPPER2_MM_100        - Move forward 100mm (full stroke)");
-                Serial.println("  STEPPER2_MM_-50        - Move backward 50mm");
-                Serial.println("  STEPPER2_MOVE_2000     - Move forward 2000 steps (10mm)");
-                Serial.println("  STEPPER2_GOTO_0        - Return to home position");
-                Serial.println("  STEPPER2_STOP          - Emergency stop");
+                Serial.println("[ERROR] Unknown stepper2 command");
             }
         }
         else if (cmd.startsWith("RGB_")) {
@@ -2835,27 +2405,11 @@ void loop() {
                     int blue = rgbStr.substring(secondUnderscore + 1).toInt();
                     setRGBColor(red, green, blue);
                 } else {
-                    Serial.println("[ERROR] Invalid RGB custom format. Use: RGB_CUSTOM_R_G_B");
-                    Serial.println("Example: RGB_CUSTOM_255_128_64");
+                    Serial.println("[ERROR] Use: RGB_CUSTOM_R_G_B");
                 }
             }
             else {
-                Serial.println("[ERROR] Unknown RGB command: " + cmd);
-                Serial.println("\n=== RGB LED STRIP COMMANDS ===");
-                Serial.println("Preset Colors:");
-                Serial.println("  RGB_WHITE        - Turn on white light");
-                Serial.println("  RGB_BLUE         - Turn on blue light");
-                Serial.println("  RGB_GREEN        - Turn on green light");
-                Serial.println("  RGB_VIOLET       - Turn on violet light");
-                Serial.println("  RGB_OFF          - Turn off all lights");
-                Serial.println("\nCustom Color:");
-                Serial.println("  RGB_CUSTOM_R_G_B - Set custom color (0-255 each)");
-                Serial.println("\nExamples:");
-                Serial.println("  RGB_WHITE        - Full white");
-                Serial.println("  RGB_BLUE         - Full blue");
-                Serial.println("  RGB_CUSTOM_255_0_0     - Full red");
-                Serial.println("  RGB_CUSTOM_255_128_0   - Orange");
-                Serial.println("  RGB_OFF          - Turn off");
+                Serial.println("[ERROR] Unknown RGB command");
             }
         }
         else if (cmd.startsWith("CAM_")) {
@@ -2871,11 +2425,7 @@ void loop() {
                 requestClassificationFromCAM();
             }
             else {
-                Serial.println("[ERROR] Unknown CAM command: " + cmd);
-                Serial.println("\n=== ESP32-CAM COMMANDS (WebSocket) ===");
-                Serial.println("  CAM_BROADCAST - Broadcast WiFi credentials via ESP-NOW");
-                Serial.println("  CAM_CLASSIFY  - Request classification via WebSocket");
-                Serial.println("======================================\n");
+                Serial.println("[ERROR] Unknown CAM command");
             }
         }
     }
