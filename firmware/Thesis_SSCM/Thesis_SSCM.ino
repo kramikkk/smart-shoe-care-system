@@ -351,6 +351,9 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
                 camIsReady = true;
                 credentialSendAttempts = MAX_CREDENTIAL_ATTEMPTS;  // Stop retrying
                 Serial.println("[ESP-NOW] CAM confirmed ready - pairing complete");
+
+                // Notify frontend of CAM sync status
+                sendCamSyncStatus();
             } else {
                 Serial.println("[ESP-NOW] CAM rejected credentials (device ID mismatch on CAM side)");
             }
@@ -683,6 +686,9 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 // Send initial status update immediately after subscribing
                 String statusMsg = "{\"type\":\"status-update\",\"deviceId\":\"" + deviceId + "\"}";
                 webSocket.sendTXT(statusMsg);
+
+                // Send CAM sync status so frontend knows if CAM is ready
+                sendCamSyncStatus();
             }
             else if (message.indexOf("\"type\":\"status-ack\"") != -1) {
                 // Acknowledgment of status update with paired status sync
@@ -881,6 +887,9 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     camIsReady = true;
                     credentialSendAttempts = MAX_CREDENTIAL_ATTEMPTS;  // Stop retrying
                     Serial.println("[ESP-NOW] CAM confirmed ready - stopping credential retry");
+
+                    // Notify frontend of CAM sync status
+                    sendCamSyncStatus();
                 }
             }
             break;
@@ -1255,10 +1264,25 @@ void sendDHTDataViaWebSocket() {
     sensorMsg += "\"type\":\"sensor-data\",";
     sensorMsg += "\"deviceId\":\"" + deviceId + "\",";
     sensorMsg += "\"temperature\":" + String(currentTemperature) + ",";
-    sensorMsg += "\"humidity\":" + String(currentHumidity);
+    sensorMsg += "\"humidity\":" + String(currentHumidity) + ",";
+    sensorMsg += "\"camSynced\":" + String(camIsReady ? "true" : "false");
     sensorMsg += "}";
 
     webSocket.sendTXT(sensorMsg);
+}
+
+// Send CAM sync status update (called when sync status changes)
+void sendCamSyncStatus() {
+    if (!isPaired || !wsConnected) return;
+
+    String syncMsg = "{";
+    syncMsg += "\"type\":\"cam-sync-status\",";
+    syncMsg += "\"deviceId\":\"" + deviceId + "\",";
+    syncMsg += "\"camSynced\":" + String(camIsReady ? "true" : "false");
+    syncMsg += "}";
+
+    webSocket.sendTXT(syncMsg);
+    Serial.println("[WebSocket] Sent CAM sync status: " + String(camIsReady ? "SYNCED" : "NOT_SYNCED"));
 }
 
 /* ===================== ULTRASONIC FUNCTIONS ===================== */

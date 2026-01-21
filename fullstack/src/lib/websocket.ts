@@ -154,9 +154,17 @@ export function createWebSocketServer(server: Server) {
         // Handle sensor data from ESP32 (temperature & humidity)
         else if (message.type === 'sensor-data' && message.deviceId) {
           const sensorDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Sensor data from ${sensorDeviceId}: Temp ${message.temperature}°C, Humidity ${message.humidity}%`)
+          console.log(`[WebSocket] Sensor data from ${sensorDeviceId}: Temp ${message.temperature}°C, Humidity ${message.humidity}%, CAM Synced: ${message.camSynced}`)
           // Broadcast to all clients subscribed to this device
           broadcastToDevice(sensorDeviceId, message)
+        }
+
+        // Handle CAM sync status from ESP32 (main board)
+        else if (message.type === 'cam-sync-status' && message.deviceId) {
+          const syncDeviceId = message.deviceId as string
+          console.log(`[WebSocket] CAM sync status from ${syncDeviceId}: ${message.camSynced ? 'SYNCED' : 'NOT_SYNCED'}`)
+          // Broadcast to all clients subscribed to this device
+          broadcastToDevice(syncDeviceId, message)
         }
 
         // Handle distance data from ESP32 (atomizer & foam levels)
