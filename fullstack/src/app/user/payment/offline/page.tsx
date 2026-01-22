@@ -189,7 +189,7 @@ const Offline = () => {
         paymentMethod: 'Cash',
         serviceType: service.charAt(0).toUpperCase() + service.slice(1),
         shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
-        careType: care.charAt(0).toUpperCase() + care.slice(1),
+        careType: service === 'package' ? 'Auto' : care.charAt(0).toUpperCase() + care.slice(1),
         amount: selectedService.price,
         deviceId,
       })
@@ -201,7 +201,7 @@ const Offline = () => {
           paymentMethod: 'Cash',
           serviceType: service.charAt(0).toUpperCase() + service.slice(1), // Capitalize first letter
           shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
-          careType: care.charAt(0).toUpperCase() + care.slice(1),
+          careType: service === 'package' ? 'Auto' : care.charAt(0).toUpperCase() + care.slice(1),
           deviceId, // Link transaction to this kiosk
         }),
       })

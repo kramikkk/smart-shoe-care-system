@@ -118,7 +118,7 @@ const OnlinePayment = () => {
                 paymentMethod: 'Online',
                 serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1), // Capitalize first letter
                 shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
-                careType: selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
+                careType: selectedService === 'package' ? 'Auto' : selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
                 deviceId, // Link transaction to this kiosk
               }),
             })
@@ -309,7 +309,7 @@ const OnlinePayment = () => {
           paymentMethod: 'Online',
           serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1),
           shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
-          careType: selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
+          careType: selectedService === 'package' ? 'Auto' : selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
           deviceId, // Link transaction to this kiosk
         }),
       })
