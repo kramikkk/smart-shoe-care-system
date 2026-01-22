@@ -147,9 +147,25 @@ const unsigned long SERVICE_STATUS_UPDATE_INTERVAL = 1000;  // Send updates ever
 unsigned long lastServiceStatusUpdate = 0;
 
 /* ===================== CLEANING SERVICE STATE ===================== */
-// Cleaning mode: Stepper moves 0 → 480mm → 0 while diaphragm pump runs
+// Cleaning mode phases:
+// Phase 0: Not cleaning
+// Phase 1: Stepper moving to max (480mm), pump ON
+// Phase 2: Stepper returning to 0, pump ON
+// Phase 3: Brushing clockwise (95 seconds)
+// Phase 4: Brushing counter-clockwise (95 seconds)
+// After 3 complete brush cycles, cleaning ends
+
 const long CLEANING_MAX_POSITION = 4800;  // 480mm * 10 steps/mm = 4800 steps
-int cleaningPhase = 0;  // 0: not cleaning, 1: moving to max, 2: returning to 0
+int cleaningPhase = 0;  // Current cleaning phase (0-4)
+
+// Brushing cycle state
+// Total cleaning: 300s, Phase 1-2: ~15s, Brushing: ~285s
+// 3 cycles × 2 directions = 6 phases, so 285s ÷ 6 ≈ 47.5s per direction
+const unsigned long BRUSH_DURATION_MS = 47500;  // 47.5 seconds per direction
+const int BRUSH_TOTAL_CYCLES = 3;               // 3 complete cycles (CW + CCW each)
+const int BRUSH_MOTOR_SPEED = 200;              // Motor speed (0-255)
+int brushCurrentCycle = 0;                      // Current brush cycle (1-3)
+unsigned long brushPhaseStartTime = 0;          // When current brush phase started
 
 /* ===================== DHT22 TEMPERATURE & HUMIDITY SENSOR ===================== */
 #define DHT_PIN 9
@@ -1000,9 +1016,11 @@ void startService(String shoeType, String serviceType, String careType) {
         // Reset cleaning-specific state if transitioning from cleaning
         if (currentServiceType == "cleaning") {
             cleaningPhase = 0;
+            brushCurrentCycle = 0;
             stepper1MoveTo(0);  // Return stepper to home
             stepper2MoveTo(0);  // Return side stepper to home
-            Serial.println("[Service] Cleaning state reset, steppers returning to home");
+            motorsCoast();      // Stop brush motors
+            Serial.println("[Service] Cleaning state reset, steppers/motors returning to home");
         }
     }
 
@@ -1120,11 +1138,15 @@ void stopService() {
         setRelay(6, false);  // Diaphragm Pump
         // Stop stepper and return to home position
         cleaningPhase = 0;
+        brushCurrentCycle = 0;
         stepper1MoveTo(0);  // Return to home
         Serial.println("[Cleaning] Returning stepper to home position");
         // Return stepper2 to home position
         stepper2MoveTo(0);
         Serial.println("[Cleaning] Returning side stepper to home position");
+        // Stop brush motors
+        motorsCoast();
+        Serial.println("[Cleaning] Brush motors stopped");
     } else if (currentServiceType == "drying") {
         setRelay(3, false);  // Centrifugal Blower Fan
         setRelay(4, false);  // PTC Ceramic Heater
@@ -1163,25 +1185,77 @@ void handleService() {
     unsigned long elapsed = millis() - serviceStartTime;
 
     // Check if service duration is complete
+    // For cleaning: don't stop if brushing is still in progress (phases 3-4)
     if (elapsed >= serviceDuration) {
-        stopService();
-        return;
+        if (currentServiceType == "cleaning" && cleaningPhase >= 3) {
+            // Brushing in progress - don't stop yet
+        } else {
+            stopService();
+            return;
+        }
     }
 
-    // Handle cleaning mode stepper movement (one round trip: 0 → max → 0)
+    // Handle cleaning mode phases
     if (currentServiceType == "cleaning" && cleaningPhase > 0) {
-        // Check if stepper reached target position
-        if (!stepper1Moving) {
-            if (cleaningPhase == 1) {
-                // Reached max position, now return to 0
-                cleaningPhase = 2;
-                stepper1MoveTo(0);
-                Serial.println("[Cleaning] Stepper at max, returning to 0");
-            } else if (cleaningPhase == 2) {
-                // Reached home position, stepper movement complete
-                cleaningPhase = 0;  // Done with stepper movement
-                setRelay(6, false);  // Turn OFF diaphragm pump
-                Serial.println("[Cleaning] Stepper at home - pump OFF");
+
+        // Phase 1 & 2: Stepper movement with pump
+        if (cleaningPhase == 1 || cleaningPhase == 2) {
+            // Check if stepper reached target position
+            if (!stepper1Moving) {
+                if (cleaningPhase == 1) {
+                    // Reached max position, now return to 0
+                    cleaningPhase = 2;
+                    stepper1MoveTo(0);
+                    Serial.println("[Cleaning] Stepper at max, returning to 0");
+                } else if (cleaningPhase == 2) {
+                    // Reached home position, stepper/pump phase complete
+                    setRelay(6, false);  // Turn OFF diaphragm pump
+                    Serial.println("[Cleaning] Stepper at home - pump OFF");
+
+                    // Start brushing phase
+                    cleaningPhase = 3;
+                    brushCurrentCycle = 1;
+                    brushPhaseStartTime = millis();
+                    setMotorsSameSpeed(BRUSH_MOTOR_SPEED);  // Start CW
+                    Serial.println("[Cleaning] Starting brush cycle 1/3 - CLOCKWISE");
+                }
+            }
+        }
+
+        // Phase 3: Brushing clockwise
+        else if (cleaningPhase == 3) {
+            unsigned long brushElapsed = millis() - brushPhaseStartTime;
+            if (brushElapsed >= BRUSH_DURATION_MS) {
+                // Switch to counter-clockwise
+                cleaningPhase = 4;
+                brushPhaseStartTime = millis();
+                setMotorsSameSpeed(-BRUSH_MOTOR_SPEED);  // Start CCW
+                Serial.println("[Cleaning] Brush cycle " + String(brushCurrentCycle) + "/3 - COUNTER-CLOCKWISE");
+            }
+        }
+
+        // Phase 4: Brushing counter-clockwise
+        else if (cleaningPhase == 4) {
+            unsigned long brushElapsed = millis() - brushPhaseStartTime;
+            if (brushElapsed >= BRUSH_DURATION_MS) {
+                // Cycle complete
+                brushCurrentCycle++;
+
+                if (brushCurrentCycle <= BRUSH_TOTAL_CYCLES) {
+                    // Start next cycle (back to clockwise)
+                    cleaningPhase = 3;
+                    brushPhaseStartTime = millis();
+                    setMotorsSameSpeed(BRUSH_MOTOR_SPEED);  // Start CW
+                    Serial.println("[Cleaning] Starting brush cycle " + String(brushCurrentCycle) + "/3 - CLOCKWISE");
+                } else {
+                    // All cycles complete - stop motors and end service
+                    motorsCoast();
+                    cleaningPhase = 0;
+                    brushCurrentCycle = 0;
+                    Serial.println("[Cleaning] All 3 brush cycles complete - motors OFF");
+                    stopService();  // Cleaning fully complete
+                    return;
+                }
             }
         }
     }
@@ -1831,7 +1905,6 @@ void IRAM_ATTR handleBillPulse() {
 /* ===================== SETUP ===================== */
 void setup() {
     Serial.begin(115200);
-    delay(1000);
 
     Serial.println("\n\n=================================");
     Serial.println("  Smart Shoe Care Machine v2.0");
@@ -1839,9 +1912,6 @@ void setup() {
     Serial.println("=================================\n");
 
     prefs.begin("sscm", false);
-
-    // Wait for USB CDC to stabilize
-    delay(2000);
 
     // Initialize ESP-NOW for wireless communication with ESP32-CAM
     // Note: ESP-NOW will be fully initialized after WiFi mode is set
@@ -1871,10 +1941,25 @@ void setup() {
     targetRightPosition = 180;
 
     // Initialize DRV8871 DC Motor Drivers (Dual Motors) with PWM
+    // IMPORTANT: Set pins LOW before attaching PWM to prevent motor spin at boot
+    pinMode(MOTOR_LEFT_IN1_PIN, OUTPUT);
+    pinMode(MOTOR_LEFT_IN2_PIN, OUTPUT);
+    pinMode(MOTOR_RIGHT_IN1_PIN, OUTPUT);
+    pinMode(MOTOR_RIGHT_IN2_PIN, OUTPUT);
+    digitalWrite(MOTOR_LEFT_IN1_PIN, LOW);
+    digitalWrite(MOTOR_LEFT_IN2_PIN, LOW);
+    digitalWrite(MOTOR_RIGHT_IN1_PIN, LOW);
+    digitalWrite(MOTOR_RIGHT_IN2_PIN, LOW);
+
+    // Now attach PWM and immediately set duty to 0
     ledcAttach(MOTOR_LEFT_IN1_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
+    ledcWrite(MOTOR_LEFT_IN1_PIN, 0);
     ledcAttach(MOTOR_LEFT_IN2_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
+    ledcWrite(MOTOR_LEFT_IN2_PIN, 0);
     ledcAttach(MOTOR_RIGHT_IN1_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
+    ledcWrite(MOTOR_RIGHT_IN1_PIN, 0);
     ledcAttach(MOTOR_RIGHT_IN2_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
+    ledcWrite(MOTOR_RIGHT_IN2_PIN, 0);
 
     motorsCoast();
 
