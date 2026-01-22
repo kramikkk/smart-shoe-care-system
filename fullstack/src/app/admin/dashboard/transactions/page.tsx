@@ -35,7 +35,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
-        const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}`)
+        const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}&limit=10000`)
         const data = await response.json()
 
         if (data.success) {

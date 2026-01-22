@@ -50,15 +50,15 @@ export function TransactionPagination<TData>({
     <Pagination>
       <PaginationContent>
         <PaginationItem>
-          <PaginationPrevious 
+          <PaginationPrevious
             href="#"
             onClick={(e) => {
               e.preventDefault()
               table.previousPage()
             }}
             className={
-              !table.getCanPreviousPage() 
-                ? "pointer-events-none opacity-50" 
+              !table.getCanPreviousPage()
+                ? "pointer-events-none opacity-50"
                 : "cursor-pointer"
             }
           />
@@ -88,8 +88,8 @@ export function TransactionPagination<TData>({
               table.nextPage()
             }}
             className={
-              !table.getCanNextPage() 
-                ? "pointer-events-none opacity-50" 
+              !table.getCanNextPage()
+                ? "pointer-events-none opacity-50"
                 : "cursor-pointer"
             }
           />
