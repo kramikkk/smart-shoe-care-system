@@ -375,6 +375,12 @@ export default function TransactionsPage() {
                           Strong
                         </div>
                       </SelectItem>
+                      <SelectItem value="Auto">
+                        <div className="flex items-center gap-2">
+                          <div className="size-2 rounded-full bg-purple-500"></div>
+                          Auto
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

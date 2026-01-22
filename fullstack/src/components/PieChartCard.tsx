@@ -82,6 +82,10 @@ const chartConfig = {
     label: "Strong",
     color: "var(--chart-3)",
   },
+  auto: {
+    label: "Auto",
+    color: "var(--chart-4)",
+  },
 } satisfies ChartConfig
 
 export function PieChartCard() {

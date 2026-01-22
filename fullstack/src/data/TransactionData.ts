@@ -4,7 +4,7 @@ export type Transaction = {
   paymentMethod: "Cash" | "Online"
   serviceType: "Cleaning" | "Drying" | "Sterilizing" | "Package"
   shoeType: "Canvas" | "Rubber" | "Mesh"
-  careType: "Gentle" | "Normal" | "Strong"
+  careType: "Gentle" | "Normal" | "Strong" | "Auto"
   amount: number
   status: "Pending" | "Success" | "Failed"
 }
