@@ -81,6 +81,7 @@ const int MAX_CREDENTIAL_ATTEMPTS = 6;  // Try for 30 seconds total
 // CAM MAC address for direct pairing (prevents cross-device interference)
 uint8_t camMacAddress[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 bool camMacPaired = false;
+String pairedCamDeviceId = "";  // Actual CAM device ID from pairing (e.g., SSCM-CAM-D4DB1C)
 
 // Broadcast address (only used during initial pairing discovery)
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -348,7 +349,12 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
         // Verify this is for our device
         if (strcmp(ack.mainDeviceId, deviceId.c_str()) == 0) {
             if (ack.ackType == 1) {
-                // Credentials accepted - store CAM MAC for direct communication
+                // Always store/update the CAM device ID
+                pairedCamDeviceId = String(ack.camDeviceId);
+                prefs.putString("camDeviceId", pairedCamDeviceId);
+                Serial.println("[ESP-NOW] Stored CAM Device ID: " + pairedCamDeviceId);
+
+                // Credentials accepted - store CAM MAC for direct communication (first time only)
                 if (!camMacPaired) {
                     memcpy(camMacAddress, senderMac, 6);
                     prefs.putBytes("camMac", camMacAddress, 6);
@@ -412,6 +418,12 @@ void initESPNow() {
     size_t macLen = prefs.getBytes("camMac", camMacAddress, 6);
     if (macLen == 6 && (camMacAddress[0] != 0x00 || camMacAddress[1] != 0x00)) {
         camMacPaired = true;
+    }
+
+    // Load paired CAM device ID from preferences
+    pairedCamDeviceId = prefs.getString("camDeviceId", "");
+    if (pairedCamDeviceId.length() > 0) {
+        Serial.println("[ESP-NOW] Loaded CAM Device ID: " + pairedCamDeviceId);
     }
 
     // Add peer (either paired CAM MAC or broadcast for discovery)
@@ -1378,6 +1390,9 @@ void sendDHTDataViaWebSocket() {
     sensorMsg += "\"temperature\":" + String(currentTemperature) + ",";
     sensorMsg += "\"humidity\":" + String(currentHumidity) + ",";
     sensorMsg += "\"camSynced\":" + String(camIsReady ? "true" : "false");
+    if (pairedCamDeviceId.length() > 0) {
+        sensorMsg += ",\"camDeviceId\":\"" + pairedCamDeviceId + "\"";
+    }
     sensorMsg += "}";
 
     webSocket.sendTXT(sensorMsg);
@@ -1391,10 +1406,13 @@ void sendCamSyncStatus() {
     syncMsg += "\"type\":\"cam-sync-status\",";
     syncMsg += "\"deviceId\":\"" + deviceId + "\",";
     syncMsg += "\"camSynced\":" + String(camIsReady ? "true" : "false");
+    if (pairedCamDeviceId.length() > 0) {
+        syncMsg += ",\"camDeviceId\":\"" + pairedCamDeviceId + "\"";
+    }
     syncMsg += "}";
 
     webSocket.sendTXT(syncMsg);
-    Serial.println("[WebSocket] Sent CAM sync status: " + String(camIsReady ? "SYNCED" : "NOT_SYNCED"));
+    Serial.println("[WebSocket] Sent CAM sync status: " + String(camIsReady ? "SYNCED" : "NOT_SYNCED") + (pairedCamDeviceId.length() > 0 ? " (CAM: " + pairedCamDeviceId + ")" : ""));
 }
 
 /* ===================== ULTRASONIC FUNCTIONS ===================== */

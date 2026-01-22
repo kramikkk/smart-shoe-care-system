@@ -112,6 +112,8 @@ model Device {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   pairedBy     String?
+  camSynced    Boolean          @default(false)
+  camDeviceId  String?
   transactions Transaction[]
   pricing      ServicePricing[]
 

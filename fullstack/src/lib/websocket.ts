@@ -154,7 +154,28 @@ export function createWebSocketServer(server: Server) {
         // Handle sensor data from ESP32 (temperature & humidity)
         else if (message.type === 'sensor-data' && message.deviceId) {
           const sensorDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Sensor data from ${sensorDeviceId}: Temp ${message.temperature}°C, Humidity ${message.humidity}%, CAM Synced: ${message.camSynced}`)
+          console.log(`[WebSocket] Sensor data from ${sensorDeviceId}: Temp ${message.temperature}°C, Humidity ${message.humidity}%, CAM Synced: ${message.camSynced}, CAM ID: ${message.camDeviceId || 'NOT PROVIDED'}`)
+
+          // Update camSynced and camDeviceId in database if provided
+          if (message.camSynced !== undefined || message.camDeviceId) {
+            try {
+              const updateData: { camSynced?: boolean; camDeviceId?: string } = {}
+              if (message.camSynced !== undefined) updateData.camSynced = message.camSynced
+              if (message.camDeviceId) updateData.camDeviceId = message.camDeviceId as string
+
+              await prisma.device.update({
+                where: { deviceId: sensorDeviceId },
+                data: updateData
+              })
+
+              if (message.camDeviceId) {
+                console.log(`[WebSocket] ✅ Saved CAM Device ID to database: ${message.camDeviceId}`)
+              }
+            } catch (error) {
+              console.error(`[WebSocket] ❌ Failed to save to database:`, error)
+            }
+          }
+
           // Broadcast to all clients subscribed to this device
           broadcastToDevice(sensorDeviceId, message)
         }
@@ -162,9 +183,46 @@ export function createWebSocketServer(server: Server) {
         // Handle CAM sync status from ESP32 (main board)
         else if (message.type === 'cam-sync-status' && message.deviceId) {
           const syncDeviceId = message.deviceId as string
-          console.log(`[WebSocket] CAM sync status from ${syncDeviceId}: ${message.camSynced ? 'SYNCED' : 'NOT_SYNCED'}`)
+          console.log(`[WebSocket] CAM sync status from ${syncDeviceId}: ${message.camSynced ? 'SYNCED' : 'NOT_SYNCED'}${message.camDeviceId ? `, CAM ID: ${message.camDeviceId}` : ''}`)
+
+          // Update camSynced and camDeviceId in database
+          try {
+            const updateData: { camSynced?: boolean; camDeviceId?: string } = { camSynced: message.camSynced }
+            if (message.camDeviceId) updateData.camDeviceId = message.camDeviceId as string
+
+            await prisma.device.update({
+              where: { deviceId: syncDeviceId },
+              data: updateData
+            })
+          } catch (error) {
+            // Device might not exist yet, ignore
+          }
+
           // Broadcast to all clients subscribed to this device
           broadcastToDevice(syncDeviceId, message)
+        }
+
+        // Handle CAM pairing acknowledgment from ESP32 (main board)
+        else if (message.type === 'cam-paired' && message.deviceId) {
+          const mainDeviceId = message.deviceId as string
+          const camDeviceId = message.camDeviceId as string
+          console.log(`[WebSocket] CAM paired: ${camDeviceId} -> ${mainDeviceId}`)
+
+          // Update camDeviceId and camSynced in database
+          try {
+            await prisma.device.update({
+              where: { deviceId: mainDeviceId },
+              data: {
+                camDeviceId: camDeviceId,
+                camSynced: true
+              }
+            })
+          } catch (error) {
+            console.error(`[WebSocket] Failed to save CAM pairing for ${mainDeviceId}:`, error)
+          }
+
+          // Broadcast to all clients subscribed to this device
+          broadcastToDevice(mainDeviceId, message)
         }
 
         // Handle distance data from ESP32 (atomizer & foam levels)

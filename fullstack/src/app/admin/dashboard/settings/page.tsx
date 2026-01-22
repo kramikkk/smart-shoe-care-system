@@ -50,6 +50,8 @@ type Device = {
   pairedBy: string | null
   lastSeen: string
   createdAt: string
+  camSynced: boolean
+  camDeviceId: string | null
   pairedByUser?: {
     name: string
     email: string
@@ -634,13 +636,26 @@ export default function SettingsPage() {
                             }
                           >
                             {device.status === 'connected' && <Check className="h-3 w-3 mr-1" />}
-                            {device.status.charAt(0).toUpperCase() + device.status.slice(1)}
+                            {device.status === 'connected' ? 'Online' : device.status === 'disconnected' ? 'Offline' : 'Pairing'}
                           </Badge>
                         </div>
 
-                        <p className="text-sm text-muted-foreground mb-2 break-all">
+                        <p className="text-sm text-muted-foreground mb-1 break-all">
                           Device ID: <span className="font-mono">{device.deviceId}</span>
                         </p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                          <span>Camera ID: <span className="font-mono">{device.camDeviceId || 'Not paired'}</span></span>
+                          <Badge
+                            variant="secondary"
+                            className={
+                              device.camSynced
+                                ? 'bg-green-500/10 text-green-500 hover:bg-green-500/20 text-xs h-5'
+                                : 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20 text-xs h-5'
+                            }
+                          >
+                            {device.camSynced ? 'Synced' : 'Not Synced'}
+                          </Badge>
+                        </div>
 
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                           <div>
