@@ -205,7 +205,18 @@ int targetLeftPosition = 0;     // Target position for left servo
 int targetRightPosition = 180;  // Target position for right servo
 bool servosMoving = false;      // Are servos currently moving
 unsigned long lastServoUpdate = 0;
-const unsigned long SERVO_UPDATE_INTERVAL = 15;  // Update servos every 15ms for smooth slow movement
+const unsigned long SERVO_UPDATE_INTERVAL = 15;  // Update servos every 15ms for smooth movement
+
+// Servo speed control for cleaning brushing phases
+// Slow: 180° over entire 3 cycles (~285s) = 285000ms / 15ms / 180° ≈ 106 updates per degree
+// Fast: 180° over ~2s = move 1° every update
+const int SERVO_SLOW_STEP_INTERVAL = 106;  // Updates between each 1° step (slow over all 3 cycles)
+const int SERVO_FAST_STEP_INTERVAL = 1;    // Updates between each 1° step (fast return)
+int servoStepInterval = SERVO_SLOW_STEP_INTERVAL;  // Current step interval
+int servoStepCounter = 0;                  // Counter for step interval
+
+// Forward declaration for servo function (defined later, used in handleService/stopService)
+void setServoPositions(int leftPos, bool fastMode = false);
 
 /* ===================== DRV8871 DC MOTOR DRIVERS - DUAL MOTORS ===================== */
 // Left DC Motor
@@ -1147,6 +1158,9 @@ void stopService() {
         // Stop brush motors
         motorsCoast();
         Serial.println("[Cleaning] Brush motors stopped");
+        // Reset servos to original position (fast return)
+        setServoPositions(0, true);  // Left: 0°, Right: 180°
+        Serial.println("[Cleaning] Resetting servos to home position");
     } else if (currentServiceType == "drying") {
         setRelay(3, false);  // Centrifugal Blower Fan
         setRelay(4, false);  // PTC Ceramic Heater
@@ -1217,7 +1231,9 @@ void handleService() {
                     brushCurrentCycle = 1;
                     brushPhaseStartTime = millis();
                     setMotorsSameSpeed(BRUSH_MOTOR_SPEED);  // Start CW
-                    Serial.println("[Cleaning] Starting brush cycle 1/3 - CLOCKWISE");
+                    // First cycle: Start slow servo movement (left 0→180, right 180→0)
+                    setServoPositions(180, false);  // Slow movement
+                    Serial.println("[Cleaning] Starting brush cycle 1/3 - CLOCKWISE (with slow servo rotation)");
                 }
             }
         }
@@ -1461,6 +1477,7 @@ void sendUltrasonicDataViaWebSocket() {
 /* ===================== SERVO MOTOR CONTROL (NON-BLOCKING) - DUAL SERVOS ===================== */
 // Non-blocking smooth servo movement - called every loop iteration
 // Left servo: 0° → 180° | Right servo: 180° → 0° (mirrored)
+// Speed controlled by servoStepInterval (higher = slower)
 void updateServoPositions() {
     if (!servosMoving) return;
 
@@ -1469,6 +1486,13 @@ void updateServoPositions() {
     // Check if it's time to update servo positions (every 15ms)
     if (currentTime - lastServoUpdate >= SERVO_UPDATE_INTERVAL) {
         lastServoUpdate = currentTime;
+
+        // Increment step counter and check if we should move
+        servoStepCounter++;
+        if (servoStepCounter < servoStepInterval) {
+            return;  // Not yet time to step
+        }
+        servoStepCounter = 0;  // Reset counter
 
         bool leftReached = false;
         bool rightReached = false;
@@ -1498,6 +1522,7 @@ void updateServoPositions() {
         // Both servos reached target
         if (leftReached && rightReached) {
             servosMoving = false;
+            Serial.println("[Servo] Reached target - Left: " + String(currentLeftPosition) + "° Right: " + String(currentRightPosition) + "°");
         }
     }
 }
@@ -1505,17 +1530,23 @@ void updateServoPositions() {
 // Set servo target positions - initiates non-blocking smooth movement
 // leftPos: position for left servo (0-180)
 // When left goes to 180°, right goes to 0° (mirrored)
-void setServoPositions(int leftPos) {
+// speedMode: true = fast return, false = slow brushing movement (default)
+void setServoPositions(int leftPos, bool fastMode) {
     // Constrain position to 0-180 degrees
     leftPos = constrain(leftPos, 0, 180);
 
     // Calculate mirrored position for right servo
     int rightPos = 180 - leftPos;
 
+    // Set speed based on mode
+    servoStepInterval = fastMode ? SERVO_FAST_STEP_INTERVAL : SERVO_SLOW_STEP_INTERVAL;
+    servoStepCounter = 0;  // Reset counter when starting new movement
+
     if (leftPos != currentLeftPosition || rightPos != currentRightPosition) {
         targetLeftPosition = leftPos;
         targetRightPosition = rightPos;
         servosMoving = true;
+        Serial.println("[Servo] Moving to Left: " + String(leftPos) + "° Right: " + String(rightPos) + "° (" + (fastMode ? "FAST" : "SLOW") + ")");
     }
 }
 
