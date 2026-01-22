@@ -2089,17 +2089,23 @@ void setup() {
     Serial.println("Money: " + String(totalPesos) + " PHP");
     Serial.println("-------------------\n");
 
-    // Initialize WiFi and ESP-NOW
-    WiFi.mode(WIFI_STA);
-    delay(100);
+    // Check if we have WiFi credentials
+    String storedSSID = prefs.getString("ssid", "");
 
-    initESPNow();
-    delay(100);
-
-    // Send credentials immediately, retry logic will handle if CAM not ready
-    sendCredentialsToCAM();
-
-    connectWiFi();
+    if (storedSSID.length() == 0) {
+        // No credentials - start SoftAP only (no ESP-NOW needed)
+        Serial.println("[Setup] No WiFi credentials - starting SoftAP");
+        startSoftAP();
+    } else {
+        // Has credentials - init ESP-NOW and connect WiFi
+        Serial.println("[Setup] WiFi credentials found - connecting");
+        WiFi.mode(WIFI_STA);
+        delay(100);
+        initESPNow();
+        delay(100);
+        sendCredentialsToCAM();
+        connectWiFi();
+    }
 }
 
 /* ===================== LOOP ===================== */
