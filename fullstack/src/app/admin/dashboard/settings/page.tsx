@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X, Pencil } from "lucide-react"
+import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X, Pencil, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -75,6 +75,7 @@ export default function SettingsPage() {
   const [pairingCode, setPairingCode] = useState('')
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
   const [editingDeviceName, setEditingDeviceName] = useState('')
+  const [restartingDeviceId, setRestartingDeviceId] = useState<string | null>(null)
 
   // Fetch pricing data for selected device
   useEffect(() => {
@@ -324,6 +325,49 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Error unpairing device:', error)
       toast.error('Failed to unpair device')
+    }
+  }
+
+  const handleRestartDevice = async (deviceId: string) => {
+    setRestartingDeviceId(deviceId)
+    try {
+      // Create a temporary WebSocket connection to send the restart command
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=admin-${Date.now()}`
+
+      const ws = new WebSocket(wsUrl)
+
+      ws.onopen = () => {
+        // Send restart command
+        ws.send(JSON.stringify({
+          type: 'restart-device',
+          deviceId: deviceId
+        }))
+
+        // Close connection after sending
+        setTimeout(() => {
+          ws.close()
+          toast.success('Restart command sent to device')
+          setRestartingDeviceId(null)
+        }, 500)
+      }
+
+      ws.onerror = () => {
+        toast.error('Failed to send restart command')
+        setRestartingDeviceId(null)
+      }
+
+      // Timeout fallback
+      setTimeout(() => {
+        if (ws.readyState !== WebSocket.CLOSED) {
+          ws.close()
+        }
+        setRestartingDeviceId(null)
+      }, 5000)
+    } catch (error) {
+      console.error('Error restarting device:', error)
+      toast.error('Failed to restart device')
+      setRestartingDeviceId(null)
     }
   }
 
@@ -676,15 +720,31 @@ export default function SettingsPage() {
                     </div>
 
                     {device.paired && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleUnpairDevice(device.deviceId)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10 sm:shrink-0 w-full sm:w-auto"
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Unpair
-                      </Button>
+                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRestartDevice(device.deviceId)}
+                          disabled={restartingDeviceId === device.deviceId}
+                          className="text-amber-600 hover:text-amber-600 hover:bg-amber-500/10 sm:shrink-0 w-full sm:w-auto"
+                        >
+                          {restartingDeviceId === device.deviceId ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                          )}
+                          Restart
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleUnpairDevice(device.deviceId)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 sm:shrink-0 w-full sm:w-auto"
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Unpair
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>

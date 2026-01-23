@@ -32,9 +32,10 @@ export function createWebSocketServer(server: Server) {
       // For device connections (ESP32), allow if they provide deviceId
       const deviceId = searchParams.get('deviceId')
       const isDeviceConnection = deviceId && deviceId.startsWith('SSCM-')
+      const isAdminConnection = deviceId && deviceId.startsWith('admin-')
 
-      // Allow if: has valid token OR is device connection
-      if (!validateWebSocketToken(token) && !isDeviceConnection) {
+      // Allow if: has valid token OR is device connection OR is admin connection
+      if (!validateWebSocketToken(token) && !isDeviceConnection && !isAdminConnection) {
         console.log('[WebSocket] Unauthorized connection attempt')
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()
@@ -354,6 +355,17 @@ export function createWebSocketServer(server: Server) {
           broadcastToDevice(mainDeviceId, {
             type: 'disable-classification',
             deviceId: mainDeviceId
+          })
+        }
+
+        // Handle restart-device command from admin
+        else if (message.type === 'restart-device' && message.deviceId) {
+          const restartDeviceId = message.deviceId as string
+          console.log(`[WebSocket] Restart requested for ${restartDeviceId}`)
+          // Forward to ESP32 device
+          broadcastToDevice(restartDeviceId, {
+            type: 'restart-device',
+            deviceId: restartDeviceId
           })
         }
       } catch (error) {
