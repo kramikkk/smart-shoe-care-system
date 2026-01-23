@@ -221,12 +221,12 @@ void setServoPositions(int leftPos, bool fastMode = false);
 
 /* ===================== DRV8871 DC MOTOR DRIVERS - DUAL MOTORS ===================== */
 // Left DC Motor
-#define MOTOR_LEFT_IN1_PIN 20   // GPIO 20 - Left motor IN1
-#define MOTOR_LEFT_IN2_PIN 21   // GPIO 21 - Left motor IN2
+#define MOTOR_LEFT_IN1_PIN 21   // GPIO 21 - Left motor IN1
+#define MOTOR_LEFT_IN2_PIN 47   // GPIO 47 - Left motor IN2
 
 // Right DC Motor
-#define MOTOR_RIGHT_IN1_PIN 47  // GPIO 47 - Right motor IN1
-#define MOTOR_RIGHT_IN2_PIN 48  // GPIO 48 - Right motor IN2
+#define MOTOR_RIGHT_IN1_PIN 48  // GPIO 48 - Right motor IN1
+#define MOTOR_RIGHT_IN2_PIN 45  // GPIO 45 - Right motor IN2
 
 // PWM configuration for motor speed control
 const int MOTOR_PWM_FREQ = 1000;      // 1kHz PWM frequency
@@ -236,8 +236,8 @@ int currentLeftMotorSpeed = 0;   // Left motor speed (-255 to 255, negative = re
 int currentRightMotorSpeed = 0;  // Right motor speed (-255 to 255, negative = reverse)
 
 /* ===================== TB6600 STEPPER MOTOR DRIVER - TOP LINEAR STEPPER ===================== */
-#define STEPPER1_STEP_PIN 45     // GPIO 45 - STEP/PULSE pin (PUL+/PUL-)
-#define STEPPER1_DIR_PIN 35      // GPIO 35 - DIRECTION pin (DIR+/DIR-)
+#define STEPPER1_STEP_PIN 35     // GPIO 35 - STEP/PULSE pin (PUL+/PUL-)
+#define STEPPER1_DIR_PIN 36      // GPIO 36 - DIRECTION pin (DIR+/DIR-)
 // ENA+ hardwired to GND (motor ALWAYS ENABLED - no ESP32 control needed)
 
 // Top Linear Stepper configuration - Optimized for NEMA11 linear actuator (max 80mm/s)
@@ -256,8 +256,8 @@ unsigned long lastStepper1Update = 0;
 unsigned long stepper1StepInterval = 1250;  // Microseconds between steps (calculated from speed)
 
 /* ===================== TB6600 STEPPER MOTOR DRIVER - SIDE LINEAR STEPPER (DOUBLE) ===================== */
-#define STEPPER2_STEP_PIN 36    // GPIO 36 - STEP/PULSE pin (PUL+/PUL-)
-#define STEPPER2_DIR_PIN 37     // GPIO 37 - DIRECTION pin (DIR+/DIR-)
+#define STEPPER2_STEP_PIN 37    // GPIO 37 - STEP/PULSE pin (PUL+/PUL-)
+#define STEPPER2_DIR_PIN 38     // GPIO 38 - DIRECTION pin (DIR+/DIR-)
 // ENA+ hardwired to GND (motor ALWAYS ENABLED - no ESP32 control needed)
 
 // Mini Linear Rail Guide Slide Actuator Specifications:
@@ -286,7 +286,7 @@ unsigned long lastStepper2Update = 0;
 unsigned long stepper2StepInterval = 667;  // Microseconds between steps (calculated from speed)
 
 /* ===================== WS2812B RGB LED STRIP (NeoPixel) ===================== */
-#define RGB_DATA_PIN 38      // GPIO 38 - WS2812B data pin
+#define RGB_DATA_PIN 39      // GPIO 39 - WS2812B data pin
 #define RGB_NUM_LEDS 58      // Number of LEDs in the strip
 
 // Create NeoPixel strip object
