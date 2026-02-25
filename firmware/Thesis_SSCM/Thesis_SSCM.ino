@@ -118,8 +118,8 @@ const unsigned long PAYMENT_STABILIZATION_DELAY = 3000;  // 3 second delay after
 #define RELAY_2_PIN 8   // Channel 2: Solenoid Lock
 #define RELAY_3_PIN 18  // Channel 3: Centrifugal Blower Fan
 #define RELAY_4_PIN 17  // Channel 4: PTC Ceramic Heater
-#define RELAY_5_PIN 16  // Channel 5: Bottom Exhaust
-#define RELAY_6_PIN 15  // Channel 6: Diaphragm Pump
+#define RELAY_5_PIN 16  // Channel 5: Diaphragm Pump
+#define RELAY_6_PIN 15  // Channel 6: Bottom Exhaust
 #define RELAY_7_PIN 7   // Channel 7: Ultrasonic Mist Maker
 #define RELAY_8_PIN 6   // Channel 8: UVC Light
 
@@ -131,8 +131,8 @@ bool relay1State = false;  // Bill + Coin (combined power for both acceptors)
 bool relay2State = false;  // Solenoid Lock
 bool relay3State = false;  // Centrifugal Blower Fan
 bool relay4State = false;  // PTC Ceramic Heater
-bool relay5State = false;  // Bottom Exhaust
-bool relay6State = false;  // Diaphragm Pump
+bool relay5State = false;  // Diaphragm Pump
+bool relay6State = false;  // Bottom Exhaust
 bool relay7State = false;  // Ultrasonic Mist Maker
 bool relay8State = false;  // UVC Light
 
@@ -302,9 +302,9 @@ String deviceId = "";
 bool isPaired = false;
 
 /* ===================== BACKEND URL ===================== */
-const char* BACKEND_HOST = "172.20.10.3";  // Update with your Next.js server IP
+const char* BACKEND_HOST = "172.20.10.2";  // Update with your Next.js server IP
 const int BACKEND_PORT = 3000;
-const char* BACKEND_URL = "http://172.20.10.3:3000";
+const char* BACKEND_URL = "http://172.20.10.2:3000";
 
 /* ===================== FUNCTIONS ===================== */
 
@@ -992,8 +992,8 @@ void setRelay(int channel, bool state) {
         case 2: pin = RELAY_2_PIN; stateVar = &relay2State; name = "Coin Slot"; break;
         case 3: pin = RELAY_3_PIN; stateVar = &relay3State; name = "Centrifugal Blower Fan"; break;
         case 4: pin = RELAY_4_PIN; stateVar = &relay4State; name = "PTC Ceramic Heater"; break;
-        case 5: pin = RELAY_5_PIN; stateVar = &relay5State; name = "Bottom Exhaust"; break;
-        case 6: pin = RELAY_6_PIN; stateVar = &relay6State; name = "Diaphragm Pump"; break;
+        case 5: pin = RELAY_5_PIN; stateVar = &relay5State; name = "Diaphragm Pump"; break;
+        case 6: pin = RELAY_6_PIN; stateVar = &relay6State; name = "Bottom Exhaust"; break;
         case 7: pin = RELAY_7_PIN; stateVar = &relay7State; name = "Ultrasonic Mist Maker"; break;
         case 8: pin = RELAY_8_PIN; stateVar = &relay8State; name = "UVC Light"; break;
         default:
@@ -1039,8 +1039,8 @@ void startService(String shoeType, String serviceType, String careType) {
         // Turn off all service relays (CH3-CH8)
         setRelay(3, false);  // Blower Fan
         setRelay(4, false);  // PTC Heater
-        setRelay(5, false);  // Bottom Exhaust
-        setRelay(6, false);  // Diaphragm Pump
+        setRelay(5, false);  // Diaphragm Pump
+        setRelay(6, false);  // Bottom Exhaust
         setRelay(7, false);  // Mist Maker
         setRelay(8, false);  // UVC Light
 
@@ -1110,8 +1110,8 @@ void startService(String shoeType, String serviceType, String careType) {
     // Turn ON relays based on service type
     if (serviceType == "cleaning") {
         // Start cleaning sequence: stepper moves 0 → 480mm → 0, diaphragm pump ON
-        setRelay(6, true);  // Diaphragm Pump
-        Serial.println("Relay 6 (Diaphragm Pump): ON");
+        setRelay(6, true);  // Bottom Exhaust
+        Serial.println("Relay 6 (Bottom Exhaust): ON");
 
         // Start stepper moving to max position
         cleaningPhase = 1;  // Phase 1: moving to max
@@ -1166,7 +1166,7 @@ void stopService() {
 
     // Turn OFF relays based on service type
     if (currentServiceType == "cleaning") {
-        setRelay(6, false);  // Diaphragm Pump
+        setRelay(6, false);  // Bottom Exhaust
         // Stop stepper and return to home position
         cleaningPhase = 0;
         brushCurrentCycle = 0;
