@@ -28,50 +28,49 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
   let displayStatus: string = sensor.status
 
   if (id === 'temperature' && sensorData.temperature > 0) {
-    displayValue = `${sensorData.temperature}°C`
+    displayValue = `${sensorData.temperature.toFixed(1)}°C`
     // Calculate percentage (0-50°C range)
     displayPercentage = Math.min(100, (sensorData.temperature / 50) * 100)
-    // Status: Normal (18-30°C), Warning (30-35°C), Critical (>35°C)
-    if (sensorData.temperature > 35) {
-      displayStatus = 'Critical'
-    } else if (sensorData.temperature > 30) {
-      displayStatus = 'Warning'
-    } else {
+    // Status: Low (<30°C), Normal (30-40°C), High (>40°C)
+    if (sensorData.temperature > 40) {
+      displayStatus = 'High'
+    } else if (sensorData.temperature >= 30) {
       displayStatus = 'Normal'
+    } else {
+      displayStatus = 'Low'
     }
   }
 
   if (id === 'humidity' && sensorData.humidity > 0) {
-    displayValue = `${sensorData.humidity}%`
+    displayValue = `${sensorData.humidity.toFixed(1)}%`
     displayPercentage = sensorData.humidity
-    // Status: Normal (40-70%), Warning (30-40% or 70-80%), Critical (<30% or >80%)
-    if (sensorData.humidity < 30 || sensorData.humidity > 80) {
-      displayStatus = 'Critical'
-    } else if (sensorData.humidity < 40 || sensorData.humidity > 70) {
-      displayStatus = 'Warning'
-    } else {
+    // Status: Low (<60%), Normal (60-70%), High (>70%)
+    if (sensorData.humidity > 70) {
+      displayStatus = 'High'
+    } else if (sensorData.humidity >= 60) {
       displayStatus = 'Normal'
+    } else {
+      displayStatus = 'Low'
     }
   }
 
   if (id === 'atomizerLevel') {
-    // Debug: log the raw distance value
-    if (sensorData.atomizerDistance !== 0) {
-      console.log('[SensorCard] Atomizer distance:', sensorData.atomizerDistance)
-    }
-    
-    // Convert distance to percentage (assuming 50cm = empty, 5cm = full)
-    const maxDistance = 50 // cm (empty)
-    const minDistance = 5  // cm (full)
-    const level = sensorData.atomizerDistance > 0 ? Math.max(0, Math.min(100, 
-      ((maxDistance - sensorData.atomizerDistance) / (maxDistance - minDistance)) * 100
-    )) : 0
-    displayValue = `${Math.round(level)}%`
-    displayPercentage = level
+    // Convert distance to liters
+    // Container: 21cm height, 8L max
+    // Sensor blind zone: 2cm min distance → usable range is 2cm (full) to 21cm (empty)
+    // Map: distance 2cm → 8L, distance 21cm → 0L
+    const MIN_DIST = 2   // cm — sensor blind zone limit
+    const MAX_DIST = 21  // cm — container height (empty)
+    const d = Math.min(Math.max(sensorData.atomizerDistance, MIN_DIST), MAX_DIST)
+    const liters = sensorData.atomizerDistance > 0
+      ? ((MAX_DIST - d) / (MAX_DIST - MIN_DIST)) * 8
+      : 0
+    displayValue = `${liters.toFixed(1)}L`
+    displayPercentage = (liters / 8) * 100
     // Status: Critical (<20%), Warning (20-40%), Normal (>40%)
-    if (level < 20) {
+    if (displayPercentage < 20) {
       displayStatus = 'Critical'
-    } else if (level < 40) {
+    } else if (displayPercentage < 40) {
       displayStatus = 'Warning'
     } else {
       displayStatus = 'Normal'
@@ -79,23 +78,22 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
   }
 
   if (id === 'foamLevel') {
-    // Debug: log the raw distance value
-    if (sensorData.foamDistance !== 0) {
-      console.log('[SensorCard] Foam distance:', sensorData.foamDistance)
-    }
-
-    // Convert distance to percentage (assuming 50cm = empty, 5cm = full)
-    const maxDistance = 50 // cm (empty)
-    const minDistance = 5  // cm (full)
-    const level = sensorData.foamDistance > 0 ? Math.max(0, Math.min(100,
-      ((maxDistance - sensorData.foamDistance) / (maxDistance - minDistance)) * 100
-    )) : 0
-    displayValue = `${Math.round(level)}%`
-    displayPercentage = level
+    // Convert distance to liters
+    // Container: 21cm height, 8L max
+    // Sensor blind zone: 2cm min distance → usable range is 2cm (full) to 21cm (empty)
+    // Map: distance 2cm → 8L, distance 21cm → 0L
+    const MIN_DIST = 2   // cm — sensor blind zone limit
+    const MAX_DIST = 21  // cm — container height (empty)
+    const d = Math.min(Math.max(sensorData.foamDistance, MIN_DIST), MAX_DIST)
+    const liters = sensorData.foamDistance > 0
+      ? ((MAX_DIST - d) / (MAX_DIST - MIN_DIST)) * 8
+      : 0
+    displayValue = `${liters.toFixed(1)}L`
+    displayPercentage = (liters / 8) * 100
     // Status: Critical (<20%), Warning (20-40%), Normal (>40%)
-    if (level < 20) {
+    if (displayPercentage < 20) {
       displayStatus = 'Critical'
-    } else if (level < 40) {
+    } else if (displayPercentage < 40) {
       displayStatus = 'Warning'
     } else {
       displayStatus = 'Normal'
@@ -133,6 +131,10 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
       case "warning":
         return "bg-yellow-100 text-yellow-800 border-yellow-200"
       case "critical":
+        return "bg-red-100 text-red-800 border-red-200"
+      case "low":
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      case "high":
         return "bg-red-100 text-red-800 border-red-200"
       default:
         return ""

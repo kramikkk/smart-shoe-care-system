@@ -163,18 +163,18 @@ int cleaningPhase = 0;  // Current cleaning phase (0-4)
 // 3 cycles × 2 directions = 6 phases, so 285s ÷ 6 ≈ 47.5s per direction
 const unsigned long BRUSH_DURATION_MS = 47500;  // 47.5 seconds per direction
 const int BRUSH_TOTAL_CYCLES = 3;               // 3 complete cycles (CW + CCW each)
-const int BRUSH_MOTOR_SPEED = 200;              // Motor speed (0-255)
+const int BRUSH_MOTOR_SPEED = 255;              // Motor speed (0-255)
 int brushCurrentCycle = 0;                      // Current brush cycle (1-3)
 unsigned long brushPhaseStartTime = 0;          // When current brush phase started
 
 /* ===================== DHT22 TEMPERATURE & HUMIDITY SENSOR ===================== */
 #define DHT_PIN 9
-#define DHT_TYPE DHT22
+#define DHT_TYPE DHT11
 
 DHT dht(DHT_PIN, DHT_TYPE);
 
-int currentTemperature = 0;
-int currentHumidity = 0;
+float currentTemperature = 0.0;
+float currentHumidity = 0.0;
 unsigned long lastDHTRead = 0;
 const unsigned long DHT_READ_INTERVAL = 5000;  // Read every 5 seconds
 
@@ -235,8 +235,8 @@ int currentLeftMotorSpeed = 0;   // Left motor speed (-255 to 255, negative = re
 int currentRightMotorSpeed = 0;  // Right motor speed (-255 to 255, negative = reverse)
 
 /* ===================== TB6600 STEPPER MOTOR DRIVER - TOP LINEAR STEPPER ===================== */
-#define STEPPER1_STEP_PIN 35     // GPIO 35 - STEP/PULSE pin (PUL+/PUL-)
-#define STEPPER1_DIR_PIN 36      // GPIO 36 - DIRECTION pin (DIR+/DIR-)
+#define STEPPER1_STEP_PIN 36     // GPIO 35 - STEP/PULSE pin (PUL+/PUL-)
+#define STEPPER1_DIR_PIN 35      // GPIO 36 - DIRECTION pin (DIR+/DIR-)
 // ENA+ hardwired to GND (motor ALWAYS ENABLED - no ESP32 control needed)
 
 // Top Linear Stepper configuration - Optimized for NEMA11 linear actuator (max 80mm/s)
@@ -302,10 +302,10 @@ String deviceId = "";
 bool isPaired = false;
 
 /* ===================== BACKEND URL ===================== */
-const char* BACKEND_HOST = "172.20.10.2";  // Update with your Next.js server IP
+const char* BACKEND_HOST = "172.20.10.3";  // Update with your Next.js server IP
 const int BACKEND_PORT = 3000;
-const char* BACKEND_URL = "http://172.20.10.2:3000";
-
+const char* BACKEND_URL = "http://172.20.10.3:3000";
+    
 /* ===================== FUNCTIONS ===================== */
 
 /* ===================== ESP-NOW FUNCTIONS ===================== */
@@ -1377,14 +1377,14 @@ bool readDHT22() {
     float hum = dht.readHumidity();
 
     if (isnan(temp) || isnan(hum)) {
-        Serial.println("[DHT22] Failed to read from sensor!");
+        Serial.println("[DHT11] Failed to read from sensor!");
         return false;  // Reading failed
     }
 
-    currentTemperature = (int)temp;
-    currentHumidity = (int)hum;
+    currentTemperature = temp;
+    currentHumidity = hum;
 
-    Serial.println("[DHT22] Temp: " + String(currentTemperature) + "°C | Humidity: " + String(currentHumidity) + "%");
+    Serial.println("[DHT11] Temp: " + String(currentTemperature, 1) + "°C | Humidity: " + String(currentHumidity, 1) + "%");
     return true;  // Reading successful
 }
 
@@ -1395,8 +1395,8 @@ void sendDHTDataViaWebSocket() {
     String sensorMsg = "{";
     sensorMsg += "\"type\":\"sensor-data\",";
     sensorMsg += "\"deviceId\":\"" + deviceId + "\",";
-    sensorMsg += "\"temperature\":" + String(currentTemperature) + ",";
-    sensorMsg += "\"humidity\":" + String(currentHumidity) + ",";
+    sensorMsg += "\"temperature\":" + String(currentTemperature, 1) + ",";
+    sensorMsg += "\"humidity\":" + String(currentHumidity, 1) + ",";
     sensorMsg += "\"camSynced\":" + String(camIsReady ? "true" : "false");
     if (pairedCamDeviceId.length() > 0) {
         sensorMsg += ",\"camDeviceId\":\"" + pairedCamDeviceId + "\"";
@@ -1431,13 +1431,14 @@ bool readAtomizerLevel() {
     digitalWrite(ATOMIZER_TRIG_PIN, HIGH);
     delayMicroseconds(20); // 20us pulse (JSN-SR20-Y1 needs at least 10us)
     digitalWrite(ATOMIZER_TRIG_PIN, LOW);
-    
-    // Wait for echo with longer timeout (30ms = 5m max distance)
-    unsigned long duration = pulseIn(ATOMIZER_ECHO_PIN, HIGH, 30000);
-    
+
+    // Wait for echo (no timeout — sensor auto-lows after ~40ms on no echo)
+    unsigned long duration = pulseIn(ATOMIZER_ECHO_PIN, HIGH);
+
     // Check for invalid reading (0 = timeout or no echo)
     if (duration == 0) {
         Serial.println("[Atomizer] Error: No echo");
+        currentAtomizerDistance = 0;
         return false;
     }
 
@@ -1445,9 +1446,10 @@ bool readAtomizerLevel() {
     // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
     int distance = (duration * 0.034) / 2;
 
-    // Validate range (JSN-SR20-Y1: 2cm to 500cm)
-    if (distance < 2 || distance > 500) {
+    // Validate range (JSN-SR20-Y1: 2cm to 21cm container height)
+    if (distance < 2 || distance > 21) {
         Serial.println("[Atomizer] Out of range: " + String(distance) + " cm");
+        currentAtomizerDistance = 0;
         return false;
     }
 
@@ -1463,12 +1465,13 @@ bool readFoamLevel() {
     delayMicroseconds(20); // 20us pulse (JSN-SR20-Y1 needs at least 10us)
     digitalWrite(FOAM_TRIG_PIN, LOW);
 
-    // Wait for echo with longer timeout (30ms = 5m max distance)
-    unsigned long duration = pulseIn(FOAM_ECHO_PIN, HIGH, 30000);
+    // Wait for echo (no timeout — sensor auto-lows after ~40ms on no echo)
+    unsigned long duration = pulseIn(FOAM_ECHO_PIN, HIGH);
 
     // Check for invalid reading (0 = timeout or no echo)
     if (duration == 0) {
         Serial.println("[Foam] Error: No echo");
+        currentFoamDistance = 0;
         return false;
     }
 
@@ -1476,9 +1479,10 @@ bool readFoamLevel() {
     // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
     int distance = (duration * 0.034) / 2;
 
-    // Validate range (JSN-SR20-Y1: 2cm to 500cm)
-    if (distance < 2 || distance > 500) {
+    // Validate range (JSN-SR20-Y1: 2cm to 21cm container height)
+    if (distance < 2 || distance > 21) {
         Serial.println("[Foam] Out of range: " + String(distance) + " cm");
+        currentFoamDistance = 0;
         return false;
     }
 
@@ -1980,7 +1984,7 @@ void setup() {
     pinMode(ATOMIZER_TRIG_PIN, OUTPUT);
     pinMode(ATOMIZER_ECHO_PIN, INPUT);
     digitalWrite(ATOMIZER_TRIG_PIN, LOW);
-    
+
     pinMode(FOAM_TRIG_PIN, OUTPUT);
     pinMode(FOAM_ECHO_PIN, INPUT);
     digitalWrite(FOAM_TRIG_PIN, LOW);

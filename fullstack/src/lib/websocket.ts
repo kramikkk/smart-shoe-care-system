@@ -162,15 +162,23 @@ export function createWebSocketServer(server: Server) {
             try {
               const updateData: { camSynced?: boolean; camDeviceId?: string } = {}
               if (message.camSynced !== undefined) updateData.camSynced = message.camSynced
-              if (message.camDeviceId) updateData.camDeviceId = message.camDeviceId as string
-
-              await prisma.device.update({
-                where: { deviceId: sensorDeviceId },
-                data: updateData
-              })
 
               if (message.camDeviceId) {
-                console.log(`[WebSocket] ✅ Saved CAM Device ID to database: ${message.camDeviceId}`)
+                const existing = await prisma.device.findUnique({
+                  where: { deviceId: sensorDeviceId },
+                  select: { camDeviceId: true }
+                })
+                if (existing?.camDeviceId !== message.camDeviceId) {
+                  updateData.camDeviceId = message.camDeviceId as string
+                  console.log(`[WebSocket] ✅ Saved CAM Device ID to database: ${message.camDeviceId}`)
+                }
+              }
+
+              if (Object.keys(updateData).length > 0) {
+                await prisma.device.update({
+                  where: { deviceId: sensorDeviceId },
+                  data: updateData
+                })
               }
             } catch (error) {
               console.error(`[WebSocket] ❌ Failed to save to database:`, error)
