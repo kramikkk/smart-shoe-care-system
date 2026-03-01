@@ -12,25 +12,25 @@ export const SensorData = {
     percentage: 0,
     icon: Thermometer,
     color: "text-orange-600",
-    range: "18-30°C",
+    range: "30-40°C normal",
     status: "Normal"
   },
   foamLevel: {
     name: "Foam Level",
-    value: "0%",
+    value: "0L",
     percentage: 0,
     icon: Droplets,
     color: "text-blue-600",
-    range: "0-100%",
+    range: "0-8L",
     status: "Normal"
   },
   atomizerLevel: {
     name: "Atomizer Level",
-    value: "0%",
+    value: "0L",
     percentage: 0,
     icon: Gauge,
     color: "text-cyan-600",
-    range: "0-100%",
+    range: "0-8L",
     status: "Normal"
   },
   humidity: {
@@ -39,7 +39,7 @@ export const SensorData = {
     percentage: 0,
     icon: Droplets,
     color: "text-teal-600",
-    range: "40-70%",
+    range: "60-70% normal",
     status: "Normal"
   },
     systemStatus: {
