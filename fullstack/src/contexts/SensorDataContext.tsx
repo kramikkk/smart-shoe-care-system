@@ -77,8 +77,8 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
             console.log('[SensorData] Received sensor data:', message)
             setSensorData(prev => ({
               ...prev,
-              temperature: message.temperature || prev.temperature,
-              humidity: message.humidity || prev.humidity,
+              temperature: message.temperature ?? prev.temperature,
+              humidity: message.humidity ?? prev.humidity,
               camSynced: message.camSynced !== undefined ? message.camSynced : prev.camSynced,
               lastUpdate: new Date()
             }))
@@ -99,8 +99,8 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
             console.log('[SensorData] Received distance data:', message)
             setSensorData(prev => ({
               ...prev,
-              atomizerDistance: message.atomizerDistance || prev.atomizerDistance,
-              foamDistance: message.foamDistance || prev.foamDistance,
+              atomizerDistance: message.atomizerDistance ?? prev.atomizerDistance,
+              foamDistance: message.foamDistance ?? prev.foamDistance,
               lastUpdate: new Date()
             }))
           }
