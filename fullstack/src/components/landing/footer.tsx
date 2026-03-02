@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Logo } from '@/components/landing/logo'
 
 const links = [
-    { label: 'Home', href: '/' },
+    { label: 'Home', href: '#home' },
     { label: 'Features', href: '#features' },
     { label: 'FAQs', href: '#faqs' },
     { label: 'Contact', href: '#contact' },
