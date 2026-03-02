@@ -1,4 +1,5 @@
 import Contact from '@/components/landing/contact'
+import FAQs from '@/components/landing/faqs'
 import Features from '@/components/landing/features'
 import HeroSection from '@/components/landing/hero-section'
 import LogoCloud from '@/components/landing/logo-cloud'
@@ -10,6 +11,7 @@ export default function LandingPage() {
       <HeroSection />
       <LogoCloud />
       <Features />
+      <FAQs />
       <Contact />
     </div>
   )
