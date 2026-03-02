@@ -302,9 +302,9 @@ String deviceId = "";
 bool isPaired = false;
 
 /* ===================== BACKEND URL ===================== */
-const char* BACKEND_HOST = "172.20.10.3";  // Update with your Next.js server IP
+const char* BACKEND_HOST = "192.168.43.147";  // Update with your Next.js server IP
 const int BACKEND_PORT = 3000;
-const char* BACKEND_URL = "http://172.20.10.3:3000";
+const char* BACKEND_URL = "http://192.168.43.147:3000";
     
 /* ===================== FUNCTIONS ===================== */
 
@@ -462,7 +462,11 @@ void sendCredentialsToCAM() {
     String pass = prefs.getString("pass", "");
 
     if (ssid.length() == 0) {
-        Serial.println("[ESP-NOW] No WiFi credentials stored");
+        static bool noCredsPrinted = false;
+        if (!noCredsPrinted) {
+            Serial.println("[ESP-NOW] No WiFi credentials stored");
+            noCredsPrinted = true;
+        }
         return;
     }
 
@@ -762,11 +766,11 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 }
                 else if (message.indexOf("\"paired\":false") != -1) {
                     if (isPaired) {
-                        Serial.println("[WebSocket] Device unpaired, new code: " + pairingCode);
+                        Serial.println("[WebSocket] Device unpaired, restarting...");
                         isPaired = false;
                         prefs.putBool("paired", false);
-                        pairingCode = generatePairingCode();
-                        sendDeviceRegistration();
+                        delay(500);
+                        ESP.restart();
                     }
                 }
             }
@@ -2189,7 +2193,11 @@ void loop() {
     // Retry sending credentials to CAM infinitely until successful (handles simultaneous boot)
     if (!camIsReady && credentialsSendStarted) {
         if (millis() - lastCredentialSendTime >= CREDENTIAL_RETRY_INTERVAL) {
-            Serial.println("[ESP-NOW] Retrying credential send (CAM may have booted late)...");
+            static uint32_t credRetryCount = 0;
+            credRetryCount++;
+            if (credRetryCount % 10 == 1) {
+                Serial.printf("[ESP-NOW] Retrying credential send (attempt %lu)...\n", credRetryCount);
+            }
             sendCredentialsToCAM();
         }
     }

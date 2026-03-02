@@ -43,6 +43,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const intentionalCloseRef = useRef<boolean>(false)
   const messageHandlersRef = useRef<Set<(message: WebSocketMessage) => void>>(new Set())
+  const prevIsPairedRef = useRef<boolean | null>(null)
 
   const connectWebSocket = useCallback((devId: string) => {
     // Prevent duplicate connections
@@ -190,6 +191,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [connectWebSocket])
+
+  // Reload the kiosk page when the device gets unpaired remotely.
+  // Delay gives the ESP32 time to reboot and register a fresh pairing code first.
+  useEffect(() => {
+    if (prevIsPairedRef.current === true && isPaired === false) {
+      const timer = setTimeout(() => window.location.reload(), 3000)
+      return () => clearTimeout(timer)
+    }
+    prevIsPairedRef.current = isPaired
+  }, [isPaired])
 
   const sendMessage = useCallback((message: WebSocketMessage) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
