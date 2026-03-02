@@ -16,7 +16,7 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
     sensorData = context.sensorData
     isConnected = context.isConnected
   } catch {
-    sensorData = { temperature: 0, humidity: 0, atomizerDistance: 0, foamDistance: 0, lastUpdate: null }
+    sensorData = { temperature: 0, humidity: 0, atomizerDistance: 0, foamDistance: 0, lastUpdate: null, serviceActive: false, serviceType: '', serviceProgress: 0, serviceTimeRemaining: 0, camSynced: false }
     isConnected = false
   }
   
@@ -107,9 +107,9 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
       displayPercentage = 0
     } else if (sensorData.serviceActive) {
       // Format time remaining as MM:SS
-      const mins = Math.floor((sensorData.serviceTimeRemaining ?? 0) / 60)
-      const secs = (sensorData.serviceTimeRemaining ?? 0) % 60
-      displayValue = `${(sensorData.serviceType ?? '').charAt(0).toUpperCase() + (sensorData.serviceType ?? '').slice(1)}`
+      const mins = Math.floor(sensorData.serviceTimeRemaining / 60)
+      const secs = sensorData.serviceTimeRemaining % 60
+      displayValue = `${sensorData.serviceType.charAt(0).toUpperCase() + sensorData.serviceType.slice(1)}`
       displayPercentage = sensorData.serviceProgress
       displayStatus = 'Active'
       // Update the range to show timer
