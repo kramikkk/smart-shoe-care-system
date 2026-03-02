@@ -11,7 +11,7 @@ const links = [
 export default function Footer() {
     return (
         <footer className="bg-background @container py-12">
-            <div className="mx-auto max-w-2xl px-6">
+            <div className="mx-auto max-w-5xl px-6">
                 <div className="border-y py-8">
                     <div className="@xl:flex-row @xl:items-center flex flex-col gap-6">
                         <Link
