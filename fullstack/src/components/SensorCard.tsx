@@ -109,7 +109,7 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
       // Format time remaining as MM:SS
       const mins = Math.floor((sensorData.serviceTimeRemaining ?? 0) / 60)
       const secs = (sensorData.serviceTimeRemaining ?? 0) % 60
-      displayValue = `${sensorData.serviceType.charAt(0).toUpperCase() + sensorData.serviceType.slice(1)}`
+      displayValue = `${(sensorData.serviceType ?? '').charAt(0).toUpperCase() + (sensorData.serviceType ?? '').slice(1)}`
       displayPercentage = sensorData.serviceProgress
       displayStatus = 'Active'
       // Update the range to show timer
