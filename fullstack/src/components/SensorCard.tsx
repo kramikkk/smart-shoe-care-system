@@ -26,6 +26,7 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
   let displayValue: string = "0"
   let displayPercentage: number = 0
   let displayStatus: string = sensor.status
+  let displayRange: string = sensor.range
 
   if (id === 'temperature' && sensorData.temperature > 0) {
     displayValue = `${sensorData.temperature.toFixed(1)}°C`
@@ -112,13 +113,12 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
       displayValue = `${sensorData.serviceType.charAt(0).toUpperCase() + sensorData.serviceType.slice(1)}`
       displayPercentage = sensorData.serviceProgress
       displayStatus = 'Active'
-      // Update the range to show timer
-      sensor.range = `Timer: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+      displayRange = `Timer: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
     } else {
       displayValue = 'Idle'
       displayStatus = 'Normal'
       displayPercentage = 0
-      sensor.range = 'Timer: 00:00'
+      displayRange = 'Timer: 00:00'
     }
   }
 
@@ -158,7 +158,7 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
       <CardContent className="space-y-4">
         <div className="flex justify-between items-center">
           <span className="text-2xl font-bold">{displayValue}</span>
-          <span className="text-xs text-muted-foreground">{sensor.range}</span>
+          <span className="text-xs text-muted-foreground">{displayRange}</span>
         </div>
         <Progress value={displayPercentage} className="h-3" />
       </CardContent>
