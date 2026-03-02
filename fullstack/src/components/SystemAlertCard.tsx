@@ -20,8 +20,8 @@ const SystemAlertCard = () => {
                   <CardTitle>System Alerts</CardTitle>
                 </div>
             </CardHeader>
-            <CardContent className="flex-1 flex items-center justify-center">
-                <Empty>
+            <CardContent className="flex-1 flex items-center justify-center min-h-0 overflow-hidden">
+                <Empty className="p-4">
                 <EmptyHeader>
                     <EmptyMedia variant="icon">
                     <Bell />
