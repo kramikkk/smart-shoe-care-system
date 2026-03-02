@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -146,8 +147,12 @@ export function LoginForm({
       </Card>
       <FieldDescription className="px-6 text-center">
         <span>SSCM Admin Dashboard v1.0. © 2025 Smart Shoe Care Machine. All rights reserved.</span>
-
       </FieldDescription>
+      <div className="text-center text-sm">
+        <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+          ← Back to Home
+        </Link>
+      </div>
     </div>
   )
 }

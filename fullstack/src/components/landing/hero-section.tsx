@@ -10,7 +10,7 @@ export default function HeroSection() {
         <>
             <HeroHeader />
             <main className="overflow-hidden">
-                <section className="bg-background">
+                <section id="home" className="bg-background">
                     <div className="relative py-40">
                         <div className="mask-radial-from-45% mask-radial-to-75% mask-radial-at-top mask-radial-[75%_100%] aspect-2/3 absolute inset-0 opacity-75 blur-xl md:aspect-square lg:aspect-video dark:opacity-5">
                             <Image
