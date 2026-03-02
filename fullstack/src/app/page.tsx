@@ -1,5 +1,6 @@
-import HeroSection from '@/components/landing/hero-section-3'
-import LogoCloud from '@/components/landing/logo-cloud-2'
+import Features from '@/components/landing/features'
+import HeroSection from '@/components/landing/hero-section'
+import LogoCloud from '@/components/landing/logo-cloud'
 import React from 'react'
 
 export default function LandingPage() {
@@ -7,6 +8,7 @@ export default function LandingPage() {
     <div>
       <HeroSection />
       <LogoCloud />
+      <Features />
     </div>
   )
 }
