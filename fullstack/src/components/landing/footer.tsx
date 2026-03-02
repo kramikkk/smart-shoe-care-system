@@ -4,7 +4,6 @@ import { Logo } from '@/components/landing/logo'
 const links = [
     { label: 'Home', href: '/' },
     { label: 'Features', href: '#features' },
-    { label: 'How It Works', href: '#how-it-works' },
     { label: 'FAQs', href: '#faqs' },
     { label: 'Contact', href: '#contact' },
 ]
