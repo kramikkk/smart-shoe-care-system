@@ -4,12 +4,13 @@ import { ScanLine } from 'lucide-react'
 export default function Features() {
     return (
         <section id="features" className="bg-background @container py-24">
-            <div className="mx-auto max-w-2xl px-6">
+            <div className="mx-auto max-w-5xl px-6">
                 <div>
                     <h2 className="text-balance font-serif text-4xl font-medium">Revolutionizing Shoe Hygiene Through Smart Automation</h2>
                     <p className="text-muted-foreground mt-4 text-balance">Experience seamless cleaning, UV sterilization, and intelligent drying — all controlled through an integrated smart system.</p>
                 </div>
-                <div className="@xl:grid-cols-2 mt-12 grid gap-3 *:p-6">
+                <div className="mx-auto mt-12 max-w-3xl">
+                <div className="@xl:grid-cols-2 grid gap-3 *:p-6">
                     <Card
                 
                         className="row-span-2 grid grid-rows-subgrid">
@@ -122,6 +123,7 @@ export default function Features() {
                             <ScanLine className="size-32 stroke-[0.1px]" />
                         </div>
                     </Card>
+                </div>
                 </div>
             </div>
         </section>
