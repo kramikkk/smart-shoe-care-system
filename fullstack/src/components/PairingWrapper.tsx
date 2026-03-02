@@ -2,8 +2,13 @@
 
 import { useWebSocket } from '@/contexts/WebSocketContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Link2Off } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Tablet } from 'lucide-react'
 import { useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
+
+const DEVICE_ID_KEY = 'kiosk_device_id'
 
 interface PairingWrapperProps {
   children: React.ReactNode
@@ -11,10 +16,21 @@ interface PairingWrapperProps {
 
 export default function PairingWrapper({ children }: PairingWrapperProps) {
   const { isPaired, pairingCode, deviceId } = useWebSocket()
-  const [isLoading] = useState(false) // Loading handled by context now
+  const [setupInput, setSetupInput] = useState('')
+  const [setupError, setSetupError] = useState('')
+
+  const handleSaveDeviceId = () => {
+    const trimmed = setupInput.trim().toUpperCase()
+    if (!/^SSCM-[A-F0-9]{6}$/.test(trimmed)) {
+      setSetupError('Format must be SSCM-XXXXXX (e.g. SSCM-XXXXXX)')
+      return
+    }
+    localStorage.setItem(DEVICE_ID_KEY, trimmed)
+    window.location.reload()
+  }
 
   // Show loading state
-  if (isPaired === null || isLoading) {
+  if (isPaired === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-green-200 via-cyan-200 to-blue-400">
         <div className="text-center">
@@ -27,67 +43,114 @@ export default function PairingWrapper({ children }: PairingWrapperProps) {
     )
   }
 
-  // Show pairing page if device is not paired
-  if (isPaired === false) {
+  // No device configured — show first-time setup form
+  if (deviceId === 'No device configured') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-green-200 via-cyan-200 to-blue-400 p-4">
-        <Card className="w-full max-w-2xl bg-white/90 border-gray-200 backdrop-blur-sm shadow-2xl">
+        <Card className="w-full max-w-md bg-white/90 border-gray-200 backdrop-blur-sm shadow-2xl">
           <CardHeader className="text-center pb-4">
             <div className="flex justify-center mb-4">
-              <div className="relative bg-orange-500/10 p-8 rounded-full border-2 border-orange-500/30">
-                <Link2Off className="h-24 w-24 text-orange-400" />
+              <div className="bg-blue-500/10 p-8 rounded-full border-2 border-blue-500/30">
+                <Tablet className="h-16 w-16 text-blue-500" />
               </div>
             </div>
-            <CardTitle className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-              Device Not Paired
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+              Kiosk Setup
             </CardTitle>
-            <CardDescription className="text-xl text-gray-700 mt-2">
-              This device needs to be paired by an administrator
+            <CardDescription className="text-base text-gray-600 mt-1">
+              Enter the Device ID printed on your ESP32 unit to link this tablet to it.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Pairing Code Display */}
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg p-3">
-              <p className="text-center text-xs text-gray-600 mb-1">Pairing Code</p>
-              {pairingCode ? (
-                <div className="flex justify-center items-center gap-1">
-                  {pairingCode.split('').map((digit, index) => (
-                    <div
-                      key={index}
-                      className="w-10 h-12 flex items-center justify-center bg-white border-2 border-blue-300 rounded-lg shadow-sm"
-                    >
-                      <span className="text-xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-                        {digit}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-sm text-gray-500">
-                  Waiting for code...
-                </p>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-gray-500 text-center">Device ID</p>
+              <Input
+                placeholder="SSCM-XXXXXX"
+                value={setupInput}
+                onChange={(e) => {
+                  setSetupInput(e.target.value)
+                  setSetupError('')
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveDeviceId()}
+                className="text-center font-mono text-lg tracking-widest text-gray-900"
+              />
+              {setupError && (
+                <p className="text-xs text-red-500 text-center">{setupError}</p>
               )}
             </div>
+            <Button
+              className="w-full bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 text-white"
+              onClick={handleSaveDeviceId}
+              disabled={!setupInput.trim()}
+            >
+              Link Tablet to Device
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
-            {/* Device ID Display */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <p className="text-xs text-gray-500 text-center mb-1">Device ID</p>
-              <p className="text-lg font-mono text-center text-gray-700">{deviceId}</p>
-            </div>
+  // Device is configured but not paired — show pairing screen with QR code
+  if (isPaired === false) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const qrUrl = pairingCode
+      ? `${origin}/admin/dashboard/settings?pair=${deviceId}&code=${pairingCode}`
+      : ''
 
-            {/* Instructions */}
-            {deviceId === 'No device configured' ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-sm text-yellow-800 text-center">
-                  <span className="font-semibold">Setup Required:</span> This kiosk needs to be paired with a device.
-                  Please register a new device from the admin panel.
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-green-200 via-cyan-200 to-blue-400 p-6">
+        <Card className="w-full max-w-2xl bg-white/90 border-gray-200 backdrop-blur-sm shadow-2xl overflow-hidden">
+          <CardContent className="p-8">
+            <div className="flex gap-8 items-center">
+              {/* Left: title + info */}
+              <div className="flex flex-col justify-center gap-5 flex-1 min-w-0">
+                <span className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+                  Device Not Paired
+                </span>
+                <p className="text-sm text-gray-600">
+                  Scan the QR code with your phone → log in as admin → confirm pairing
                 </p>
+
+                {/* Pairing Code */}
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg p-3">
+                  <p className="text-center text-sm text-gray-600 mb-2">Pairing Code</p>
+                  {pairingCode ? (
+                    <div className="flex justify-center items-center gap-2">
+                      {pairingCode.split('').map((digit, index) => (
+                        <div
+                          key={index}
+                          className="w-10 h-12 flex items-center justify-center bg-white border-2 border-blue-300 rounded-lg shadow-sm"
+                        >
+                          <span className="text-xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
+                            {digit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-sm text-gray-500">Waiting for code...</p>
+                  )}
+                </div>
+
+                {/* Device ID */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-sm text-gray-500 text-center mb-1">Device ID</p>
+                  <p className="text-base font-mono text-center text-gray-700">{deviceId}</p>
+                </div>
               </div>
-            ) : (
-              <p className="text-center text-sm text-gray-500">
-                Waiting for pairing...
-              </p>
-            )}
+
+              {/* Right: QR code */}
+              <div className="flex flex-col items-center gap-2 shrink-0">
+                {qrUrl ? (
+                  <div className="bg-white p-4 rounded-xl border-2 border-blue-200 shadow-sm">
+                    <QRCodeSVG value={qrUrl} size={200} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">Generating QR code...</p>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

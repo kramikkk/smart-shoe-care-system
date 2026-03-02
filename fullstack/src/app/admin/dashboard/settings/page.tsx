@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -64,6 +65,8 @@ type DeviceWithStatus = Device & {
 
 export default function SettingsPage() {
   const { selectedDevice } = useDeviceFilter()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [pricing, setPricing] = useState<ServicePricing[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -76,6 +79,20 @@ export default function SettingsPage() {
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
   const [editingDeviceName, setEditingDeviceName] = useState('')
   const [restartingDeviceId, setRestartingDeviceId] = useState<string | null>(null)
+  const autoOpenedRef = useRef(false)
+
+  // Auto-open pairing dialog when redirected from QR code scan
+  useEffect(() => {
+    if (autoOpenedRef.current) return
+    const pair = searchParams.get('pair')
+    const code = searchParams.get('code')
+    if (pair && code) {
+      autoOpenedRef.current = true
+      setPairingDeviceId(pair)
+      setPairingCode(code)
+      setPairingDialogOpen(true)
+    }
+  }, [searchParams])
 
   // Fetch pricing data for selected device
   useEffect(() => {
@@ -255,6 +272,7 @@ export default function SettingsPage() {
         setPairingDialogOpen(false)
         setPairingDeviceId('')
         setPairingCode('')
+        router.replace('/admin/dashboard/settings')
 
         // Refresh devices list
         const devicesResponse = await fetch('/api/device/list')

@@ -5,7 +5,13 @@ import type { Duplex } from 'stream'
 import prisma from './prisma'
 
 // Store active WebSocket connections by device ID (for clients subscribing to device updates)
-const deviceConnections = new Map<string, Set<WebSocket>>()
+// Use a global singleton so all Next.js bundles (API routes, custom server) share the same Map
+declare global {
+  // eslint-disable-next-line no-var
+  var _deviceConnections: Map<string, Set<WebSocket>> | undefined
+}
+const deviceConnections: Map<string, Set<WebSocket>> =
+  global._deviceConnections ?? (global._deviceConnections = new Map())
 
 // Simple token validation - in production, verify against session store
 function validateWebSocketToken(token: string | null): boolean {
@@ -79,6 +85,27 @@ export function createWebSocketServer(server: Server) {
             type: 'subscribed',
             deviceId: subscribeDeviceId
           }))
+
+          // Immediately push current device state so reconnecting clients stay in sync
+          try {
+            const device = await prisma.device.findUnique({
+              where: { deviceId: subscribeDeviceId },
+              select: { paired: true, pairingCode: true, pairedAt: true }
+            })
+            if (device) {
+              ws.send(JSON.stringify({
+                type: 'device-update',
+                deviceId: subscribeDeviceId,
+                data: {
+                  paired: device.paired,
+                  pairingCode: device.pairingCode,
+                  pairedAt: device.pairedAt
+                }
+              }))
+            }
+          } catch {
+            // Non-critical — client will fall back to REST polling
+          }
         }
 
         // Handle device status update from ESP32
@@ -414,6 +441,14 @@ function broadcastToDevice(deviceId: string, message: any) {
       }
     })
   }
+}
+
+// Broadcast restart command to ESP32
+export function broadcastRestartDevice(deviceId: string) {
+  broadcastToDevice(deviceId, {
+    type: 'restart-device',
+    deviceId
+  })
 }
 
 // Broadcast device status update to all subscribed clients
