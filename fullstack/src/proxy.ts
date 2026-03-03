@@ -7,8 +7,8 @@ export async function proxy(request: NextRequest) {
 
   // Public routes that don't require authentication
   const publicRoutes = [
-    '/user',
-    '/admin/login',
+    '/kiosk',
+    '/client/login',
     '/api/auth',
     '/api/transaction/create',
     '/api/pricing',
@@ -28,7 +28,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Check if path requires admin authentication
-  const isAdminRoute = pathname.startsWith('/admin')
+  const isAdminRoute = pathname.startsWith('/client')
 
   if (isAdminRoute) {
     // Check for session
@@ -38,7 +38,7 @@ export async function proxy(request: NextRequest) {
 
     if (!session) {
       // Redirect to login if not authenticated
-      const loginUrl = new URL('/admin/login', request.url)
+      const loginUrl = new URL('/client/login', request.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
       return NextResponse.redirect(loginUrl)
     }

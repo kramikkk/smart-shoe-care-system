@@ -46,7 +46,7 @@ export function LoginForm({
       }
 
       // Successful login - redirect to dashboard
-      router.replace("/admin/dashboard")
+      router.replace("/client/dashboard")
     } catch (err) {
       setError("An error occurred. Please try again.")
       setLoading(false)
@@ -67,7 +67,7 @@ export function LoginForm({
                 />
                 <h1 className="text-2xl font-bold">Welcome back</h1>
                 <p className="text-muted-foreground text-balance">
-                  Login to your SSCM admin account
+                  Login to your SSCM client account
                 </p>
               </div>
               
@@ -128,7 +128,7 @@ export function LoginForm({
                 </Button>
               </Field>
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                Admin Dashboard
+                Client Dashboard
               </FieldSeparator>
               <FieldDescription className="text-center">
                 Only admins can access the dashboard
@@ -146,7 +146,7 @@ export function LoginForm({
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        <span>SSCM Admin Dashboard v1.0. © 2025 Smart Shoe Care Machine. All rights reserved.</span>
+        <span>SSCM Client Dashboard v1.0. © 2025 Smart Shoe Care Machine. All rights reserved.</span>
       </FieldDescription>
       <div className="text-center text-sm">
         <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">

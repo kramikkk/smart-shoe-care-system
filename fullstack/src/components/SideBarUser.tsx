@@ -64,7 +64,7 @@ export function SideBarUser({
     try {
       await signOut();
       toast.success("Signed out successfully");
-      router.push("/admin/login");
+      router.push("/client/login");
     } catch (error) {
       console.error("Sign out error:", error);
       toast.error("Failed to sign out. Please try again.");
