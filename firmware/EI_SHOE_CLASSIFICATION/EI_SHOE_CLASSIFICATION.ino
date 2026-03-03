@@ -102,6 +102,7 @@ typedef struct {
 #define CAM_MSG_STATUS_PONG       6  // CAM → Main board: yes/no
 #define CAM_MSG_LED_ENABLE        7  // Main board → CAM: classification light on
 #define CAM_MSG_LED_DISABLE       8  // Main board → CAM: classification light off
+#define CAM_MSG_FACTORY_RESET     9  // Main board → CAM: wipe all prefs and restart
 
 // Status codes in CamMessage.status
 #define CAM_STATUS_OK             0
@@ -137,8 +138,11 @@ unsigned long wifiConnectStartMs  = 0;
 String        camIp               = "";
 
 /* ===================== CLASSIFICATION STATE ===================== */
-volatile bool classificationRequested = false;
+volatile bool classificationRequested  = false;
 bool          classificationInProgress = false;
+
+/* ===================== FACTORY RESET STATE ===================== */
+volatile bool factoryResetRequested = false;
 
 /* ===================== CLASSIFICATION SETTINGS ===================== */
 #define NUM_SCANS 5
@@ -403,6 +407,12 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             Serial.println("[ESP-NOW] LED_DISABLE");
             break;
 
+        case CAM_MSG_FACTORY_RESET:
+            // Set flag — handled from main loop (unsafe to call prefs/restart from WiFi task)
+            Serial.println("[ESP-NOW] FACTORY_RESET received — will reset after callback");
+            factoryResetRequested = true;
+            break;
+
         default:
             Serial.println("[ESP-NOW] Unknown message type: " + String(msg.type));
             break;
@@ -617,6 +627,15 @@ void runClassificationAndRespond() {
     Serial.println("=== Classification Complete ===\n");
 }
 
+/* ===================== FACTORY RESET ===================== */
+void factoryReset() {
+    Serial.println("[FactoryReset] Clearing all preferences...");
+    prefs.clear();
+    Serial.println("[FactoryReset] Done. Restarting...");
+    delay(500);
+    ESP.restart();
+}
+
 /* ===================== SETUP ===================== */
 
 void setup() {
@@ -629,6 +648,18 @@ void setup() {
     Serial.println("=================================\n");
 
     prefs.begin("cam", false);
+
+    // Factory reset via BOOT button (GPIO0) held at power-on for 3s
+    pinMode(0, INPUT_PULLUP);
+    if (digitalRead(0) == LOW) {
+        Serial.println("[Setup] BOOT button held — hold 3s to confirm factory reset...");
+        delay(3000);
+        if (digitalRead(0) == LOW) {
+            Serial.println("[Setup] Confirmed — triggering factory reset!");
+            factoryReset();
+        }
+        Serial.println("[Setup] BOOT button released — factory reset cancelled");
+    }
 
     // Generate CAM's own permanent device ID
     camOwnDeviceId = generateCamOwnDeviceId();
@@ -708,10 +739,11 @@ void setup() {
     }
 
     Serial.println("\n--- Serial Commands ---");
-    Serial.println("CLASSIFY  - Run local classification test");
-    Serial.println("STATUS    - Show device status");
-    Serial.println("UNPAIR    - Clear MAC pairing and groupToken");
-    Serial.println("CLEAR     - Clear all stored data");
+    Serial.println("CLASSIFY      - Run local classification test");
+    Serial.println("STATUS        - Show device status");
+    Serial.println("UNPAIR        - Clear MAC pairing and groupToken");
+    Serial.println("CLEAR         - Clear all stored data (restart required)");
+    Serial.println("FACTORY_RESET - Wipe all prefs and restart");
     Serial.println("-----------------------\n");
 }
 
@@ -741,6 +773,12 @@ void loop() {
             sendPairingAck(mainBoardMac);
             pairingAckPending = false;
         }
+    }
+
+    // --- Factory reset (deferred from ESP-NOW callback — unsafe to run in WiFi task) ---
+    if (factoryResetRequested) {
+        factoryResetRequested = false;
+        factoryReset();
     }
 
     // --- Classification (runs from Arduino task, not ESP-NOW callback) ---
@@ -795,6 +833,10 @@ void loop() {
         else if (cmd == "CLEAR") {
             prefs.clear();
             Serial.println("[CLEAR] All NVS data cleared. Restart required.");
+        }
+        else if (cmd == "FACTORY_RESET") {
+            Serial.println("[Serial] Factory reset command received!");
+            factoryReset();
         }
     }
 

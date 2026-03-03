@@ -66,47 +66,32 @@ export function createWebSocketServer(server: Server) {
         const message = JSON.parse(data.toString())
 
         // Handle client subscription to device updates
+        // groupToken is NOT required for WS subscriptions — security for the
+        // CAM→backend path is enforced via X-Group-Token on the classify HTTP endpoint
         if (message.type === 'subscribe' && message.deviceId) {
           const subscribeDeviceId = message.deviceId as string
-          const providedGroupToken = message.groupToken as string | undefined
 
-          // Validate groupToken if the device has one stored (3-way binding enforcement)
-          // Skip validation for unpaired devices (they won't have a groupToken yet)
+          deviceId = subscribeDeviceId
+          let connections = deviceConnections.get(subscribeDeviceId)
+          if (!connections) {
+            connections = new Set<WebSocket>()
+            deviceConnections.set(subscribeDeviceId, connections)
+          }
+          connections.add(ws)
+
+          console.log(`[WebSocket] Client subscribed to device: ${subscribeDeviceId}`)
+
+          ws.send(JSON.stringify({
+            type: 'subscribed',
+            deviceId: subscribeDeviceId
+          }))
+
+          // Push current device state immediately for reconnecting clients
           try {
             const device = await prisma.device.findUnique({
               where: { deviceId: subscribeDeviceId },
               select: { paired: true, pairingCode: true, pairedAt: true, groupToken: true }
             })
-
-            if (device?.paired && device.groupToken) {
-              // Device is paired and has a groupToken — require it to match
-              if (!providedGroupToken || providedGroupToken !== device.groupToken) {
-                console.log(`[WebSocket] Rejected subscription: groupToken mismatch for ${subscribeDeviceId}`)
-                ws.send(JSON.stringify({
-                  type: 'error',
-                  code: 'INVALID_GROUP_TOKEN',
-                  message: 'Invalid or missing groupToken — tablet must be paired to this device'
-                }))
-                return
-              }
-            }
-
-            deviceId = subscribeDeviceId
-            let connections = deviceConnections.get(subscribeDeviceId)
-            if (!connections) {
-              connections = new Set<WebSocket>()
-              deviceConnections.set(subscribeDeviceId, connections)
-            }
-            connections.add(ws)
-
-            console.log(`[WebSocket] Client subscribed to device: ${subscribeDeviceId}`)
-
-            ws.send(JSON.stringify({
-              type: 'subscribed',
-              deviceId: subscribeDeviceId
-            }))
-
-            // Push current device state immediately for reconnecting clients
             if (device) {
               ws.send(JSON.stringify({
                 type: 'device-update',
@@ -119,16 +104,9 @@ export function createWebSocketServer(server: Server) {
                 }
               }))
             }
-          } catch {
+          } catch (err) {
             // Non-critical — client will fall back to REST polling
-            deviceId = subscribeDeviceId
-            let connections = deviceConnections.get(subscribeDeviceId)
-            if (!connections) {
-              connections = new Set<WebSocket>()
-              deviceConnections.set(subscribeDeviceId, connections)
-            }
-            connections.add(ws)
-            ws.send(JSON.stringify({ type: 'subscribed', deviceId: subscribeDeviceId }))
+            console.warn(`[WebSocket] Could not push initial device state for ${subscribeDeviceId}:`, err)
           }
         }
 

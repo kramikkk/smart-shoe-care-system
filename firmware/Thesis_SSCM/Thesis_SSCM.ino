@@ -87,6 +87,7 @@ typedef struct {
 #define CAM_MSG_STATUS_PONG       6
 #define CAM_MSG_LED_ENABLE        7
 #define CAM_MSG_LED_DISABLE       8
+#define CAM_MSG_FACTORY_RESET     9
 
 // Status codes in CamMessage.status
 #define CAM_STATUS_OK             0
@@ -2060,6 +2061,28 @@ void IRAM_ATTR handleBillPulse() {
     }
 }
 
+/* ===================== FACTORY RESET ===================== */
+void factoryReset() {
+    // If ESP-NOW is up and CAM is paired, reset CAM first before clearing our own prefs
+    if (espNowInitialized && camMacPaired) {
+        Serial.println("[FactoryReset] Sending reset command to CAM...");
+        CamMessage msg;
+        memset(&msg, 0, sizeof(msg));
+        msg.type = CAM_MSG_FACTORY_RESET;
+        esp_now_send(camMacAddress, (uint8_t*)&msg, sizeof(msg));
+        Serial.println("[FactoryReset] Waiting 3s for CAM to reset...");
+        delay(3000);
+    } else {
+        Serial.println("[FactoryReset] CAM not reachable (ESP-NOW not ready) — skipping CAM reset");
+    }
+
+    Serial.println("[FactoryReset] Clearing main board preferences...");
+    prefs.clear();
+    Serial.println("[FactoryReset] Done. Restarting...");
+    delay(500);
+    ESP.restart();
+}
+
 /* ===================== SETUP ===================== */
 void setup() {
     Serial.begin(115200);
@@ -2070,6 +2093,18 @@ void setup() {
     Serial.println("=================================\n");
 
     prefs.begin("sscm", false);
+
+    // Factory reset via BOOT button (GPIO0) held at power-on for 3s
+    pinMode(0, INPUT_PULLUP);
+    if (digitalRead(0) == LOW) {
+        Serial.println("[Setup] BOOT button held — hold 3s to confirm factory reset...");
+        delay(3000);
+        if (digitalRead(0) == LOW) {
+            Serial.println("[Setup] Confirmed — triggering factory reset!");
+            factoryReset();
+        }
+        Serial.println("[Setup] BOOT button released — factory reset cancelled");
+    }
 
     // Initialize ESP-NOW for wireless communication with ESP32-CAM
     // Note: ESP-NOW will be fully initialized after WiFi mode is set
@@ -2342,6 +2377,10 @@ void loop() {
             prefs.putUInt("totalCoinPesos", 0);
             prefs.putUInt("totalBillPesos", 0);
             Serial.println("Money counters reset");
+        }
+        else if (cmd == "FACTORY_RESET") {
+            Serial.println("[Serial] Factory reset command received!");
+            factoryReset();
         }
         else if (cmd == "STATUS") {
             Serial.println("\nDevice: " + deviceId);
