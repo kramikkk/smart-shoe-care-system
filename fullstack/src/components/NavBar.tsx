@@ -10,7 +10,7 @@ const NavBar = () => {
     <nav className="p-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
         <SidebarTrigger />
-        <Link href="/admin/dashboard" className="text-base font-bold"> Admin Dashboard </Link>
+        <Link href="/client/dashboard" className="text-base font-bold"> Client Dashboard</Link>
       </div>
       <div className="flex items-center gap-4">
         <DeviceSelector />

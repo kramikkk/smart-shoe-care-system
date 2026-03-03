@@ -30,7 +30,7 @@ export default function HeroSection() {
                                     <Button
                                         asChild
                                         className="mt-6 pr-1.5">
-                                        <Link href="/admin/login">
+                                        <Link href="/client/login">
                                             <span className="text-nowrap">Get Started</span>
                                             <ChevronRight className="opacity-50" />
                                         </Link>

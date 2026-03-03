@@ -22,10 +22,10 @@ import { useEffect, useState } from "react";
 import { getSession } from "@/lib/actions/auth-action";
 
 const menu = [
-  { title: "Overview", url: "/admin/dashboard", icon: LayoutDashboard },
-  { title: "Transactions", url: "/admin/dashboard/transactions", icon: ArrowLeftRight },
-  { title: "System", url: "/admin/dashboard/system", icon: Cpu },
-  { title: "Settings", url: "/admin/dashboard/settings", icon: Settings },
+  { title: "Overview", url: "/client/dashboard", icon: LayoutDashboard },
+  { title: "Transactions", url: "/client/dashboard/transactions", icon: ArrowLeftRight },
+  { title: "System", url: "/client/dashboard/system", icon: Cpu },
+  { title: "Settings", url: "/client/dashboard/settings", icon: Settings },
 ]
 
 const SideBar = () => {
@@ -54,7 +54,7 @@ const SideBar = () => {
   }, []);
 
   const isActive = (url: string) => {
-    if (url === "/admin/dashboard") {
+    if (url === "/client/dashboard") {
       return pathname === url;
     }
     return pathname.startsWith(url);
@@ -66,7 +66,7 @@ const SideBar = () => {
             <SidebarMenu>
             <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                    <Link href="/admin/dashboard">
+                    <Link href="/client/dashboard">
                     <Image src="/SSCMLogoCircle.png" alt="Logo" width={30} height={20} priority style={{ width: 'auto', height: 'auto' }}/>
                     <span className=" text-base font-bold">Smart Shoe Care</span>
                     </Link>

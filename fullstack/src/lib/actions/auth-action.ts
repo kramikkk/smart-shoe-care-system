@@ -6,7 +6,7 @@ import { auth } from "../auth"
 export const signIn = async (email: string, password: string) => {
     const result = await auth.api.signInEmail({
         body: {
-            email, password, callbackURL: "/admin/dashboard"
+            email, password, callbackURL: "/client/dashboard"
         },
     });
     return result;
