@@ -114,6 +114,8 @@ model Device {
   pairedBy     String?
   camSynced    Boolean          @default(false)
   camDeviceId  String?
+  groupToken   String?          // 8-char hex shared secret for 3-way binding
+  camIp        String?          // CAM's WiFi IP for optional HTTP streaming
   transactions Transaction[]
   pricing      ServicePricing[]
 

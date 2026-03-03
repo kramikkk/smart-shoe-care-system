@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 const DeviceRegisterSchema = z.object({
   deviceId: z.string().regex(/^SSCM-[A-F0-9]{6}$/, 'Invalid device ID format'),
   pairingCode: z.string().regex(/^\d{6}$/, 'Pairing code must be 6 digits'),
+  groupToken: z.string().regex(/^[A-F0-9]{8}$/, 'GroupToken must be 8 uppercase hex chars').optional(),
 })
 
 /**
@@ -28,24 +29,33 @@ export async function POST(request: Request) {
       )
     }
 
-    const { deviceId, pairingCode } = validation.data
+    const { deviceId, pairingCode, groupToken } = validation.data
 
     // Find existing device to check if paired
     const existingDevice = await prisma.device.findUnique({
       where: { deviceId }
     })
 
-    // Upsert device with pairing code
+    // Build update payload — always store groupToken when provided
+    const updateData: {
+      pairingCode: string | null
+      lastSeen: Date
+      groupToken?: string
+    } = {
+      pairingCode: existingDevice?.paired ? null : pairingCode,
+      lastSeen: new Date(),
+    }
+    if (groupToken) updateData.groupToken = groupToken
+
+    // Upsert device with pairing code and groupToken
     const device = await prisma.device.upsert({
       where: { deviceId },
-      update: {
-        pairingCode: existingDevice?.paired ? null : pairingCode, // Only update if not paired
-        lastSeen: new Date()
-      },
+      update: updateData,
       create: {
         deviceId,
         pairingCode,
         paired: false,
+        ...(groupToken ? { groupToken } : {}),
       }
     })
 

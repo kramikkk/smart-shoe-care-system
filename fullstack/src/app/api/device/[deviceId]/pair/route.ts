@@ -90,16 +90,18 @@ export async function POST(
       data: {
         paired: true,
         pairedAt: new Date(),
-        pairedBy: session.user.id, // Track which admin paired this device
-        pairingCode: null, // Clear pairing code after successful pairing
+        pairedBy: session.user.id,
+        pairingCode: null,
       }
     })
 
     // Broadcast update to all WebSocket clients subscribed to this device
+    // groupToken is included so the tablet can store it for subsequent connections
     broadcastDeviceUpdate(deviceId, {
       paired: true,
       pairingCode: null,
-      pairedAt: pairedDevice.pairedAt
+      pairedAt: pairedDevice.pairedAt,
+      groupToken: pairedDevice.groupToken ?? null,
     })
 
     return NextResponse.json({

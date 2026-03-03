@@ -68,30 +68,45 @@ export function createWebSocketServer(server: Server) {
         // Handle client subscription to device updates
         if (message.type === 'subscribe' && message.deviceId) {
           const subscribeDeviceId = message.deviceId as string
-          deviceId = subscribeDeviceId
+          const providedGroupToken = message.groupToken as string | undefined
 
-          // Add this connection to the device's subscription list
-          let connections = deviceConnections.get(subscribeDeviceId)
-          if (!connections) {
-            connections = new Set<WebSocket>()
-            deviceConnections.set(subscribeDeviceId, connections)
-          }
-          connections.add(ws)
-
-          console.log(`[WebSocket] Client subscribed to device: ${subscribeDeviceId}`)
-
-          // Send confirmation
-          ws.send(JSON.stringify({
-            type: 'subscribed',
-            deviceId: subscribeDeviceId
-          }))
-
-          // Immediately push current device state so reconnecting clients stay in sync
+          // Validate groupToken if the device has one stored (3-way binding enforcement)
+          // Skip validation for unpaired devices (they won't have a groupToken yet)
           try {
             const device = await prisma.device.findUnique({
               where: { deviceId: subscribeDeviceId },
-              select: { paired: true, pairingCode: true, pairedAt: true }
+              select: { paired: true, pairingCode: true, pairedAt: true, groupToken: true }
             })
+
+            if (device?.paired && device.groupToken) {
+              // Device is paired and has a groupToken — require it to match
+              if (!providedGroupToken || providedGroupToken !== device.groupToken) {
+                console.log(`[WebSocket] Rejected subscription: groupToken mismatch for ${subscribeDeviceId}`)
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  code: 'INVALID_GROUP_TOKEN',
+                  message: 'Invalid or missing groupToken — tablet must be paired to this device'
+                }))
+                return
+              }
+            }
+
+            deviceId = subscribeDeviceId
+            let connections = deviceConnections.get(subscribeDeviceId)
+            if (!connections) {
+              connections = new Set<WebSocket>()
+              deviceConnections.set(subscribeDeviceId, connections)
+            }
+            connections.add(ws)
+
+            console.log(`[WebSocket] Client subscribed to device: ${subscribeDeviceId}`)
+
+            ws.send(JSON.stringify({
+              type: 'subscribed',
+              deviceId: subscribeDeviceId
+            }))
+
+            // Push current device state immediately for reconnecting clients
             if (device) {
               ws.send(JSON.stringify({
                 type: 'device-update',
@@ -99,12 +114,21 @@ export function createWebSocketServer(server: Server) {
                 data: {
                   paired: device.paired,
                   pairingCode: device.pairingCode,
-                  pairedAt: device.pairedAt
+                  pairedAt: device.pairedAt,
+                  groupToken: device.groupToken,
                 }
               }))
             }
           } catch {
             // Non-critical — client will fall back to REST polling
+            deviceId = subscribeDeviceId
+            let connections = deviceConnections.get(subscribeDeviceId)
+            if (!connections) {
+              connections = new Set<WebSocket>()
+              deviceConnections.set(subscribeDeviceId, connections)
+            }
+            connections.add(ws)
+            ws.send(JSON.stringify({ type: 'subscribed', deviceId: subscribeDeviceId }))
           }
         }
 
@@ -238,26 +262,29 @@ export function createWebSocketServer(server: Server) {
           broadcastToDevice(syncDeviceId, message)
         }
 
-        // Handle CAM pairing acknowledgment from ESP32 (main board)
+        // Handle CAM pairing acknowledgment from ESP32 main board
+        // Sent after CAM responds to pairing broadcast with PairingAck
         else if (message.type === 'cam-paired' && message.deviceId) {
           const mainDeviceId = message.deviceId as string
-          const camDeviceId = message.camDeviceId as string
-          console.log(`[WebSocket] CAM paired: ${camDeviceId} -> ${mainDeviceId}`)
+          const camDeviceId  = message.camDeviceId as string
+          const camIp        = message.camIp as string | undefined
+          console.log(`[WebSocket] CAM paired: ${camDeviceId} -> ${mainDeviceId}${camIp ? ` @ ${camIp}` : ''}`)
 
-          // Update camDeviceId and camSynced in database
+          // Update camDeviceId, camIp, and camSynced in database
           try {
             await prisma.device.update({
               where: { deviceId: mainDeviceId },
               data: {
                 camDeviceId: camDeviceId,
-                camSynced: true
+                camSynced:   true,
+                ...(camIp ? { camIp } : {}),
               }
             })
           } catch (error) {
             console.error(`[WebSocket] Failed to save CAM pairing for ${mainDeviceId}:`, error)
           }
 
-          // Broadcast to all clients subscribed to this device
+          // Broadcast to all clients subscribed to this device (tablets can react to cam sync)
           broadcastToDevice(mainDeviceId, message)
         }
 
@@ -306,71 +333,68 @@ export function createWebSocketServer(server: Server) {
           broadcastToDevice(camDeviceId, message)
         }
 
-        // Handle classification request from frontend or main board
+        // Handle classification request from tablet/frontend
+        // New flow: forward to main board, which triggers CAM via ESP-NOW direct path
         else if ((message.type === 'start-classification' || message.type === 'request-classification') && message.deviceId) {
           const requestDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Classification requested from ${requestDeviceId}`)
 
-          // Determine CAM device ID
-          let camDeviceId: string
-          if (requestDeviceId.startsWith('SSCM-CAM-')) {
-            camDeviceId = requestDeviceId
-          } else if (message.camDeviceId) {
-            camDeviceId = message.camDeviceId as string
-          } else {
-            // Derive from main board ID: SSCM-xxx -> SSCM-CAM-xxx
-            camDeviceId = requestDeviceId.replace('SSCM-', 'SSCM-CAM-')
-          }
+          // Normalise to main board ID (strip SSCM-CAM- prefix if tablet sent CAM id by mistake)
+          const mainDeviceId = requestDeviceId.startsWith('SSCM-CAM-')
+            ? requestDeviceId.replace('SSCM-CAM-', 'SSCM-')
+            : requestDeviceId
 
-          console.log(`[WebSocket] Forwarding classification request to CAM: ${camDeviceId}`)
-          // Forward to CAM only - LED is controlled by enable/disable-classification
-          broadcastToDevice(camDeviceId, {
+          console.log(`[WebSocket] Classification request → main board: ${mainDeviceId}`)
+          broadcastToDevice(mainDeviceId, {
             type: 'start-classification',
-            deviceId: camDeviceId
+            deviceId: mainDeviceId
           })
         }
 
-        // Handle classification result from CAM
+        // Handle classification result — now sent by main board (relayed from CAM via ESP-NOW)
+        // Backward compat: also handles old path where CAM sent directly (SSCM-CAM-xxx)
         else if (message.type === 'classification-result' && message.deviceId) {
-          const camDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Classification result from ${camDeviceId}: ${message.result} (${(message.confidence * 100).toFixed(1)}%)`)
+          const sourceId = message.deviceId as string
+          console.log(`[WebSocket] Classification result from ${sourceId}: ${message.result} (${(message.confidence * 100).toFixed(1)}%)`)
 
-          // Broadcast to main board: SSCM-CAM-xxx -> SSCM-xxx
-          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
-          broadcastToDevice(mainDeviceId, message)
-
-          // Also broadcast to CAM subscribers (UI)
-          broadcastToDevice(camDeviceId, message)
+          if (sourceId.startsWith('SSCM-CAM-')) {
+            // Old path: CAM sent directly (backward compat)
+            const mainDeviceId = sourceId.replace('SSCM-CAM-', 'SSCM-')
+            broadcastToDevice(mainDeviceId, message)
+          } else {
+            // New path: main board relayed the result — broadcast to all tablet subscribers
+            broadcastToDevice(sourceId, message)
+          }
         }
 
-        // Handle classification started acknowledgment from CAM
-        else if (message.type === 'classification-started' && message.deviceId) {
-          const camDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Classification started on ${camDeviceId}`)
-          // Broadcast to main board and UI
-          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
-          broadcastToDevice(mainDeviceId, message)
-          broadcastToDevice(camDeviceId, message)
-        }
-
-        // Handle classification error from CAM
+        // Handle classification error — now sent by main board on behalf of CAM
         else if (message.type === 'classification-error' && message.deviceId) {
-          const camDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Classification error from ${camDeviceId}: ${message.error}`)
-          // Broadcast to main board and UI
-          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
-          broadcastToDevice(mainDeviceId, message)
-          broadcastToDevice(camDeviceId, message)
+          const sourceId = message.deviceId as string
+          console.log(`[WebSocket] Classification error from ${sourceId}: ${message.error}`)
+
+          const targetId = sourceId.startsWith('SSCM-CAM-')
+            ? sourceId.replace('SSCM-CAM-', 'SSCM-')
+            : sourceId
+          broadcastToDevice(targetId, message)
         }
 
-        // Handle classification busy from CAM
+        // Handle classification started (kept for backward compat with old CAM firmware)
+        else if (message.type === 'classification-started' && message.deviceId) {
+          const sourceId    = message.deviceId as string
+          const mainId = sourceId.startsWith('SSCM-CAM-')
+            ? sourceId.replace('SSCM-CAM-', 'SSCM-')
+            : sourceId
+          console.log(`[WebSocket] Classification started on ${mainId}`)
+          broadcastToDevice(mainId, message)
+        }
+
+        // Handle classification busy (backward compat)
         else if (message.type === 'classification-busy' && message.deviceId) {
-          const camDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Classification busy on ${camDeviceId}`)
-          // Broadcast to main board and UI
-          const mainDeviceId = camDeviceId.replace('SSCM-CAM-', 'SSCM-')
-          broadcastToDevice(mainDeviceId, message)
-          broadcastToDevice(camDeviceId, message)
+          const sourceId = message.deviceId as string
+          const mainId = sourceId.startsWith('SSCM-CAM-')
+            ? sourceId.replace('SSCM-CAM-', 'SSCM-')
+            : sourceId
+          console.log(`[WebSocket] Classification busy on ${mainId}`)
+          broadcastToDevice(mainId, message)
         }
 
         // Handle enable-classification (page enter) from frontend
@@ -456,6 +480,7 @@ export function broadcastDeviceUpdate(deviceId: string, data: {
   paired: boolean
   pairingCode: string | null
   pairedAt: Date | null
+  groupToken?: string | null
 }) {
   broadcastToDevice(deviceId, {
     type: 'device-update',
