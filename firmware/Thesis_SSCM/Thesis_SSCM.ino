@@ -47,49 +47,83 @@ unsigned long lastStatusUpdate = 0;
 const unsigned long STATUS_UPDATE_INTERVAL = 60000; // Update status every 1 minute
 
 /* ===================== ESP-NOW - ESP32-CAM COMMUNICATION ===================== */
-// Wireless credential transfer to ESP32-CAM via ESP-NOW (no wires needed)
-// CAM device ID is derived from main board: SSCM-ABC123 -> SSCM-CAM-ABC123
+// Hybrid communication: ESP-NOW for classification (fast, offline-capable),
+// WiFi/WebSocket optional on CAM for HTTP streaming only.
 
-// Structure to send WiFi credentials to CAM
+// ---- Shared structs — must match EI_SHOE_CLASSIFICATION.ino exactly ----
+
+// Pairing broadcast from main board → CAM
 typedef struct {
-  char ssid[32];
-  char password[64];
-  char wsHost[64];
-  uint16_t wsPort;
-  char deviceId[24];  // Main board's device ID
-} WiFiCredentials;
+    uint8_t  type;           // CAM_MSG_PAIR_REQUEST = 1
+    char     groupToken[10]; // 8 hex chars + null
+    char     deviceId[24];   // Main board device ID
+    char     ssid[32];       // WiFi SSID for CAM streaming
+    char     password[64];   // WiFi password
+    char     wsHost[64];     // Backend host (informational for CAM)
+    uint16_t wsPort;         // Backend port
+} PairingBroadcast;
 
-WiFiCredentials camCredentials;
-
-// Structure to receive pairing acknowledgment from CAM
+// Pairing acknowledgment from CAM → main board
 typedef struct {
-  char camDeviceId[24];    // CAM's own device ID (e.g., SSCM-CAM-XYZ789)
-  char mainDeviceId[24];   // Echoed main board device ID (for verification)
-  uint8_t ackType;         // 1 = accepted, 2 = rejected
+    uint8_t type;               // CAM_MSG_PAIR_ACK = 2
+    char    camOwnDeviceId[24]; // e.g., SSCM-CAM-D4DB1C
+    char    camIp[20];          // CAM's WiFi IP (empty if not connected yet)
 } PairingAck;
 
-bool espNowInitialized = false;
-bool credentialsSentToCAM = false;
-bool camIsReady = false;  // Track if CAM has confirmed it's ready
+// Runtime classification/control message (bidirectional)
+typedef struct {
+    uint8_t type;          // Message type constant
+    uint8_t status;        // Status code constant
+    char    shoeType[32];  // "sneaker", "leather", etc.
+    float   confidence;    // 0.0 - 1.0
+} CamMessage;
 
-// Credential retry logic (retries infinitely until CAM responds)
-unsigned long lastCredentialSendTime = 0;
-const unsigned long CREDENTIAL_RETRY_INTERVAL = 5000;  // Retry every 5 seconds
-bool credentialsSendStarted = false;  // Track if we've started sending credentials
+// Message type constants
+#define CAM_MSG_PAIR_REQUEST      1
+#define CAM_MSG_PAIR_ACK          2
+#define CAM_MSG_CLASSIFY_REQUEST  3
+#define CAM_MSG_CLASSIFY_RESULT   4
+#define CAM_MSG_STATUS_PING       5
+#define CAM_MSG_STATUS_PONG       6
+#define CAM_MSG_LED_ENABLE        7
+#define CAM_MSG_LED_DISABLE       8
 
-// CAM MAC address for direct pairing (prevents cross-device interference)
-uint8_t camMacAddress[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-bool camMacPaired = false;
-String pairedCamDeviceId = "";  // Actual CAM device ID from pairing (e.g., SSCM-CAM-D4DB1C)
+// Status codes in CamMessage.status
+#define CAM_STATUS_OK             0
+#define CAM_STATUS_ERROR          1
+#define CAM_STATUS_TIMEOUT        2
+#define CAM_STATUS_BUSY           3
+#define CAM_STATUS_NOT_READY      4
+#define CAM_STATUS_LOW_CONFIDENCE 5
 
-// Broadcast address (only used during initial pairing discovery)
+// ---- ESP-NOW state ----
+bool   espNowInitialized   = false;
+bool   camIsReady          = false;  // True after PairingAck received from CAM
+
+// Pairing broadcast retry (retries until CAM sends PairingAck)
+unsigned long lastPairingBroadcastTime = 0;
+const unsigned long PAIRING_BROADCAST_INTERVAL = 5000;
+bool pairingBroadcastStarted = false;
+
+// CAM MAC address (locked after first PairingAck)
+uint8_t camMacAddress[6]   = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+bool    camMacPaired        = false;
+String  pairedCamDeviceId  = "";   // e.g., SSCM-CAM-D4DB1C
+String  pairedCamIp        = "";   // CAM's WiFi IP for streaming
+
+// Broadcast address used during initial pairing
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
+// ---- Classification via ESP-NOW ----
+bool          classificationPending     = false;
+unsigned long classificationRequestTime = 0;
+const unsigned long CAM_CLASSIFY_TIMEOUT_MS = 20000; // 20s fallback timeout
+
 /* ===================== CLASSIFICATION STATE ===================== */
-// Classification is now handled via WebSocket, not serial
-String lastClassificationResult = "";
-float lastClassificationConfidence = 0.0;
-bool classificationLedOn = false;
+// Classification via ESP-NOW direct path (not routed through backend)
+String lastClassificationResult     = "";
+float  lastClassificationConfidence = 0.0;
+bool   classificationLedOn          = false;
 
 /* ===================== COIN SLOT ===================== */
 #define COIN_SLOT_PIN 5
@@ -298,8 +332,9 @@ int currentBlue = 0;
 
 /* ===================== PAIRING ===================== */
 String pairingCode = "";
-String deviceId = "";
-bool isPaired = false;
+String deviceId    = "";
+String groupToken  = "";  // 8 hex chars — shared secret for 3-way binding
+bool   isPaired    = false;
 
 /* ===================== BACKEND URL ===================== */
 const char* BACKEND_HOST = "192.168.43.147";  // Update with your Next.js server IP
@@ -308,191 +343,270 @@ const char* BACKEND_URL = "http://192.168.43.147:3000";
     
 /* ===================== FUNCTIONS ===================== */
 
+/* ===================== GROUP TOKEN ===================== */
+
+// Generate an 8-character uppercase hex groupToken from RNG
+String generateGroupToken() {
+    uint32_t r1 = esp_random();
+    uint32_t r2 = esp_random();
+    char token[9];
+    snprintf(token, sizeof(token), "%04X%04X", r1 & 0xFFFF, r2 & 0xFFFF);
+    return String(token);
+}
+
 /* ===================== ESP-NOW FUNCTIONS ===================== */
 
-// Callback when ESP-NOW data is sent
-// Updated for ESP32 Arduino Core v3.x
+// Send callback (ESP32 Arduino Core v3.x)
 void onDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
-    if (status == ESP_NOW_SEND_SUCCESS) {
-        Serial.println("[ESP-NOW] Credentials sent to CAM");
-        credentialsSentToCAM = true;
-    } else {
+    if (status != ESP_NOW_SEND_SUCCESS) {
         Serial.println("[ESP-NOW] Send failed");
     }
 }
 
-// Callback when ESP-NOW data is received (for CAM pairing acknowledgment)
+// Receive callback — handles PairingAck and CamMessage from CAM
 // Updated for ESP32 Arduino Core v3.x
 void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
-    Serial.println("\n[ESP-NOW] Data received from CAM!");
+    if (len < 1) return;
 
-    // Get sender MAC address
+    uint8_t  msgType   = data[0];
     uint8_t* senderMac = recv_info->src_addr;
-    Serial.print("[ESP-NOW] From MAC: ");
-    for (int i = 0; i < 6; i++) {
-        Serial.printf("%02X", senderMac[i]);
-        if (i < 5) Serial.print(":");
-    }
-    Serial.println();
 
-    // Check if this is a PairingAck message
-    if (len == sizeof(PairingAck)) {
+    Serial.printf("\n[ESP-NOW] Data received, type=%d len=%d\n", msgType, len);
+
+    // ============================================================
+    // PAIRING ACK (type 2): CAM accepted our pairing broadcast
+    // ============================================================
+    if (msgType == CAM_MSG_PAIR_ACK) {
+        if (len < (int)sizeof(PairingAck)) {
+            Serial.println("[ESP-NOW] PairingAck too small: " + String(len));
+            return;
+        }
+
         PairingAck ack;
         memcpy(&ack, data, sizeof(PairingAck));
 
-        Serial.println("[ESP-NOW] Pairing acknowledgment received:");
-        Serial.println("  CAM Device ID: " + String(ack.camDeviceId));
-        Serial.println("  Main Device ID: " + String(ack.mainDeviceId));
-        Serial.println("  Ack Type: " + String(ack.ackType == 1 ? "ACCEPTED" : "REJECTED"));
+        Serial.println("[ESP-NOW] PairingAck received:");
+        Serial.println("  CAM Device ID: " + String(ack.camOwnDeviceId));
+        Serial.println("  CAM IP:        " + String(strlen(ack.camIp) > 0 ? ack.camIp : "(no IP yet)"));
 
-        // Verify this is for our device
-        if (strcmp(ack.mainDeviceId, deviceId.c_str()) == 0) {
-            if (ack.ackType == 1) {
-                // Always store/update the CAM device ID
-                pairedCamDeviceId = String(ack.camDeviceId);
-                prefs.putString("camDeviceId", pairedCamDeviceId);
-                Serial.println("[ESP-NOW] Stored CAM Device ID: " + pairedCamDeviceId);
+        // Store/update CAM device ID
+        pairedCamDeviceId = String(ack.camOwnDeviceId);
+        prefs.putString("camDeviceId", pairedCamDeviceId);
 
-                // Credentials accepted - store CAM MAC for direct communication (first time only)
-                if (!camMacPaired) {
-                    memcpy(camMacAddress, senderMac, 6);
-                    prefs.putBytes("camMac", camMacAddress, 6);
-                    camMacPaired = true;
-
-                    Serial.println("[ESP-NOW] Paired with CAM MAC:");
-                    Serial.print("  ");
-                    for (int i = 0; i < 6; i++) {
-                        Serial.printf("%02X", camMacAddress[i]);
-                        if (i < 5) Serial.print(":");
-                    }
-                    Serial.println();
-
-                    // Update ESP-NOW peer to use direct MAC instead of broadcast
-                    esp_now_del_peer(broadcastAddress);
-                    esp_now_peer_info_t peerInfo;
-                    memset(&peerInfo, 0, sizeof(peerInfo));
-                    memcpy(peerInfo.peer_addr, camMacAddress, 6);
-                    peerInfo.channel = 0;
-                    peerInfo.encrypt = false;
-                    esp_now_add_peer(&peerInfo);
-
-                    Serial.println("[ESP-NOW] Updated to direct CAM communication");
-                }
-
-                // CAM is confirmed ready - this stops the infinite retry
-                camIsReady = true;
-                Serial.println("[ESP-NOW] CAM confirmed ready - pairing complete");
-
-                // Notify frontend of CAM sync status
-                sendCamSyncStatus();
-            } else {
-                Serial.println("[ESP-NOW] CAM rejected credentials (device ID mismatch on CAM side)");
-            }
-        } else {
-            Serial.println("[ESP-NOW] Ack not for this device (expected: " + deviceId + ")");
+        // Store CAM IP if provided
+        if (strlen(ack.camIp) > 0) {
+            pairedCamIp = String(ack.camIp);
+            prefs.putString("camIp", pairedCamIp);
         }
-    } else {
-        Serial.println("[ESP-NOW] Unknown data size: " + String(len) + " (expected PairingAck: " + String(sizeof(PairingAck)) + ")");
+
+        // MAC-lock to this CAM (first time only)
+        if (!camMacPaired) {
+            memcpy(camMacAddress, senderMac, 6);
+            prefs.putBytes("camMac", camMacAddress, 6);
+            camMacPaired = true;
+
+            Serial.printf("[ESP-NOW] Locked to CAM MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                camMacAddress[0], camMacAddress[1], camMacAddress[2],
+                camMacAddress[3], camMacAddress[4], camMacAddress[5]);
+
+            // Switch from broadcast peer to direct CAM MAC
+            esp_now_del_peer(broadcastAddress);
+            esp_now_peer_info_t peer;
+            memset(&peer, 0, sizeof(peer));
+            memcpy(peer.peer_addr, camMacAddress, 6);
+            peer.channel = 0;
+            peer.encrypt = false;
+            esp_now_add_peer(&peer);
+            Serial.println("[ESP-NOW] Switched to direct CAM communication");
+        }
+
+        camIsReady = true;
+        Serial.println("[ESP-NOW] CAM paired and ready");
+
+        // Report CAM pairing to backend via WebSocket
+        sendCamPairedToBackend();
+        return;
     }
+
+    // ============================================================
+    // CAM CLASSIFICATION RESULT (type 4)
+    // ============================================================
+    if (msgType == CAM_MSG_CLASSIFY_RESULT) {
+        if (len < (int)sizeof(CamMessage)) {
+            Serial.println("[ESP-NOW] CamMessage too small: " + String(len));
+            return;
+        }
+
+        CamMessage msg;
+        memcpy(&msg, data, sizeof(CamMessage));
+
+        classificationPending = false;  // Result received, clear timeout flag
+
+        switch (msg.status) {
+            case CAM_STATUS_OK:
+                Serial.println("[Classification] OK: " + String(msg.shoeType) +
+                               " (" + String(msg.confidence * 100, 1) + "%)");
+                handleClassificationResultFromCAM(String(msg.shoeType), msg.confidence);
+                break;
+
+            case CAM_STATUS_LOW_CONFIDENCE:
+                Serial.println("[Classification] LOW_CONFIDENCE: " + String(msg.shoeType) +
+                               " (" + String(msg.confidence * 100, 1) + "%) — below threshold");
+                // Relay low confidence result to backend so UI can show retry message
+                relayClassificationErrorToBackend("LOW_CONFIDENCE");
+                break;
+
+            case CAM_STATUS_BUSY:
+                Serial.println("[Classification] CAM busy — retry later");
+                relayClassificationErrorToBackend("CAM_BUSY");
+                break;
+
+            case CAM_STATUS_TIMEOUT:
+                Serial.println("[Classification] CAM timeout");
+                relayClassificationErrorToBackend("CLASSIFICATION_TIMEOUT");
+                break;
+
+            case CAM_STATUS_NOT_READY:
+                Serial.println("[Classification] CAM camera not ready");
+                relayClassificationErrorToBackend("CAMERA_NOT_READY");
+                break;
+
+            case CAM_STATUS_ERROR:
+            default:
+                Serial.println("[Classification] CAM error");
+                relayClassificationErrorToBackend("CLASSIFICATION_ERROR");
+                break;
+        }
+        return;
+    }
+
+    // ============================================================
+    // STATUS PONG (type 6): CAM responded to our ping
+    // ============================================================
+    if (msgType == CAM_MSG_STATUS_PONG) {
+        if (len < (int)sizeof(CamMessage)) return;
+        CamMessage msg;
+        memcpy(&msg, data, sizeof(CamMessage));
+        Serial.println("[ESP-NOW] STATUS_PONG: CAM " +
+                       String(msg.status == CAM_STATUS_OK ? "READY" : "NOT_READY"));
+        return;
+    }
+
+    Serial.println("[ESP-NOW] Unknown message type: " + String(msgType));
 }
 
 // Initialize ESP-NOW (call after WiFi.mode is set)
 void initESPNow() {
     if (espNowInitialized) return;
 
-    // ESP-NOW requires WiFi to be initialized
     if (esp_now_init() != ESP_OK) {
         Serial.println("[ESP-NOW] Init failed!");
         return;
     }
 
-    // Register send callback
     esp_now_register_send_cb(onDataSent);
-
-    // Register receive callback (for pairing acknowledgment from CAM)
     esp_now_register_recv_cb(onDataRecv);
 
-    // Load paired CAM MAC from preferences
+    // Load stored CAM pairing data
     size_t macLen = prefs.getBytes("camMac", camMacAddress, 6);
     if (macLen == 6 && (camMacAddress[0] != 0x00 || camMacAddress[1] != 0x00)) {
         camMacPaired = true;
     }
-
-    // Load paired CAM device ID from preferences
     pairedCamDeviceId = prefs.getString("camDeviceId", "");
+    pairedCamIp       = prefs.getString("camIp", "");
+
     if (pairedCamDeviceId.length() > 0) {
-        Serial.println("[ESP-NOW] Loaded CAM Device ID: " + pairedCamDeviceId);
+        Serial.println("[ESP-NOW] Restored CAM ID: " + pairedCamDeviceId + " — awaiting PairingAck to confirm ready");
+        // Do NOT set camIsReady=true here — require live PairingAck from CAM each boot.
+        // Setting pairingBroadcastStarted=true makes the retry loop send broadcasts
+        // until the CAM responds, preventing classification against an unresponsive CAM.
+        pairingBroadcastStarted = true;
     }
 
-    // Add peer (either paired CAM MAC or broadcast for discovery)
-    esp_now_peer_info_t peerInfo;
-    memset(&peerInfo, 0, sizeof(peerInfo));
-    
+    // Add peer: use direct CAM MAC if known, otherwise broadcast
+    esp_now_peer_info_t peer;
+    memset(&peer, 0, sizeof(peer));
     if (camMacPaired) {
-        // Use paired CAM MAC for direct communication
-        memcpy(peerInfo.peer_addr, camMacAddress, 6);
+        memcpy(peer.peer_addr, camMacAddress, 6);
         Serial.println("[ESP-NOW] Added paired CAM as peer");
     } else {
-        // Use broadcast for initial pairing discovery
-        memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-        Serial.println("[ESP-NOW] Added broadcast peer for pairing discovery");
+        memcpy(peer.peer_addr, broadcastAddress, 6);
+        Serial.println("[ESP-NOW] Added broadcast peer for initial discovery");
     }
-    
-    peerInfo.channel = 0;  // Use current WiFi channel
-    peerInfo.encrypt = false;
+    peer.channel = 0;
+    peer.encrypt = false;
 
-    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    if (esp_now_add_peer(&peer) != ESP_OK) {
         Serial.println("[ESP-NOW] Failed to add peer");
         return;
     }
 
     espNowInitialized = true;
-    Serial.println("[ESP-NOW] Initialized successfully");
+    Serial.println("[ESP-NOW] Initialized");
 }
 
-// Send WiFi credentials to ESP32-CAM via ESP-NOW broadcast
-void sendCredentialsToCAM() {
-    if (!espNowInitialized) {
-        Serial.println("[ESP-NOW] Not initialized, cannot send credentials");
-        return;
-    }
+// Send pairing broadcast to CAM (replaces old sendCredentialsToCAM)
+void sendPairingBroadcast() {
+    if (!espNowInitialized) return;
 
-    // Get stored WiFi credentials
     String ssid = prefs.getString("ssid", "");
     String pass = prefs.getString("pass", "");
 
     if (ssid.length() == 0) {
-        static bool noCredsPrinted = false;
-        if (!noCredsPrinted) {
-            Serial.println("[ESP-NOW] No WiFi credentials stored");
-            noCredsPrinted = true;
-        }
+        static bool warned = false;
+        if (!warned) { Serial.println("[ESP-NOW] No WiFi credentials — cannot send pairing broadcast"); warned = true; }
         return;
     }
 
-    // Prepare credentials structure
-    memset(&camCredentials, 0, sizeof(camCredentials));
-    strncpy(camCredentials.ssid, ssid.c_str(), sizeof(camCredentials.ssid) - 1);
-    strncpy(camCredentials.password, pass.c_str(), sizeof(camCredentials.password) - 1);
+    PairingBroadcast pb;
+    memset(&pb, 0, sizeof(pb));
+    pb.type    = CAM_MSG_PAIR_REQUEST;
+    strncpy(pb.groupToken, groupToken.c_str(), sizeof(pb.groupToken) - 1);
+    strncpy(pb.deviceId,   deviceId.c_str(),   sizeof(pb.deviceId) - 1);
+    strncpy(pb.ssid,       ssid.c_str(),        sizeof(pb.ssid) - 1);
+    strncpy(pb.password,   pass.c_str(),        sizeof(pb.password) - 1);
+    strncpy(pb.wsHost,     BACKEND_HOST,        sizeof(pb.wsHost) - 1);
+    pb.wsPort = BACKEND_PORT;
 
-    // WebSocket server info - use BACKEND_HOST (same server both boards connect to)
-    strncpy(camCredentials.wsHost, BACKEND_HOST, sizeof(camCredentials.wsHost) - 1);
-    camCredentials.wsPort = BACKEND_PORT;
-
-    // Device ID for CAM to derive its own ID
-    strncpy(camCredentials.deviceId, deviceId.c_str(), sizeof(camCredentials.deviceId) - 1);
-
-    // Send to paired CAM MAC or broadcast if not paired
     uint8_t* targetMac = camMacPaired ? camMacAddress : broadcastAddress;
-    esp_now_send(targetMac, (uint8_t *)&camCredentials, sizeof(camCredentials));
+    esp_now_send(targetMac, (uint8_t*)&pb, sizeof(pb));
 
-    // Track that we've started sending credentials
-    credentialsSendStarted = true;
-    lastCredentialSendTime = millis();
+    pairingBroadcastStarted   = true;
+    lastPairingBroadcastTime  = millis();
 
     static int sendCount = 0;
     sendCount++;
-    Serial.println("[ESP-NOW] Credentials sent to CAM (attempt " + String(sendCount) + ")");
+    Serial.println("[ESP-NOW] Pairing broadcast sent (attempt " + String(sendCount) + ")");
+}
+
+// Send classify request to CAM via ESP-NOW
+void sendClassifyRequest() {
+    if (!espNowInitialized || !camMacPaired) {
+        Serial.println("[Classification] CAM not paired — cannot send classify request");
+        return;
+    }
+
+    CamMessage msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.type   = CAM_MSG_CLASSIFY_REQUEST;
+    msg.status = CAM_STATUS_OK;
+
+    esp_now_send(camMacAddress, (uint8_t*)&msg, sizeof(msg));
+    classificationPending     = true;
+    classificationRequestTime = millis();
+    Serial.println("[Classification] CLASSIFY_REQUEST sent to CAM via ESP-NOW");
+}
+
+// Send LED control to CAM via ESP-NOW
+void sendLedControl(uint8_t ledMsgType) {
+    if (!espNowInitialized || !camMacPaired) return;
+
+    CamMessage msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.type = ledMsgType;
+
+    esp_now_send(camMacAddress, (uint8_t*)&msg, sizeof(msg));
+    Serial.println("[ESP-NOW] LED " + String(ledMsgType == CAM_MSG_LED_ENABLE ? "ENABLE" : "DISABLE") + " sent to CAM");
 }
 
 /* ===================== WIFI FUNCTIONS ===================== */
@@ -663,6 +777,9 @@ void sendDeviceRegistration() {
     String payload = "{";
     payload += "\"deviceId\":\"" + deviceId + "\",";
     payload += "\"pairingCode\":\"" + pairingCode + "\"";
+    if (groupToken.length() > 0) {
+        payload += ",\"groupToken\":\"" + groupToken + "\"";
+    }
     payload += "}";
 
     int httpCode = http.POST(payload);
@@ -862,78 +979,33 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 }
             }
             else if (message.indexOf("\"type\":\"start-classification\"") != -1) {
-                // Classification request received - LED is controlled by page enter/leave
-                Serial.println("\n=== CLASSIFICATION STARTED ===");
-                Serial.println("===============================\n");
+                // Tablet/backend requesting classification — send to CAM via ESP-NOW
+                Serial.println("\n=== CLASSIFICATION REQUESTED (via ESP-NOW) ===");
+                if (camIsReady && camMacPaired) {
+                    sendClassifyRequest();
+                } else {
+                    Serial.println("[Classification] CAM not ready — aborting");
+                    relayClassificationErrorToBackend("CAM_NOT_READY");
+                }
+                Serial.println("==============================================\n");
             }
             else if (message.indexOf("\"type\":\"enable-classification\"") != -1) {
-                // User entered classification page - turn on WHITE LED
+                // User entered classification page — turn on WHITE LED + notify CAM
                 Serial.println("\n=== CLASSIFICATION PAGE ENTERED ===");
                 rgbWhite();
                 classificationLedOn = true;
+                sendLedControl(CAM_MSG_LED_ENABLE);
                 Serial.println("RGB Light: WHITE (camera lighting)");
                 Serial.println("===================================\n");
             }
             else if (message.indexOf("\"type\":\"disable-classification\"") != -1) {
-                // User left classification page - turn off LED
+                // User left classification page — turn off LED + notify CAM
                 Serial.println("\n=== CLASSIFICATION PAGE EXITED ===");
                 rgbOff();
                 classificationLedOn = false;
+                sendLedControl(CAM_MSG_LED_DISABLE);
                 Serial.println("RGB Light: OFF");
                 Serial.println("==================================\n");
-            }
-            else if (message.indexOf("\"type\":\"classification-result\"") != -1) {
-                // Classification result from ESP32-CAM (via backend)
-                // Format: {"type":"classification-result","deviceId":"SSCM-CAM-xxx","result":"leather","confidence":0.95}
-
-                // Extract result (shoe type)
-                int resultIdx = message.indexOf("\"result\":\"");
-                String shoeType = "";
-                if (resultIdx != -1) {
-                    int start = resultIdx + 10;
-                    int end = message.indexOf("\"", start);
-                    shoeType = message.substring(start, end);
-                }
-
-                // Extract confidence
-                int confIdx = message.indexOf("\"confidence\":");
-                float confidence = 0.0;
-                if (confIdx != -1) {
-                    int start = confIdx + 13;
-                    int end = message.indexOf(",", start);
-                    if (end == -1) end = message.indexOf("}", start);
-                    confidence = message.substring(start, end).toFloat();
-                }
-
-                handleClassificationResultFromWebSocket(shoeType, confidence);
-                // LED stays on - controlled by page leave (disable-classification)
-            }
-            else if (message.indexOf("\"type\":\"classification-error\"") != -1) {
-                // Classification error from CAM
-                Serial.println("[Classification] Error received from CAM");
-
-                int errIdx = message.indexOf("\"error\":\"");
-                if (errIdx != -1) {
-                    int start = errIdx + 9;
-                    int end = message.indexOf("\"", start);
-                    String error = message.substring(start, end);
-                    Serial.println("[Classification] Error: " + error);
-                }
-                // LED stays on - controlled by page leave (disable-classification)
-            }
-            else if (message.indexOf("\"type\":\"cam-status\"") != -1) {
-                // CAM status update
-                bool cameraReady = (message.indexOf("\"cameraReady\":true") != -1);
-                Serial.println("[CAM] Status - Camera Ready: " + String(cameraReady ? "Yes" : "No"));
-
-                // Stop credential retry if CAM is ready (camIsReady=true stops infinite retry)
-                if (cameraReady && !camIsReady) {
-                    camIsReady = true;
-                    Serial.println("[ESP-NOW] CAM confirmed ready - stopping credential retry");
-
-                    // Notify frontend of CAM sync status
-                    sendCamSyncStatus();
-                }
             }
             else if (message.indexOf("\"type\":\"restart-device\"") != -1) {
                 // Restart command from admin panel
@@ -957,8 +1029,10 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 void connectWebSocket() {
     if (!wifiConnected || wsConnected) return;
 
-    // Include deviceId as query parameter for server authentication
     String wsPath = "/api/ws?deviceId=" + deviceId;
+    if (groupToken.length() > 0) {
+        wsPath += "&groupToken=" + groupToken;
+    }
 
     Serial.println("[WebSocket] Connecting to " + String(BACKEND_HOST) + ":" + String(BACKEND_PORT));
     webSocket.begin(BACKEND_HOST, BACKEND_PORT, wsPath);
@@ -1335,45 +1409,61 @@ void sendServiceStatusUpdate() {
 }
 
 /* ===================== CLASSIFICATION FUNCTIONS ===================== */
-// Note: Classification is now handled via WebSocket through the backend server
-// Flow: Main board -> Backend -> ESP32-CAM -> Backend -> Main board
-// No more direct serial communication with CAM
+// Classification flow: Main board → ESP-NOW → CAM → ESP-NOW → Main board → WebSocket → Backend
+// Offline-capable: works even if backend is down (result still goes to service logic)
 
-void requestClassificationFromCAM() {
-    Serial.println("[Classification] Requesting via WebSocket...");
+// Handle classification result received from CAM via ESP-NOW, then relay to backend
+void handleClassificationResultFromCAM(String shoeType, float confidence) {
+    Serial.println("\n=== CLASSIFICATION RESULT RECEIVED (ESP-NOW) ===");
+    Serial.println("Shoe Type:  " + shoeType);
+    Serial.println("Confidence: " + String(confidence * 100, 1) + "%");
+    Serial.println("================================================\n");
 
-    lastClassificationResult = "";
-    lastClassificationConfidence = 0.0;
+    lastClassificationResult     = shoeType;
+    lastClassificationConfidence = confidence;
 
-    // Request classification from CAM via backend
-    // The backend will route this to the ESP32-CAM
+    // Relay to backend so tablet UI can display the result
     if (wsConnected && isPaired) {
-        // Derive CAM device ID from main board ID: SSCM-ABC123 -> SSCM-CAM-ABC123
-        String camDeviceId = "SSCM-CAM-" + deviceId.substring(5);  // Remove "SSCM-" and add "SSCM-CAM-"
-
-        String reqMsg = "{\"type\":\"request-classification\",";
-        reqMsg += "\"deviceId\":\"" + deviceId + "\",";
-        reqMsg += "\"camDeviceId\":\"" + camDeviceId + "\"}";
-        webSocket.sendTXT(reqMsg);
-
-        Serial.println("[Classification] Request sent to backend for CAM: " + camDeviceId);
-    } else {
-        Serial.println("[Classification] Cannot request - not connected or not paired");
+        String msg = "{";
+        msg += "\"type\":\"classification-result\",";
+        msg += "\"deviceId\":\"" + deviceId + "\",";
+        msg += "\"result\":\"" + shoeType + "\",";
+        msg += "\"confidence\":" + String(confidence, 4);
+        msg += "}";
+        webSocket.sendTXT(msg);
+        Serial.println("[WebSocket] Classification result relayed to backend");
     }
 }
 
-// Handle classification result received from CAM via WebSocket
-void handleClassificationResultFromWebSocket(String shoeType, float confidence) {
-    Serial.println("\n=== CLASSIFICATION RESULT RECEIVED ===");
-    Serial.println("Shoe Type: " + shoeType);
-    Serial.println("Confidence: " + String(confidence * 100, 1) + "%");
-    Serial.println("======================================\n");
+// Relay a classification error to backend so tablet UI can show the error
+void relayClassificationErrorToBackend(String errorCode) {
+    if (!wsConnected || !isPaired) return;
 
-    lastClassificationResult = shoeType;
-    lastClassificationConfidence = confidence;
+    String msg = "{";
+    msg += "\"type\":\"classification-error\",";
+    msg += "\"deviceId\":\"" + deviceId + "\",";
+    msg += "\"error\":\"" + errorCode + "\"";
+    msg += "}";
+    webSocket.sendTXT(msg);
+    Serial.println("[WebSocket] Classification error relayed: " + errorCode);
 }
 
-// Note: checkCamSerial() removed - CAM now communicates via WebSocket
+// Report CAM pairing info to backend after receiving PairingAck
+void sendCamPairedToBackend() {
+    if (!wsConnected) return;
+
+    String msg = "{";
+    msg += "\"type\":\"cam-paired\",";
+    msg += "\"deviceId\":\"" + deviceId + "\",";
+    msg += "\"camDeviceId\":\"" + pairedCamDeviceId + "\"";
+    if (pairedCamIp.length() > 0) {
+        msg += ",\"camIp\":\"" + pairedCamIp + "\"";
+    }
+    msg += "}";
+    webSocket.sendTXT(msg);
+    Serial.println("[WebSocket] cam-paired sent: " + pairedCamDeviceId +
+                   (pairedCamIp.length() > 0 ? " @ " + pairedCamIp : ""));
+}
 
 /* ===================== DHT22 FUNCTIONS ===================== */
 bool readDHT22() {
@@ -1414,17 +1504,20 @@ void sendDHTDataViaWebSocket() {
 void sendCamSyncStatus() {
     if (!isPaired || !wsConnected) return;
 
+    // Use the new cam-paired message if we have a CAM device ID
+    if (pairedCamDeviceId.length() > 0) {
+        sendCamPairedToBackend();
+        return;
+    }
+
+    // Fallback: send legacy cam-sync-status for backward compat
     String syncMsg = "{";
     syncMsg += "\"type\":\"cam-sync-status\",";
     syncMsg += "\"deviceId\":\"" + deviceId + "\",";
     syncMsg += "\"camSynced\":" + String(camIsReady ? "true" : "false");
-    if (pairedCamDeviceId.length() > 0) {
-        syncMsg += ",\"camDeviceId\":\"" + pairedCamDeviceId + "\"";
-    }
     syncMsg += "}";
-
     webSocket.sendTXT(syncMsg);
-    Serial.println("[WebSocket] Sent CAM sync status: " + String(camIsReady ? "SYNCED" : "NOT_SYNCED") + (pairedCamDeviceId.length() > 0 ? " (CAM: " + pairedCamDeviceId + ")" : ""));
+    Serial.println("[WebSocket] Sent CAM sync status: " + String(camIsReady ? "SYNCED" : "NOT_SYNCED"));
 }
 
 /* ===================== ULTRASONIC FUNCTIONS ===================== */
@@ -2084,11 +2177,21 @@ void setup() {
     totalBillPesos = prefs.getUInt("totalBillPesos", 0);
     totalPesos = totalCoinPesos + totalBillPesos;
 
-    // Initialize device ID (persistent)
+    // Initialize device ID (persistent, derived from chip MAC)
     deviceId = prefs.getString("deviceId", "");
     if (deviceId.length() == 0) {
         deviceId = generateDeviceId();
         prefs.putString("deviceId", deviceId);
+    }
+
+    // Initialize groupToken (persistent, generated once on first boot)
+    groupToken = prefs.getString("groupToken", "");
+    if (groupToken.length() == 0) {
+        groupToken = generateGroupToken();
+        prefs.putString("groupToken", groupToken);
+        Serial.println("[Setup] Generated new groupToken: " + groupToken);
+    } else {
+        Serial.println("[Setup] Loaded groupToken: " + groupToken);
     }
 
     // Check if device is paired
@@ -2100,26 +2203,27 @@ void setup() {
     }
 
     Serial.println("\n--- Device Info ---");
-    Serial.println("ID: " + deviceId);
-    Serial.println("Paired: " + String(isPaired ? "Yes" : "No - Code: " + pairingCode));
-    Serial.println("Money: " + String(totalPesos) + " PHP");
+    Serial.println("ID:         " + deviceId);
+    Serial.println("GroupToken: " + groupToken);
+    Serial.println("Paired:     " + String(isPaired ? "Yes" : "No - Code: " + pairingCode));
+    Serial.println("Money:      " + String(totalPesos) + " PHP");
     Serial.println("-------------------\n");
 
     // Check if we have WiFi credentials
     String storedSSID = prefs.getString("ssid", "");
 
     if (storedSSID.length() == 0) {
-        // No credentials - start SoftAP only (no ESP-NOW needed)
+        // No credentials — start SoftAP captive portal only
         Serial.println("[Setup] No WiFi credentials - starting SoftAP");
         startSoftAP();
     } else {
-        // Has credentials - init ESP-NOW and connect WiFi
+        // Has credentials — init ESP-NOW then connect WiFi
         Serial.println("[Setup] WiFi credentials found - connecting");
         WiFi.mode(WIFI_STA);
         delay(100);
         initESPNow();
         delay(100);
-        sendCredentialsToCAM();
+        sendPairingBroadcast();  // Send groupToken + WiFi creds to CAM
         connectWiFi();
     }
 }
@@ -2190,16 +2294,23 @@ void loop() {
         }
     }
 
-    // Retry sending credentials to CAM infinitely until successful (handles simultaneous boot)
-    if (!camIsReady && credentialsSendStarted) {
-        if (millis() - lastCredentialSendTime >= CREDENTIAL_RETRY_INTERVAL) {
-            static uint32_t credRetryCount = 0;
-            credRetryCount++;
-            if (credRetryCount % 10 == 1) {
-                Serial.printf("[ESP-NOW] Retrying credential send (attempt %lu)...\n", credRetryCount);
+    // Retry pairing broadcast until CAM sends PairingAck (handles simultaneous boot)
+    if (!camIsReady && pairingBroadcastStarted) {
+        if (millis() - lastPairingBroadcastTime >= PAIRING_BROADCAST_INTERVAL) {
+            static uint32_t broadcastRetryCount = 0;
+            broadcastRetryCount++;
+            if (broadcastRetryCount % 6 == 1) {  // Log every 30 seconds
+                Serial.printf("[ESP-NOW] Retrying pairing broadcast (attempt %lu)...\n", broadcastRetryCount);
             }
-            sendCredentialsToCAM();
+            sendPairingBroadcast();
         }
+    }
+
+    // Handle classification timeout (CAM didn't respond within CAM_CLASSIFY_TIMEOUT_MS)
+    if (classificationPending && (millis() - classificationRequestTime >= CAM_CLASSIFY_TIMEOUT_MS)) {
+        classificationPending = false;
+        Serial.println("[Classification] Timeout waiting for CAM response");
+        relayClassificationErrorToBackend("CAM_RESPONSE_TIMEOUT");
     }
 
     // Serial commands
@@ -2530,12 +2641,12 @@ void loop() {
             String subCmd = cmd.substring(4);
 
             if (subCmd == "BROADCAST") {
-                Serial.println("[CAM] Broadcasting credentials via ESP-NOW...");
-                sendCredentialsToCAM();
+                Serial.println("[CAM] Broadcasting pairing via ESP-NOW...");
+                sendPairingBroadcast();
             }
             else if (subCmd == "CLASSIFY") {
-                Serial.println("[CAM] Requesting classification via WebSocket...");
-                requestClassificationFromCAM();
+                Serial.println("[CAM] Requesting classification via ESP-NOW...");
+                sendClassifyRequest();
             }
             else {
                 Serial.println("[ERROR] Unknown CAM command");
@@ -2580,10 +2691,10 @@ void loop() {
         // Connect to WebSocket for real-time updates
         connectWebSocket();
 
-        // Broadcast credentials again (in case CAM booted after main board)
-        Serial.println("[ESP-NOW] Re-broadcasting credentials to CAM (WiFi connected)...");
+        // Broadcast pairing again (in case CAM booted after main board)
+        Serial.println("[ESP-NOW] Re-broadcasting pairing to CAM (WiFi connected)...");
         delay(100);
-        sendCredentialsToCAM();
+        sendPairingBroadcast();
     }
 
     /* WiFi retry logic */

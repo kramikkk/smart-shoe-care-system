@@ -27,7 +27,8 @@ enum ConnectionState {
   RECONNECTING = 'reconnecting'
 }
 
-const DEVICE_ID_KEY = 'kiosk_device_id'
+const DEVICE_ID_KEY    = 'kiosk_device_id'
+const GROUP_TOKEN_KEY  = 'kiosk_group_token'
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAY_MS = 3000
 
@@ -78,11 +79,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       setIsConnected(true)
       reconnectAttemptsRef.current = 0
 
-      // Subscribe to device updates
-      ws.send(JSON.stringify({
-        type: 'subscribe',
-        deviceId: devId
-      }))
+      // Include groupToken in subscribe if we have one stored (3-way binding)
+      const storedGroupToken = localStorage.getItem(GROUP_TOKEN_KEY)
+      const subscribeMsg: Record<string, string> = { type: 'subscribe', deviceId: devId }
+      if (storedGroupToken) subscribeMsg.groupToken = storedGroupToken
+
+      ws.send(JSON.stringify(subscribeMsg))
     }
 
     ws.onmessage = (event) => {
@@ -96,9 +98,19 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           console.log('[WebSocket] Received device update:', message.data)
           setIsPaired(message.data.paired)
           setPairingCode(message.data.pairingCode || '')
+          // Store groupToken so subsequent connections carry 3-way binding credentials
+          if (message.data.groupToken) {
+            localStorage.setItem(GROUP_TOKEN_KEY, message.data.groupToken)
+            console.log('[WebSocket] Stored groupToken for 3-way binding')
+          }
         } else if (message.type === 'device-online') {
           console.log('[WebSocket] Device is online:', message.deviceId)
           setIsPaired(message.paired)
+        } else if (message.type === 'error' && message.code === 'INVALID_GROUP_TOKEN') {
+          // Backend rejected our groupToken — clear it and reload
+          console.warn('[WebSocket] GroupToken rejected — clearing and reloading')
+          localStorage.removeItem(GROUP_TOKEN_KEY)
+          window.location.reload()
         }
 
         // Notify all registered message handlers
