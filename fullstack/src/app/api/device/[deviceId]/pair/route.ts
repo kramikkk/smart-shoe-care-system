@@ -129,6 +129,14 @@ export async function DELETE(
   { params }: { params: Promise<{ deviceId: string }> }
 ) {
   try {
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const { deviceId } = await params
 
     if (!deviceId) {
@@ -150,7 +158,7 @@ export async function DELETE(
       )
     }
 
-    // Unpair the device
+    // Unpair the device and clear groupToken so stale tokens don't cause mismatch on re-pair
     const unpairedDevice = await prisma.device.update({
       where: { deviceId },
       data: {
@@ -158,6 +166,7 @@ export async function DELETE(
         pairedAt: null,
         pairedBy: null,
         pairingCode: null, // ESP32 will generate new code on next check
+        groupToken: null,  // Clear so re-pairing starts fresh
       }
     })
 
@@ -165,7 +174,8 @@ export async function DELETE(
     broadcastDeviceUpdate(deviceId, {
       paired: false,
       pairingCode: null,
-      pairedAt: null
+      pairedAt: null,
+      groupToken: null,
     })
 
     return NextResponse.json({
