@@ -76,8 +76,10 @@ export default function PaymentSuccess() {
     <div className="flex flex-col items-center justify-center min-h-screen text-center px-4 py-6">
       <div className="bg-white/80 py-8 px-10 rounded-3xl shadow-2xl backdrop-blur-md w-[500px]">
         {/* Success Icon */}
-        <div className="mb-4">
-          <CheckCircle className="w-20 h-20 text-green-600 mx-auto" strokeWidth={2.5} />
+        <div className="mb-4 flex justify-center">
+          <div className="w-32 h-32 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-xl">
+            <CheckCircle className="w-16 h-16 text-white" strokeWidth={2.5} />
+          </div>
         </div>
 
         {/* Success Title */}

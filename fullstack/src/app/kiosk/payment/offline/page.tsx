@@ -68,8 +68,8 @@ const Offline = () => {
           }))
           setServices(fetchedServices)
         }
-      } catch (error) {
-        console.error('Error fetching pricing, using defaults:', error)
+      } catch {
+        // use defaults
       }
     }
 
@@ -78,10 +78,7 @@ const Offline = () => {
 
   // Get the service details based on the service parameter
   const selectedService = useMemo(() => {
-    console.log('Looking for service:', service)
-    console.log('Available services:', services)
     const found = services.find((s) => s.id === service)
-    console.log('Found service:', found)
     return found || services[3] // default to package
   }, [service, services])
 
@@ -121,7 +118,6 @@ const Offline = () => {
         
         // Enable payment system when entering payment page
         ws!.send(JSON.stringify({ type: 'enable-payment', deviceId }))
-        console.log('[Payment] Payment system enabled')
       }
 
       ws.onmessage = (event) => {
@@ -134,21 +130,17 @@ const Offline = () => {
           } else if (message.type === 'bill-inserted') {
             setAmountInserted((prev) => prev + message.billValue)
           }
-        } catch (error) {
-          console.error('[Payment] Error parsing message:', error)
+        } catch {
+          // ignore malformed messages
         }
       }
 
-      ws.onerror = (error) => {
-        console.error('[Payment] WebSocket error:', error)
+      ws.onerror = () => {
         if (!isCleanedUp) setWsConnected(false)
       }
-      
+
       ws.onclose = () => {
-        if (!isCleanedUp) {
-          console.log('[Payment] WebSocket closed')
-          setWsConnected(false)
-        }
+        if (!isCleanedUp) setWsConnected(false)
       }
     }
 
@@ -162,7 +154,6 @@ const Offline = () => {
       // Disable payment system when leaving payment page
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'disable-payment', deviceId }))
-        console.log('[Payment] Payment system disabled')
       }
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close()
@@ -184,16 +175,6 @@ const Offline = () => {
       // Get device ID from localStorage (set by PairingWrapper)
       const deviceId = localStorage.getItem('kiosk_device_id')
 
-      console.log('Device ID from localStorage:', deviceId)
-      console.log('Transaction data:', {
-        paymentMethod: 'Cash',
-        serviceType: service.charAt(0).toUpperCase() + service.slice(1),
-        shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
-        careType: service === 'package' ? 'Auto' : care.charAt(0).toUpperCase() + care.slice(1),
-        amount: selectedService.price,
-        deviceId,
-      })
-
       const response = await fetch('/api/transaction/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -208,16 +189,7 @@ const Offline = () => {
 
       const data = await response.json()
 
-      if (data.success) {
-        console.log('✅ Transaction saved:', data.transaction.transactionId)
-      } else {
-        console.error('❌ Failed to save transaction:', data.error)
-        if (data.details) {
-          console.error('Validation errors:', data.details)
-        }
-      }
-    } catch (error) {
-      console.error('❌ Transaction save error:', error)
+    } catch {
       // Continue to success page even if transaction save fails
     } finally {
       setIsSaving(false)

@@ -1,49 +1,84 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent } from '@/components/ui/item'
-import Link from 'next/link'
 import Image from 'next/image'
 import { BackButton } from '@/components/kiosk/BackButton'
+import { StepIndicator } from '@/components/kiosk/StepIndicator'
 
-const mode = () => {
+const CUSTOM_STEPS = ['Mode', 'Shoe Type', 'Service', 'Care Type', 'Payment']
+
+const modes = [
+  {
+    id: 'auto',
+    label: 'Auto Mode',
+    image: '/Automatic3D.webp',
+    descriptions: ['Automatic Shoe Type Detection', 'Automated Service Package', 'Automated Care Type Selection'],
+    href: '/kiosk/mode/auto/classify',
+  },
+  {
+    id: 'custom',
+    label: 'Custom Mode',
+    image: '/Custom3D.webp',
+    descriptions: ['Manual Shoe Type Selection', 'Choose Service Type', 'Choose Care Type'],
+    href: '/kiosk/mode/custom',
+  },
+]
+
+const ModePage = () => {
+  const [selected, setSelected] = useState<string | null>(null)
+  const router = useRouter()
+
+  const handleProceed = () => {
+    const mode = modes.find(m => m.id === selected)
+    if (mode) router.push(mode.href)
+  }
+
   return (
     <div className="relative">
       <BackButton />
 
+      <StepIndicator steps={CUSTOM_STEPS} currentStep={0} />
+
       <h1 className="text-5xl font-bold text-center mb-10 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Select Mode
       </h1>
-      <div className='flex gap-8 justify-center'>
-        <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w-100 flex flex-col items-center'>
-        <Image src="/Automatic3D.webp" alt="Auto Mode" width={128} height={128} className="w-32 h-32" />
-          <ItemContent>
-            <h2 className="text-2xl font-bold mb-4">Auto Mode</h2>
-            <p className="text-xl text-gray-600">Automatic Shoe Type Detection</p>
-            <p className="text-xl text-gray-600">Automated Service Package</p>
-            <p className="text-xl text-gray-600">Automated Care Type Selection</p>
-            <Link href="/kiosk/mode/auto/classify">
-              <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
-                <p className='text-lg font-bold'>Select Auto Mode</p>
-              </Button>
-            </Link>
-          </ItemContent>
-        </Item>
-        <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w-100 flex flex-col items-center'>
-        <Image src="/Custom3D.webp" alt="Custom Mode" width={128} height={128} className="w-32 h-32" />
-          <ItemContent>
-            <h2 className="text-2xl font-bold mb-4">Custom Mode</h2>
-            <p className="text-xl text-gray-600">Manual Shoe Type Selection</p>
-            <p className="text-xl text-gray-600">Choose Service Type</p>
-            <p className="text-xl text-gray-600">Choose Care Type</p>
-            <Link href="/kiosk/mode/custom">
-              <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
-                <p className='text-lg font-bold'>Select Custom Mode</p>
-              </Button>
-            </Link>
-          </ItemContent>
-        </Item>
+
+      <div className='flex gap-8 justify-center mb-8'>
+        {modes.map((mode) => (
+          <Item
+            key={mode.id}
+            onClick={() => setSelected(mode.id)}
+            className={`text-center p-8 rounded-lg shadow-lg w-100 flex flex-col items-center cursor-pointer transition-all duration-200 select-none
+              ${selected === mode.id
+                ? 'bg-white/90 ring-4 ring-blue-500 shadow-2xl scale-[1.03]'
+                : 'bg-white/50 hover:bg-white/70 hover:shadow-xl'
+              }`}
+          >
+            <Image src={mode.image} alt={mode.label} width={128} height={128} className="w-32 h-32" />
+            <ItemContent>
+              <h2 className="text-2xl font-bold mb-4">{mode.label}</h2>
+              {mode.descriptions.map((desc, i) => (
+                <p key={i} className="text-xl text-gray-600">{desc}</p>
+              ))}
+            </ItemContent>
+          </Item>
+        ))}
+      </div>
+
+      <div className="flex justify-center">
+        <Button
+          onClick={handleProceed}
+          disabled={!selected}
+          className="px-12 py-6 text-xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
+        >
+          Proceed
+        </Button>
       </div>
     </div>
   )
 }
 
-export default mode
+export default ModePage
