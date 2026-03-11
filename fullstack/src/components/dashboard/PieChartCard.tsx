@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Label, Pie, PieChart, Sector } from "recharts"
+import { Loader2 } from "lucide-react"
 import { PieSectorDataItem } from "recharts/types/polar/Pie"
 import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
@@ -161,7 +162,7 @@ export function PieChartCard() {
           </Select>
         </CardHeader>
         <CardContent className="flex flex-1 justify-center items-center">
-          <div className="text-muted-foreground">Loading chart data...</div>
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     )

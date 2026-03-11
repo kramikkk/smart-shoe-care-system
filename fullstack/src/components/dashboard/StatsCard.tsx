@@ -1,6 +1,6 @@
 'use client'
 
-import { TrendingDown, TrendingUp, ShoppingCart, Coins } from "lucide-react"
+import { TrendingDown, TrendingUp, ShoppingCart, Coins, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -60,15 +60,8 @@ const StatsCard = ({ id }: { id: StatsType }) => {
   if (isLoading || !stats) {
     return (
       <Card className="@container/card">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="size-5 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="h-8 w-24 bg-gray-200 rounded animate-pulse mb-2" />
-          <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
+        <CardContent className="flex items-center justify-center h-24">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     )
