@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X, Pencil, RotateCcw } from "lucide-react"
+import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X, Pencil, RotateCcw, Timer } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -27,6 +27,14 @@ type ServicePricing = {
   createdAt: string
   updatedAt: string
 }
+
+type ServiceDuration = {
+  serviceType: string
+  careType: string
+  duration: number // seconds
+}
+
+type DurationMap = Record<string, Record<string, number>> // serviceType -> careType -> seconds
 
 const serviceIcons = {
   cleaning: { icon: <Sparkles className="h-5 w-5" />, color: 'var(--chart-1)' },
@@ -80,6 +88,9 @@ export default function SettingsPage() {
   const [editingDeviceName, setEditingDeviceName] = useState('')
   const [restartingDeviceId, setRestartingDeviceId] = useState<string | null>(null)
   const autoOpenedRef = useRef(false)
+  const [durations, setDurations] = useState<DurationMap>({})
+  const [editedDurations, setEditedDurations] = useState<DurationMap>({})
+  const [isSavingDuration, setIsSavingDuration] = useState(false)
 
   // Auto-open pairing dialog when redirected from QR code scan
   useEffect(() => {
@@ -94,9 +105,9 @@ export default function SettingsPage() {
     }
   }, [searchParams])
 
-  // Fetch pricing data for selected device
+  // Fetch pricing and durations for selected device
   useEffect(() => {
-    const fetchPricing = async () => {
+    const fetchData = async () => {
       if (!selectedDevice) {
         setIsLoading(false)
         return
@@ -104,29 +115,44 @@ export default function SettingsPage() {
 
       setIsLoading(true)
       try {
-        const response = await fetch(`/api/pricing?deviceId=${selectedDevice}`)
-        const data = await response.json()
+        const [pricingRes, durationRes] = await Promise.all([
+          fetch(`/api/pricing?deviceId=${selectedDevice}`),
+          fetch(`/api/duration?deviceId=${selectedDevice}`),
+        ])
+        const [pricingData, durationData] = await Promise.all([
+          pricingRes.json(),
+          durationRes.json(),
+        ])
 
-        if (data.success) {
-          setPricing(data.pricing)
-          // Initialize edited prices with current prices
+        if (pricingData.success) {
+          setPricing(pricingData.pricing)
           const initialPrices: Record<string, number> = {}
-          data.pricing.forEach((item: ServicePricing) => {
+          pricingData.pricing.forEach((item: ServicePricing) => {
             initialPrices[item.serviceType] = item.price
           })
           setEditedPrices(initialPrices)
         } else {
-          toast.error(data.error || "Failed to fetch pricing")
+          toast.error(pricingData.error || "Failed to fetch pricing")
+        }
+
+        if (durationData.success) {
+          const map: DurationMap = {}
+          durationData.durations.forEach((item: ServiceDuration) => {
+            if (!map[item.serviceType]) map[item.serviceType] = {}
+            map[item.serviceType][item.careType] = item.duration
+          })
+          setDurations(map)
+          setEditedDurations(JSON.parse(JSON.stringify(map)))
         }
       } catch (error) {
-        console.error('Error fetching pricing:', error)
-        toast.error("Failed to load pricing data")
+        console.error('Error fetching settings:', error)
+        toast.error("Failed to load settings")
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchPricing()
+    fetchData()
   }, [selectedDevice])
 
   // Fetch only paired devices on mount
@@ -389,6 +415,54 @@ export default function SettingsPage() {
     }
   }
 
+  const handleDurationChange = (serviceType: string, careType: string, value: string) => {
+    const num = parseInt(value)
+    setEditedDurations(prev => ({
+      ...prev,
+      [serviceType]: { ...prev[serviceType], [careType]: isNaN(num) || num < 0 ? 0 : num },
+    }))
+  }
+
+  const hasDurationChanges = (serviceType: string, careType: string) => {
+    return durations[serviceType]?.[careType] !== editedDurations[serviceType]?.[careType]
+  }
+
+  const handleSaveDuration = async (serviceType: string, careType: string) => {
+    const duration = editedDurations[serviceType]?.[careType]
+    if (!duration || duration <= 0) {
+      toast.error('Duration must be greater than 0')
+      return
+    }
+    setIsSavingDuration(true)
+    try {
+      const res = await fetch('/api/duration', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceType, careType, duration, deviceId: selectedDevice }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setDurations(prev => ({
+          ...prev,
+          [serviceType]: { ...prev[serviceType], [careType]: duration },
+        }))
+        toast.success(`${serviceType} (${careType}) duration updated`)
+      } else {
+        toast.error(data.error || 'Failed to update duration')
+      }
+    } catch {
+      toast.error('Failed to save duration')
+    } finally {
+      setIsSavingDuration(false)
+    }
+  }
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return s === 0 ? `${m}m` : `${m}m ${s}s`
+  }
+
   const formatLastSeen = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -465,7 +539,7 @@ export default function SettingsPage() {
                       {serviceNames[item.serviceType as keyof typeof serviceNames]}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Current: ₱{item.price.toFixed(2)}
+                      Default: ₱{item.price.toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -773,14 +847,84 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Additional Settings Sections (Future) */}
-      <Card className="border-dashed">
+      {/* Service Duration Section */}
+      <Card>
         <CardHeader>
-          <CardTitle className="text-lg text-muted-foreground">Additional Settings</CardTitle>
+          <div className="flex items-center gap-2">
+            <Timer className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-lg">Service Durations</CardTitle>
+          </div>
           <CardDescription>
-            More configuration options coming soon...
+            Configure how long each service runs per care intensity for {selectedDevice}.
           </CardDescription>
         </CardHeader>
+        <CardContent className="space-y-6">
+          {[
+            { key: 'cleaning', label: 'Cleaning', icon: <Sparkles className="h-4 w-4" />, color: 'var(--chart-1)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: true },
+            { key: 'drying', label: 'Drying', icon: <Wind className="h-4 w-4" />, color: 'var(--chart-2)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: false },
+            { key: 'sterilizing', label: 'Sterilizing', icon: <ShieldCheck className="h-4 w-4" />, color: 'var(--chart-3)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: false },
+          ].map(({ key, label, icon, color, careTypes, singleDuration }) => (
+            <div key={key} className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md" style={{ backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`, color }}>
+                  {icon}
+                </div>
+                <h3 className="font-semibold text-sm">{label}</h3>
+              </div>
+              <div className={`grid gap-3 ${singleDuration ? 'grid-cols-1 max-w-xs' : 'grid-cols-1 sm:grid-cols-3'}`}>
+                {(singleDuration ? ['normal'] : careTypes).map((careType) => {
+                  const current = durations[key]?.[careType] ?? 0
+                  const edited = editedDurations[key]?.[careType] ?? 0
+                  const changed = hasDurationChanges(key, careType)
+                  return (
+                    <div key={careType} className="space-y-1.5">
+                      {!singleDuration && (
+                        <Label className="text-xs capitalize text-muted-foreground">{careType}</Label>
+                      )}
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={edited || ''}
+                            onChange={(e) => {
+                              if (singleDuration) {
+                                careTypes.forEach(ct => handleDurationChange(key, ct, e.target.value))
+                              } else {
+                                handleDurationChange(key, careType, e.target.value)
+                              }
+                            }}
+                            className="pr-7"
+                            disabled={isSavingDuration}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">s</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          className="shrink-0"
+                          disabled={!changed || isSavingDuration}
+                          onClick={() => {
+                            if (singleDuration) {
+                              Promise.all(careTypes.map(ct => handleSaveDuration(key, ct)))
+                            } else {
+                              handleSaveDuration(key, careType)
+                            }
+                          }}
+                        >
+                          {isSavingDuration ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Default: {current > 0 ? `${current}s` : '—'}
+                        {changed && <span className="text-amber-600 dark:text-amber-400 ml-2">→ {edited}s</span>}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </CardContent>
       </Card>
     </div>
   )

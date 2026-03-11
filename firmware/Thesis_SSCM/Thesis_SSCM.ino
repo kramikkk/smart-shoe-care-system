@@ -120,6 +120,7 @@ bool          classificationPending     = false;
 unsigned long classificationRequestTime = 0;
 const unsigned long CAM_CLASSIFY_TIMEOUT_MS = 20000; // 20s fallback timeout
 
+
 /* ===================== CLASSIFICATION STATE ===================== */
 // Classification via ESP-NOW direct path (not routed through backend)
 String lastClassificationResult     = "";
@@ -267,8 +268,10 @@ const int SERVO_FAST_STEP_INTERVAL = 1;    // Updates between each 1° step (fas
 int servoStepInterval = SERVO_SLOW_STEP_INTERVAL;  // Current step interval
 int servoStepCounter = 0;                  // Counter for step interval
 
-// Forward declaration for servo function (defined later, used in handleService/stopService)
+// Forward declarations for functions defined later in the file
 void setServoPositions(int leftPos, bool fastMode = false);
+void startService(String shoeType, String serviceType, String careType, unsigned long customDurationSeconds = 0);
+void stopService();
 
 /* ===================== DRV8871 DC MOTOR DRIVERS - DUAL MOTORS ===================== */
 // Left DC Motor
@@ -988,10 +991,20 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     careType = message.substring(start, end);
                 }
 
+                // Extract optional custom duration (seconds)
+                unsigned long customDuration = 0;
+                int durationIndex = message.indexOf("\"duration\":");
+                if (durationIndex != -1) {
+                    int start = durationIndex + 11;
+                    int end = message.indexOf(",", start);
+                    if (end == -1) end = message.indexOf("}", start);
+                    customDuration = message.substring(start, end).toInt();
+                }
+
                 // Start the service (handles all service types: cleaning, drying, sterilizing)
                 if (serviceType == "cleaning" || serviceType == "drying" || serviceType == "sterilizing") {
-                    startService(shoeType, serviceType, careType);
-                    Serial.println("[WebSocket] Start: " + serviceType + " | " + shoeType + " | " + careType);
+                    startService(shoeType, serviceType, careType, customDuration);
+                    Serial.println("[WebSocket] Start: " + serviceType + " | " + shoeType + " | " + careType + (customDuration > 0 ? " | " + String(customDuration) + "s" : ""));
                 } else {
                     Serial.println("[WebSocket] Unknown service: " + serviceType);
                 }
@@ -1111,7 +1124,7 @@ void allRelaysOff() {
 }
 
 /* ===================== SERVICE FUNCTIONS ===================== */
-void startService(String shoeType, String serviceType, String careType) {
+void startService(String shoeType, String serviceType, String careType, unsigned long customDurationSeconds) {
     // Turn OFF all service-related relays and RGB before starting new service
     // This ensures clean transition between services in auto mode
     if (serviceActive) {
@@ -1180,6 +1193,12 @@ void startService(String shoeType, String serviceType, String careType) {
         }
     } else {
         serviceDuration = 120000;  // Default to 120 seconds
+    }
+
+    // Override with custom duration from frontend if provided
+    if (customDurationSeconds > 0) {
+        serviceDuration = customDurationSeconds * 1000;
+        Serial.println("[Service] Custom duration: " + String(customDurationSeconds) + "s");
     }
 
     currentShoeType = shoeType;
@@ -2433,6 +2452,7 @@ void loop() {
         Serial.println("[Classification] Timeout waiting for CAM response");
         relayClassificationErrorToBackend("CAM_RESPONSE_TIMEOUT");
     }
+
 
     // Serial commands
     if (Serial.available()) {

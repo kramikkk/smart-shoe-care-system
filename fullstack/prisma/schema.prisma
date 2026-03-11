@@ -102,22 +102,38 @@ model ServicePricing {
   @@map("service_pricing")
 }
 
+model ServiceDuration {
+  id          String   @id @default(cuid())
+  serviceType String   // 'cleaning', 'drying', 'sterilizing'
+  careType    String   // 'gentle', 'normal', 'strong'
+  duration    Int      // seconds
+  deviceId    String?
+  device      Device?  @relation(fields: [deviceId], references: [deviceId])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([deviceId, serviceType, careType])
+  @@index([deviceId])
+  @@map("service_duration")
+}
+
 model Device {
-  id           String           @id @default(cuid())
-  deviceId     String           @unique
+  id           String            @id @default(cuid())
+  deviceId     String            @unique
   pairingCode  String?
-  paired       Boolean          @default(false)
+  paired       Boolean           @default(false)
   pairedAt     DateTime?
-  lastSeen     DateTime         @default(now())
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  lastSeen     DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
   pairedBy     String?
-  camSynced    Boolean          @default(false)
+  camSynced    Boolean           @default(false)
   camDeviceId  String?
-  groupToken   String?          // 8-char hex shared secret for 3-way binding
-  camIp        String?          // CAM's WiFi IP for optional HTTP streaming
+  groupToken   String?           // 8-char hex shared secret for 3-way binding
+  camIp        String?           // CAM's WiFi IP for optional HTTP streaming
   transactions Transaction[]
   pricing      ServicePricing[]
+  durations    ServiceDuration[]
 
   @@map("device")
 }

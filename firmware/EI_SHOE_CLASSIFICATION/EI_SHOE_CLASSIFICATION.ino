@@ -858,10 +858,10 @@ bool ei_camera_init(void) {
 
     sensor_t* s = esp_camera_sensor_get();
     if (s->id.PID == OV3660_PID) {
-        s->set_vflip(s, 1);
         s->set_brightness(s, 1);
         s->set_saturation(s, 0);
     }
+    s->set_vflip(s, 1);  // Flip vertically (camera mounted upside down)
 
     is_initialised = true;
     return true;

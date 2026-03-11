@@ -5,53 +5,60 @@ import React, { useState, useEffect } from 'react'
 import { Progress } from "@/components/ui/progress"
 import { useSearchParams, useRouter } from 'next/navigation'
 
+const DEFAULT_DURATIONS: Record<string, Record<string, number>> = {
+  cleaning:    { gentle: 300, normal: 300, strong: 300 },
+  drying:      { gentle: 60,  normal: 120, strong: 180 },
+  sterilizing: { gentle: 60,  normal: 120, strong: 180 },
+}
+
 const CustomProgress = () => {
   const searchParams = useSearchParams()
   const shoe = searchParams.get('shoe') || 'mesh'
   const service = searchParams.get('service') || 'cleaning'
   const care = searchParams.get('care') || 'normal'
   const router = useRouter()
-  
-  // Different durations for each service and care type combination
-  const getServiceDuration = (serviceType: string, careType: string) => {
-    const durations: Record<string, Record<string, number>> = {
-      cleaning: {
-        gentle: 300,
-        normal: 300,
-        strong: 300 
-      },
-      drying: {
-        gentle: 60, 
-        normal: 120, 
-        strong: 180
-      },
-      sterilizing: {
-        gentle: 60,
-        normal: 120, 
-        strong: 180 
-      }
-    }
 
-    return durations[serviceType.toLowerCase()]?.[careType.toLowerCase()] || 120
-  }
-
-  const [timeRemaining, setTimeRemaining] = useState(() => getServiceDuration(service, care))
-  const totalTime = getServiceDuration(service, care)
+  const fallbackDuration = DEFAULT_DURATIONS[service.toLowerCase()]?.[care.toLowerCase()] ?? 120
+  const [totalTime, setTotalTime] = useState(fallbackDuration)
+  const [timeRemaining, setTimeRemaining] = useState(fallbackDuration)
   const [wsConnected, setWsConnected] = useState(false)
   const [serviceStarted, setServiceStarted] = useState(false)
+  const [resolvedDuration, setResolvedDuration] = useState<number | null>(null)
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
 
-  // Reset timer when service or care parameters change
+  // Fetch configured duration from API
   useEffect(() => {
-    const newDuration = getServiceDuration(service, care)
-    setTimeRemaining(newDuration)
+    const fetchDuration = async () => {
+      try {
+        const deviceId = localStorage.getItem('kiosk_device_id')
+        const url = deviceId
+          ? `/api/duration?deviceId=${encodeURIComponent(deviceId)}`
+          : '/api/duration'
+        const res = await fetch(url)
+        const data = await res.json()
+        if (data.success) {
+          const entry = data.durations.find(
+            (d: { serviceType: string; careType: string; duration: number }) =>
+              d.serviceType === service.toLowerCase() && d.careType === care.toLowerCase()
+          )
+          const duration = entry?.duration ?? fallbackDuration
+          setTotalTime(duration)
+          setTimeRemaining(duration)
+          setResolvedDuration(duration)
+        }
+      } catch {
+        // Fall back to defaults silently
+        setResolvedDuration(fallbackDuration)
+      }
+    }
+    fetchDuration()
   }, [service, care])
 
   // WebSocket connection to send start-service command and receive updates
   useEffect(() => {
     const deviceId = localStorage.getItem('kiosk_device_id')
-    if (!deviceId) return
+    if (!deviceId || resolvedDuration === null) return
 
     let ws: WebSocket | null = null
     let isCleanedUp = false
@@ -80,10 +87,11 @@ const CustomProgress = () => {
             deviceId,
             shoeType: shoe,
             serviceType: service,
-            careType: care
+            careType: care,
+            duration: resolvedDuration,
           }))
           setServiceStarted(true)
-          console.log(`[Progress] Service started: ${service} (${care})`)
+          console.log(`[Progress] Service started: ${service} (${care}) ${resolvedDuration}s`)
         }
       }
 
@@ -132,7 +140,7 @@ const CustomProgress = () => {
         ws.close()
       }
     }
-  }, [shoe, service, care])
+  }, [shoe, service, care, resolvedDuration])
 
   // Fallback local timer (in case WebSocket is not available)
   useEffect(() => {
