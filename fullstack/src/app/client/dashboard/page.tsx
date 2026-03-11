@@ -32,11 +32,11 @@ export default function DashboardPage() {
         </div>
         
         {/* Transactions and Alerts Section */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div className="xl:col-span-2">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
+            <div className="xl:col-span-2 h-full">
                 <RecentTransactionTable />
             </div>
-            <div className="xl:col-span-1">
+            <div className="xl:col-span-1 h-full">
                 <SystemAlertCard />
             </div>
         </div>

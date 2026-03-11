@@ -160,7 +160,7 @@ const SystemAlertCard = () => {
   const warningCount = alerts.filter(a => a.severity === 'warning').length
 
   return (
-    <Card className="@container/card">
+    <Card className="@container/card flex flex-col h-full">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -183,7 +183,7 @@ const SystemAlertCard = () => {
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 min-h-0 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
