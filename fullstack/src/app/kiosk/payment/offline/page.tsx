@@ -6,7 +6,7 @@ import { Item, ItemContent } from '@/components/ui/item'
 import React, { useState, useMemo, useEffect } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { BackButton } from '@/components/BackButton'
+import { BackButton } from '@/components/kiosk/BackButton'
 
 type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
 

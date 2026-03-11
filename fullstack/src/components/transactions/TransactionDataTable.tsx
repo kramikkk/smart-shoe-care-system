@@ -17,14 +17,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { TransactionPagination } from "./TransactionPagination"
-import { 
+import { TransactionPagination } from "@/components/transactions/TransactionPagination"
+import {
   Empty,
-  EmptyDescription, 
-  EmptyHeader, 
-  EmptyMedia, 
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
   EmptyTitle
-} from "./ui/empty"
+} from "@/components/ui/empty"
 import { FileClock } from "lucide-react"
 
 interface DataTableProps<TData, TValue> {

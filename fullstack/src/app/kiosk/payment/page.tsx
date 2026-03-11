@@ -6,7 +6,7 @@ import { Item, ItemContent, ItemHeader } from '@/components/ui/item'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { BackButton } from '@/components/BackButton'
+import { BackButton } from '@/components/kiosk/BackButton'
 
 type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
 

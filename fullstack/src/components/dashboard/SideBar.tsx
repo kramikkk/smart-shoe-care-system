@@ -6,25 +6,23 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeftRight, Cpu, LayoutDashboard, Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { SideBarUser } from "./SideBarUser";
+import { SideBarUser } from "@/components/dashboard/SideBarUser";
 import { useEffect, useState } from "react";
 import { getSession } from "@/lib/actions/auth-action";
 
 const menu = [
   { title: "Overview", url: "/client/dashboard", icon: LayoutDashboard },
   { title: "Transactions", url: "/client/dashboard/transactions", icon: ArrowLeftRight },
-  { title: "System", url: "/client/dashboard/system", icon: Cpu },
+  { title: "Monitoring", url: "/client/dashboard/monitoring", icon: Cpu },
   { title: "Settings", url: "/client/dashboard/settings", icon: Settings },
 ]
 
@@ -63,21 +61,14 @@ const SideBar = () => {
   return (
     <Sidebar collapsible="offcanvas" variant="inset">
         <SidebarHeader className="pt-4">
-            <SidebarMenu>
-            <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                    <Link href="/client/dashboard">
-                    <Image src="/SSCMLogoCircle.png" alt="Logo" width={30} height={20} priority style={{ width: 'auto', height: 'auto' }}/>
-                    <span className=" text-base font-bold">Smart Shoe Care</span>
-                    </Link>
-                </SidebarMenuButton>
-            </SidebarMenuItem>
-            </SidebarMenu>
+            <Link href="/client/dashboard" className="flex flex-col items-center gap-1 py-2 hover:opacity-80 transition-opacity">
+                <Image src="/SSCMlogoTrans.png" alt="Logo" width={256} height={256} priority className="w-full h-auto"/>
+                <span className="text-base font-bold text-center leading-snug px-2">Smart Shoe Care Machine</span>
+                <span className="text-xs text-muted-foreground">Client Portal</span>
+            </Link>
         </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup>
-                <SidebarSeparator className="w-full mx-auto "/>
-                <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
                     <SidebarGroupContent>
                     <SidebarMenu>
                         {menu.map((item) => {

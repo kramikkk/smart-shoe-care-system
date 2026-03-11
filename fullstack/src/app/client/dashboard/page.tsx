@@ -1,11 +1,11 @@
 'use client'
 
-import AreaChartCard from "@/components/AreaChartCard"
-import { PieChartCard } from "@/components/PieChartCard"
-import StatsCard from "@/components/StatsCard"
-import RecentTransactionTable from "@/components/RecentTransactionTable"
-import SystemAlertCard from "@/components/SystemAlertCard"
-import SensorCard from "@/components/SensorCard"
+import AreaChartCard from "@/components/dashboard/AreaChartCard"
+import { PieChartCard } from "@/components/dashboard/PieChartCard"
+import StatsCard from "@/components/dashboard/StatsCard"
+import RecentTransactionTable from "@/components/dashboard/RecentTransactionTable"
+import SystemAlertCard from "@/components/monitoring/SystemAlertCard"
+import SensorCard from "@/components/monitoring/SensorCard"
 import { SensorDataProvider } from "@/contexts/SensorDataContext"
 
 export default function DashboardPage() {

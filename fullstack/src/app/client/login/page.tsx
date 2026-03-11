@@ -1,4 +1,4 @@
-import { LoginForm } from "@/components/LoginForm"
+import { LoginForm } from "@/components/auth/LoginForm"
 import { ModeToggle } from "@/components/ModeToggle"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
