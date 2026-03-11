@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, AlertTriangle, Bell, Info, WifiOff } from "lucide-react"
+import { AlertCircle, AlertTriangle, Bell, Info, Loader2, WifiOff } from "lucide-react"
 import { Card, CardContent, CardTitle } from "./ui/card"
 import { CardHeader } from "./ui/card"
 import {
@@ -153,22 +153,22 @@ const severityConfig = {
 
 const SystemAlertCard = () => {
   const { sensorData, isConnected } = useSensorData()
+  const isLoading = sensorData.lastUpdate === null
   const alerts = deriveAlerts(sensorData, isConnected)
 
   const criticalCount = alerts.filter(a => a.severity === 'critical').length
   const warningCount = alerts.filter(a => a.severity === 'warning').length
 
   return (
-    <div className="flex flex-col h-full">
-      <Card className="@container/card flex flex-col h-full">
+    <Card className="@container/card">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertCircle className={alerts.length > 0 ? "text-red-500" : "text-muted-foreground"} />
               <CardTitle>System Alerts</CardTitle>
             </div>
-            {alerts.length > 0 && (
-              <div className="flex gap-2">
+            {!isLoading && alerts.length > 0 && (
+              <div className="flex gap-2 flex-wrap justify-end">
                 {criticalCount > 0 && (
                   <Badge variant="outline" className={severityConfig.critical.badgeClass}>
                     {criticalCount} Critical
@@ -183,9 +183,14 @@ const SystemAlertCard = () => {
             )}
           </div>
         </CardHeader>
-        <CardContent className="flex-1 min-h-0 overflow-auto">
-          {alerts.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-sm">Loading</span>
+            </div>
+          ) : alerts.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
               <Empty className="p-4">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -224,8 +229,7 @@ const SystemAlertCard = () => {
             </div>
           )}
         </CardContent>
-      </Card>
-    </div>
+    </Card>
   )
 }
 

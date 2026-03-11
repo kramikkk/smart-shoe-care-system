@@ -18,13 +18,13 @@ export type Transaction = {
 const getStatusBadge = (status: string) => {
   switch (status.toLowerCase()) {
     case "success":
-      return <Badge className="bg-green-200 text-green-800 hover:bg-green-100">Success</Badge>
+      return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">Success</Badge>
     case "pending":
-      return <Badge className="bg-yellow-200 text-yellow-800 hover:bg-yellow-100">Pending</Badge>
+      return <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800">Pending</Badge>
     case "failed":
-      return <Badge className="bg-red-200 text-red-800 hover:bg-red-100">Failed</Badge>
+      return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">Failed</Badge>
     default:
-      return <Badge>{status}</Badge>
+      return <Badge variant="outline">{status}</Badge>
   }
 }
 
