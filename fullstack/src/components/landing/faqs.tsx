@@ -2,6 +2,8 @@
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import Link from 'next/link'
+import { useRef, useEffect } from 'react'
+import { gsap } from '@/lib/gsap'
 
 const faqItems = [
     {
@@ -37,16 +39,50 @@ const faqItems = [
 ]
 
 export default function FAQs() {
+    const sectionRef = useRef<HTMLElement>(null)
+
+    useEffect(() => {
+        const ctx = gsap.context(() => {
+            gsap.from('[data-faq-heading]', {
+                y: 30,
+                opacity: 0,
+                duration: 0.7,
+                ease: 'power2.out',
+                scrollTrigger: {
+                    trigger: '[data-faq-heading]',
+                    start: 'top 85%',
+                    once: true,
+                },
+            })
+
+            gsap.from('[data-faq-item]', {
+                x: -20,
+                opacity: 0,
+                duration: 0.6,
+                stagger: 0.08,
+                ease: 'power2.out',
+                scrollTrigger: {
+                    trigger: '[data-faq-item]',
+                    start: 'top 85%',
+                    once: true,
+                },
+            })
+        }, sectionRef)
+
+        return () => ctx.revert()
+    }, [])
+
     return (
-        <section id="faqs" className="bg-background @container py-24">
+        <section ref={sectionRef} id="faqs" className="bg-background @container py-24">
             <div className="mx-auto max-w-2xl px-6">
-                <h2 className="text-center font-serif text-4xl font-medium">Frequently Asked Questions</h2>
+                <h2 data-faq-heading className="text-center font-serif text-4xl font-medium">Frequently Asked Questions</h2>
                 <Accordion
                     type="single"
                     collapsible
                     className="mt-12">
                     {faqItems.map((item) => (
                         <div
+                            data-faq-item
                             className="group"
                             key={item.id}>
                             <AccordionItem
