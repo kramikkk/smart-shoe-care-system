@@ -1,8 +1,7 @@
 'use client'
 
 import { AlertCircle, AlertTriangle, Bell, Info, Loader2, WifiOff } from "lucide-react"
-import { Card, CardContent, CardTitle } from "./ui/card"
-import { CardHeader } from "./ui/card"
+import { Card, CardContent, CardTitle, CardHeader } from "@/components/ui/card"
 import {
   Empty,
   EmptyContent,
@@ -12,7 +11,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { useSensorData } from "@/contexts/SensorDataContext"
-import { Badge } from "./ui/badge"
+import { Badge } from "@/components/ui/badge"
 
 type Alert = {
   id: string

@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "./ui/badge"
+import { Badge } from "@/components/ui/badge"
 import { ArrowRight, ArrowLeftRight } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
