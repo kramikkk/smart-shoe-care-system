@@ -150,11 +150,11 @@ const unsigned long PAYMENT_STABILIZATION_DELAY = 3000;  // 3 second delay after
 
 /* ===================== 8-CHANNEL RELAY ===================== */
 #define RELAY_1_PIN 3   // Channel 1: Bill + Coin (combined power for both acceptors)
-#define RELAY_2_PIN 8   // Channel 2: Solenoid Lock
+#define RELAY_2_PIN 8   // Channel 2: Bottom Exhaust
 #define RELAY_3_PIN 18  // Channel 3: Centrifugal Blower Fan
 #define RELAY_4_PIN 17  // Channel 4: PTC Ceramic Heater
 #define RELAY_5_PIN 16  // Channel 5: Diaphragm Pump
-#define RELAY_6_PIN 15  // Channel 6: Bottom Exhaust
+#define RELAY_6_PIN 15  // Channel 6: Mist Fan
 #define RELAY_7_PIN 7   // Channel 7: Ultrasonic Mist Maker
 #define RELAY_8_PIN 6   // Channel 8: UVC Light
 
@@ -163,11 +163,11 @@ const unsigned long PAYMENT_STABILIZATION_DELAY = 3000;  // 3 second delay after
 #define RELAY_OFF LOW
 
 bool relay1State = false;  // Bill + Coin (combined power for both acceptors)
-bool relay2State = false;  // Solenoid Lock
+bool relay2State = false;  // Bottom Exhaust
 bool relay3State = false;  // Centrifugal Blower Fan
 bool relay4State = false;  // PTC Ceramic Heater
 bool relay5State = false;  // Diaphragm Pump
-bool relay6State = false;  // Bottom Exhaust
+bool relay6State = false;  // Mist Fan
 bool relay7State = false;  // Ultrasonic Mist Maker
 bool relay8State = false;  // UVC Light
 
@@ -180,6 +180,23 @@ String currentShoeType = "";
 String currentServiceType = "";
 const unsigned long SERVICE_STATUS_UPDATE_INTERVAL = 1000;  // Send updates every second
 unsigned long lastServiceStatusUpdate = 0;
+
+/* ===================== PURGE STATE ===================== */
+bool purgeActive = false;
+unsigned long purgeStartTime = 0;
+String purgeServiceType = "";
+String purgeShoeType = "";
+String purgeCareType = "";
+const unsigned long PURGE_DURATION_MS = 15000;  // 15 seconds
+
+/* ===================== STERILIZING PHASES ===================== */
+// Phase 0: Inactive
+// Phase 1: UVC ON + Mist Maker ON (mist builds up in pipe, fan OFF)
+// Phase 2: UVC OFF + Mist Maker ON + Mist Fan ON (push accumulated mist in)
+// Each phase = 50% of serviceDuration
+int sterilizingPhase = 0;
+unsigned long sterilizingPhaseStart = 0;
+unsigned long sterilizingPhaseDuration = 0;  // = serviceDuration / 2
 
 /* ===================== CLEANING SERVICE STATE ===================== */
 // Cleaning mode phases:
@@ -1068,11 +1085,11 @@ void setRelay(int channel, bool state) {
 
     switch(channel) {
         case 1: pin = RELAY_1_PIN; stateVar = &relay1State; name = "Bill Acceptor"; break;
-        case 2: pin = RELAY_2_PIN; stateVar = &relay2State; name = "Coin Slot"; break;
+        case 2: pin = RELAY_2_PIN; stateVar = &relay2State; name = "Bottom Exhaust"; break;
         case 3: pin = RELAY_3_PIN; stateVar = &relay3State; name = "Centrifugal Blower Fan"; break;
         case 4: pin = RELAY_4_PIN; stateVar = &relay4State; name = "PTC Ceramic Heater"; break;
         case 5: pin = RELAY_5_PIN; stateVar = &relay5State; name = "Diaphragm Pump"; break;
-        case 6: pin = RELAY_6_PIN; stateVar = &relay6State; name = "Bottom Exhaust"; break;
+        case 6: pin = RELAY_6_PIN; stateVar = &relay6State; name = "Mist Fan"; break;
         case 7: pin = RELAY_7_PIN; stateVar = &relay7State; name = "Ultrasonic Mist Maker"; break;
         case 8: pin = RELAY_8_PIN; stateVar = &relay8State; name = "UVC Light"; break;
         default:
@@ -1116,21 +1133,24 @@ void startService(String shoeType, String serviceType, String careType) {
         // Turn off RGB
         rgbOff();
         // Turn off all service relays (CH3-CH8)
+        setRelay(2, false);  // Bottom Exhaust
         setRelay(3, false);  // Blower Fan
         setRelay(4, false);  // PTC Heater
         setRelay(5, false);  // Diaphragm Pump
-        setRelay(6, false);  // Bottom Exhaust
+        setRelay(6, false);  // Mist Fan
         setRelay(7, false);  // Mist Maker
         setRelay(8, false);  // UVC Light
 
-        // Reset cleaning-specific state if transitioning from cleaning
+        // Reset service-specific state
         if (currentServiceType == "cleaning") {
             cleaningPhase = 0;
             brushCurrentCycle = 0;
-            stepper1MoveTo(0);  // Return stepper to home
-            stepper2MoveTo(0);  // Return side stepper to home
-            motorsCoast();      // Stop brush motors
+            stepper1MoveTo(0);
+            stepper2MoveTo(0);
+            motorsCoast();
             Serial.println("[Service] Cleaning state reset, steppers/motors returning to home");
+        } else if (currentServiceType == "sterilizing") {
+            sterilizingPhase = 0;
         }
     }
 
@@ -1189,8 +1209,8 @@ void startService(String shoeType, String serviceType, String careType) {
     // Turn ON relays based on service type
     if (serviceType == "cleaning") {
         // Start cleaning sequence: stepper moves 0 → 480mm → 0, diaphragm pump ON
-        setRelay(6, true);  // Bottom Exhaust
-        Serial.println("Relay 6 (Bottom Exhaust): ON");
+        setRelay(2, true);  // Bottom Exhaust
+        Serial.println("Relay 2 (Bottom Exhaust): ON");
 
         // Start stepper moving to max position
         cleaningPhase = 1;  // Phase 1: moving to max
@@ -1222,10 +1242,14 @@ void startService(String shoeType, String serviceType, String careType) {
         Serial.println("Relay 3 (Blower Fan): ON");
         Serial.println("Relay 4 (PTC Heater): ON");
     } else if (serviceType == "sterilizing") {
-        setRelay(7, true);  // Ultrasonic Mist Maker
-        setRelay(8, true);  // UVC Light
-        Serial.println("Relay 7 (Mist Maker): ON");
-        Serial.println("Relay 8 (UVC Light): ON");
+        // Phase 1: UVC ON + Mist Maker ON (fan OFF, mist builds up in pipe)
+        sterilizingPhaseDuration = serviceDuration / 2;
+        sterilizingPhase = 1;
+        sterilizingPhaseStart = millis();
+        setRelay(8, true);   // UVC ON
+        setRelay(7, true);   // Mist Maker ON (building up in pipe)
+        setRelay(6, false);  // Mist Fan OFF
+        Serial.println("[Sterilize] Phase 1: UVC ON + Mist building (Fan OFF)");
     }
 
     Serial.println("=======================\n");
@@ -1245,7 +1269,7 @@ void stopService() {
 
     // Turn OFF relays based on service type
     if (currentServiceType == "cleaning") {
-        setRelay(6, false);  // Bottom Exhaust
+        setRelay(2, false);  // Bottom Exhaust
         // Stop stepper and return to home position
         cleaningPhase = 0;
         brushCurrentCycle = 0;
@@ -1263,33 +1287,80 @@ void stopService() {
     } else if (currentServiceType == "drying") {
         setRelay(3, false);  // Centrifugal Blower Fan
         setRelay(4, false);  // PTC Ceramic Heater
+        // Start purge: exhaust ON for 15s to cool down chamber
+        setRelay(2, true);
+        purgeActive = true;
+        purgeStartTime = millis();
+        purgeServiceType = currentServiceType;
+        purgeShoeType = currentShoeType;
+        purgeCareType = currentCareType;
+        Serial.println("[Purge] Drying purge started - Bottom Exhaust ON for 15s");
     } else if (currentServiceType == "sterilizing") {
-        setRelay(7, false);  // Ultrasonic Mist Maker
+        setRelay(6, false);  // Mist Fan
+        setRelay(7, false);  // Mist Maker
         setRelay(8, false);  // UVC Light
+        sterilizingPhase = 0;
+        // Start purge: exhaust ON for 15s to clear residual mist
+        setRelay(2, true);
+        purgeActive = true;
+        purgeStartTime = millis();
+        purgeServiceType = currentServiceType;
+        purgeShoeType = currentShoeType;
+        purgeCareType = currentCareType;
+        Serial.println("[Purge] Sterilizing purge started - Bottom Exhaust ON for 15s");
     }
 
-    Serial.println("\n=== SERVICE COMPLETED ===");
+    Serial.println("\n=== SERVICE STOPPED ===");
     Serial.println("Service Type: " + currentServiceType);
-    Serial.println("All relays turned OFF");
-    Serial.println("=========================\n");
+    Serial.println("=======================\n");
 
-    // Send completion status via WebSocket
-    if (wsConnected && isPaired) {
-        String msg = "{";
-        msg += "\"type\":\"service-complete\",";
-        msg += "\"deviceId\":\"" + deviceId + "\",";
-        msg += "\"serviceType\":\"" + currentServiceType + "\",";
-        msg += "\"shoeType\":\"" + currentShoeType + "\",";
-        msg += "\"careType\":\"" + currentCareType + "\"";
-        msg += "}";
-        webSocket.sendTXT(msg);
-        Serial.println("[WebSocket] Complete: " + currentServiceType);
+    // For cleaning: send completion now (no purge needed)
+    // For drying/sterilizing: completion is sent after purge finishes
+    if (currentServiceType == "cleaning") {
+        if (wsConnected && isPaired) {
+            String msg = "{";
+            msg += "\"type\":\"service-complete\",";
+            msg += "\"deviceId\":\"" + deviceId + "\",";
+            msg += "\"serviceType\":\"" + currentServiceType + "\",";
+            msg += "\"shoeType\":\"" + currentShoeType + "\",";
+            msg += "\"careType\":\"" + currentCareType + "\"";
+            msg += "}";
+            webSocket.sendTXT(msg);
+            Serial.println("[WebSocket] Complete: " + currentServiceType);
+        }
     }
 
     // Clear service data
     currentShoeType = "";
     currentServiceType = "";
     currentCareType = "";
+}
+
+void handlePurge() {
+    if (!purgeActive) return;
+
+    if (millis() - purgeStartTime >= PURGE_DURATION_MS) {
+        purgeActive = false;
+        setRelay(2, false);  // Bottom Exhaust OFF
+        Serial.println("[Purge] Complete - Bottom Exhaust OFF");
+
+        // Send service-complete now that purge is done
+        if (wsConnected && isPaired) {
+            String msg = "{";
+            msg += "\"type\":\"service-complete\",";
+            msg += "\"deviceId\":\"" + deviceId + "\",";
+            msg += "\"serviceType\":\"" + purgeServiceType + "\",";
+            msg += "\"shoeType\":\"" + purgeShoeType + "\",";
+            msg += "\"careType\":\"" + purgeCareType + "\"";
+            msg += "}";
+            webSocket.sendTXT(msg);
+            Serial.println("[WebSocket] Complete (post-purge): " + purgeServiceType);
+        }
+
+        purgeServiceType = "";
+        purgeShoeType = "";
+        purgeCareType = "";
+    }
 }
 
 void handleService() {
@@ -1373,6 +1444,21 @@ void handleService() {
                 }
             }
         }
+    }
+
+    // Sterilizing phase handler
+    if (currentServiceType == "sterilizing" && sterilizingPhase > 0) {
+        unsigned long phaseElapsed = millis() - sterilizingPhaseStart;
+
+        if (sterilizingPhase == 1 && phaseElapsed >= sterilizingPhaseDuration) {
+            // Transition to Phase 2: UVC OFF, Fan ON — push accumulated mist in
+            sterilizingPhase = 2;
+            sterilizingPhaseStart = millis();
+            setRelay(8, false);  // UVC OFF
+            setRelay(6, true);   // Mist Fan ON
+            Serial.println("[Sterilize] Phase 2: UVC OFF, Mist Fan ON (pushing mist in)");
+        }
+        // Phase 2: Mist Maker + Fan run until global serviceDuration timer fires stopService()
     }
 
     // Send status updates every second
@@ -2838,6 +2924,7 @@ void loop() {
     /* ================= SERVICE HANDLING ================= */
     // Handle service timer, relay control, and RGB lights
     handleService();
+    handlePurge();
 
     // Small yield to prevent watchdog timeout (allows ESP32 to handle WiFi/system tasks)
     yield();
