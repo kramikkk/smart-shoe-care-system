@@ -120,6 +120,7 @@ model ServiceDuration {
 model Device {
   id           String            @id @default(cuid())
   deviceId     String            @unique
+  name         String?
   pairingCode  String?
   paired       Boolean           @default(false)
   pairedAt     DateTime?

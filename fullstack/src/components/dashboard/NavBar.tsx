@@ -2,8 +2,8 @@
 
 import Link from "next/link"
 import { ModeToggle } from "@/components/ModeToggle"
-import { SidebarTrigger } from "./ui/sidebar"
-import { DeviceSelector } from "./DeviceSelector"
+import { SidebarTrigger } from "@/components/ui/sidebar"
+import { DeviceSelector } from "@/components/DeviceSelector"
 
 const NavBar = () => {
   return (

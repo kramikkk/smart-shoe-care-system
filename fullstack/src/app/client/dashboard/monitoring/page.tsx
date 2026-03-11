@@ -1,7 +1,7 @@
 'use client'
 
-import SensCard from "@/components/SensorCard"
-import SystemAlertCard from "@/components/SystemAlertCard"
+import SensCard from "@/components/monitoring/SensorCard"
+import SystemAlertCard from "@/components/monitoring/SystemAlertCard"
 import { SensorDataProvider } from "@/contexts/SensorDataContext"
 
 export default function SystemPage() {

@@ -11,8 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CalendarIcon, FileClock, X, Search } from "lucide-react"
-import { TransactionDataTable } from "@/components/TransactionDataTable"
-import { columns, Transaction } from "@/components/TransactionColumns"
+import { TransactionDataTable } from "@/components/transactions/TransactionDataTable"
+import { columns, Transaction } from "@/components/transactions/TransactionColumns"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"

@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Zap, Settings } from 'lucide-react'
 import { Item, ItemContent } from '@/components/ui/item'
 import Link from 'next/link'
-import { BackButton } from '@/components/BackButton'
+import { BackButton } from '@/components/kiosk/BackButton'
 
 const mode = () => {
   return (

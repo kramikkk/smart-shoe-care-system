@@ -1,5 +1,5 @@
 import './kiosk.css'
-import PairingWrapper from '@/components/PairingWrapper'
+import PairingWrapper from '@/components/kiosk/PairingWrapper'
 import { WebSocketProvider } from '@/contexts/WebSocketContext'
 
 export default function UserLayout({

@@ -3,22 +3,12 @@
 import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Settings, Sparkles, Wind, ShieldCheck, Package, Save, Loader2, Smartphone, Wifi, WifiOff, Check, X, Pencil, RotateCcw, Timer } from "lucide-react"
+import { Settings, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
+import { DevicePairingCard } from "@/components/settings/DevicePairingCard"
+import { ServicePricingCard } from "@/components/settings/ServicePricingCard"
+import { ServiceDurationCard } from "@/components/settings/ServiceDurationCard"
 
 type ServicePricing = {
   id: string
@@ -36,23 +26,10 @@ type ServiceDuration = {
 
 type DurationMap = Record<string, Record<string, number>> // serviceType -> careType -> seconds
 
-const serviceIcons = {
-  cleaning: { icon: <Sparkles className="h-5 w-5" />, color: 'var(--chart-1)' },
-  drying: { icon: <Wind className="h-5 w-5" />, color: 'var(--chart-2)' },
-  sterilizing: { icon: <ShieldCheck className="h-5 w-5" />, color: 'var(--chart-3)' },
-  package: { icon: <Package className="h-5 w-5" />, color: 'var(--chart-4)' },
-}
-
-const serviceNames = {
-  cleaning: 'Cleaning',
-  drying: 'Drying',
-  sterilizing: 'Sterilizing',
-  package: 'Package',
-}
-
 type Device = {
   id: string
   deviceId: string
+  name: string | null
   pairingCode: string | null
   paired: boolean
   pairedAt: string | null
@@ -87,6 +64,7 @@ export default function SettingsPage() {
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
   const [editingDeviceName, setEditingDeviceName] = useState('')
   const [restartingDeviceId, setRestartingDeviceId] = useState<string | null>(null)
+  const [unpairConfirmId, setUnpairConfirmId] = useState<string | null>(null)
   const autoOpenedRef = useRef(false)
   const [durations, setDurations] = useState<DurationMap>({})
   const [editedDurations, setEditedDurations] = useState<DurationMap>({})
@@ -251,7 +229,13 @@ export default function SettingsPage() {
           )
         )
 
-        toast.success(`${serviceNames[serviceType as keyof typeof serviceNames]} price updated successfully`)
+        const serviceNamesMap: Record<string, string> = {
+          cleaning: 'Cleaning',
+          drying: 'Drying',
+          sterilizing: 'Sterilizing',
+          package: 'Package',
+        }
+        toast.success(`${serviceNamesMap[serviceType] ?? serviceType} price updated successfully`)
       } else {
         toast.error(data.error || "Failed to update pricing")
       }
@@ -457,12 +441,6 @@ export default function SettingsPage() {
     }
   }
 
-  const formatDuration = (seconds: number) => {
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return s === 0 ? `${m}m` : `${m}m ${s}s`
-  }
-
   const formatLastSeen = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -498,434 +476,66 @@ export default function SettingsPage() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Service Pricing Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Service Pricing</CardTitle>
-          <CardDescription>
-            Update prices for {selectedDevice}. These prices will only apply to this specific machine.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {pricing.map((item) => {
-              const iconColor = serviceIcons[item.serviceType as keyof typeof serviceIcons].color
-              return (
-              <div
-                key={item.id}
-                className="border rounded-lg p-4 space-y-4 transition-colors"
-                style={{
-                  ['--hover-border-color' as any]: iconColor
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = iconColor
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = ''
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="p-2 rounded-lg"
-                    style={{
-                      backgroundColor: `color-mix(in srgb, ${serviceIcons[item.serviceType as keyof typeof serviceIcons].color} 15%, transparent)`,
-                      color: serviceIcons[item.serviceType as keyof typeof serviceIcons].color
-                    }}
-                  >
-                    {serviceIcons[item.serviceType as keyof typeof serviceIcons].icon}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">
-                      {serviceNames[item.serviceType as keyof typeof serviceNames]}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Default: ₱{item.price.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
+      <DevicePairingCard
+        devices={devices}
+        isPairing={isPairing}
+        pairingDialogOpen={pairingDialogOpen}
+        pairingDeviceId={pairingDeviceId}
+        pairingCode={pairingCode}
+        editingDeviceId={editingDeviceId}
+        editingDeviceName={editingDeviceName}
+        restartingDeviceId={restartingDeviceId}
+        unpairConfirmId={unpairConfirmId}
+        onPairingDialogOpenChange={setPairingDialogOpen}
+        onPairingDeviceIdChange={setPairingDeviceId}
+        onPairingCodeChange={setPairingCode}
+        onPairDevice={handlePairDevice}
+        onUnpairDevice={handleUnpairDevice}
+        onRestartDevice={handleRestartDevice}
+        onEditingDeviceIdChange={setEditingDeviceId}
+        onEditingDeviceNameChange={setEditingDeviceName}
+        onSaveDeviceName={async (deviceId, name) => {
+          try {
+            const res = await fetch(`/api/device/${deviceId}/name`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name }),
+            })
+            const data = await res.json()
+            if (data.success) {
+              setDevices(prev => prev.map(d => d.deviceId === deviceId ? { ...d, name } : d))
+              setEditingDeviceId(null)
+              toast.success('Device name updated')
+            } else {
+              toast.error(data.error || 'Failed to update name')
+            }
+          } catch {
+            toast.error('Failed to update name')
+          }
+        }}
+        onUnpairConfirmIdChange={setUnpairConfirmId}
+        formatLastSeen={formatLastSeen}
+      />
 
-                <div className="space-y-2">
-                  <Label htmlFor={`price-${item.serviceType}`}>Price (PHP)</Label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                        ₱
-                      </span>
-                      <Input
-                        id={`price-${item.serviceType}`}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={editedPrices[item.serviceType] ?? ''}
-                        onChange={(e) => handlePriceChange(item.serviceType, e.target.value)}
-                        className="pl-7"
-                        disabled={isSaving}
-                      />
-                    </div>
-                    <Button
-                      onClick={() => handleSave(item.serviceType)}
-                      disabled={!hasChanges(item.serviceType) || isSaving}
-                      size="icon"
-                      className="shrink-0"
-                    >
-                      {isSaving ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                  {hasChanges(item.serviceType) && (
-                    <p className="text-sm text-amber-600 dark:text-amber-400">
-                      Unsaved changes
-                    </p>
-                  )}
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <ServicePricingCard
+        pricing={pricing}
+        editedPrices={editedPrices}
+        isSaving={isSaving}
+        selectedDevice={selectedDevice}
+        onPriceChange={handlePriceChange}
+        onSave={handleSave}
+        hasChanges={hasChanges}
+      />
 
-      {/* Device Pairing Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-            <div>
-              <CardTitle className="text-lg">Device Pairing</CardTitle>
-              <CardDescription>
-                Manage connected shoe care machines. Pair devices using device ID and pairing code from kiosk.
-              </CardDescription>
-            </div>
-            <Dialog open={pairingDialogOpen} onOpenChange={setPairingDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2 w-full sm:w-auto sm:shrink-0">
-                  <Smartphone className="h-4 w-4" />
-                  Pair New Device
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Pair New Device</DialogTitle>
-                  <DialogDescription>
-                    Enter the device ID and 6-digit pairing code displayed on the kiosk screen.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="deviceId">Device ID</Label>
-                    <Input
-                      id="deviceId"
-                      placeholder="e.g., SSCM-XXXXXX"
-                      value={pairingDeviceId}
-                      onChange={(e) => setPairingDeviceId(e.target.value.toUpperCase())}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="pairingCode">Pairing Code</Label>
-                    <Input
-                      id="pairingCode"
-                      placeholder="6-digit code"
-                      maxLength={6}
-                      value={pairingCode}
-                      onChange={(e) => setPairingCode(e.target.value.replace(/\D/g, ''))}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setPairingDialogOpen(false)
-                      setPairingDeviceId('')
-                      setPairingCode('')
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handlePairDevice}
-                    disabled={isPairing || !pairingDeviceId || pairingCode.length !== 6}
-                  >
-                    {isPairing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Pairing...
-                      </>
-                    ) : (
-                      'Pair Device'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {devices.length === 0 ? (
-              <div className="text-center py-8 border-2 border-dashed rounded-lg">
-                <Smartphone className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                <p className="text-muted-foreground">No devices paired yet</p>
-                <p className="text-sm text-muted-foreground">Click "Pair New Device" to get started</p>
-              </div>
-            ) : (
-              devices.map((device) => {
-                const statusColor = device.status === 'connected' ? '#22c55e' : device.status === 'pairing' ? '#f59e0b' : '#6b7280'
-                return (
-                <div
-                  key={device.id}
-                  className="border rounded-lg p-4 transition-colors"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = statusColor
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = ''
-                  }}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    <div className="flex items-start gap-4 flex-1 min-w-0">
-                      <div
-                        className={`p-3 rounded-lg shrink-0 ${
-                          device.status === 'connected'
-                            ? 'bg-green-500/10 text-green-500'
-                            : device.status === 'pairing'
-                            ? 'bg-amber-500/10 text-amber-500'
-                            : 'bg-gray-500/10 text-gray-500'
-                        }`}
-                      >
-                        {device.status === 'connected' ? (
-                          <Wifi className="h-6 w-6" />
-                        ) : (
-                          <WifiOff className="h-6 w-6" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center flex-wrap gap-2 mb-1">
-                          {editingDeviceId === device.deviceId ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={editingDeviceName}
-                                onChange={(e) => setEditingDeviceName(e.target.value)}
-                                className="h-8 w-48"
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    // Save device name
-                                    localStorage.setItem(`device_name_${device.deviceId}`, editingDeviceName)
-                                    setEditingDeviceId(null)
-                                    toast.success('Device name updated')
-                                  } else if (e.key === 'Escape') {
-                                    setEditingDeviceId(null)
-                                  }
-                                }}
-                              />
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8"
-                                onClick={() => {
-                                  localStorage.setItem(`device_name_${device.deviceId}`, editingDeviceName)
-                                  setEditingDeviceId(null)
-                                  toast.success('Device name updated')
-                                }}
-                              >
-                                <Check className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8"
-                                onClick={() => setEditingDeviceId(null)}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold truncate">
-                                {localStorage.getItem(`device_name_${device.deviceId}`) || 'Smart Shoe Care Machine'}
-                              </h3>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6"
-                                onClick={() => {
-                                  setEditingDeviceId(device.deviceId)
-                                  setEditingDeviceName(localStorage.getItem(`device_name_${device.deviceId}`) || 'Smart Shoe Care Machine')
-                                }}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
-                          <Badge
-                            variant={device.status === 'connected' ? 'default' : 'secondary'}
-                            className={
-                              device.status === 'connected'
-                                ? 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
-                                : device.status === 'pairing'
-                                ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'
-                                : 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20'
-                            }
-                          >
-                            {device.status === 'connected' && <Check className="h-3 w-3 mr-1" />}
-                            {device.status === 'connected' ? 'Online' : device.status === 'disconnected' ? 'Offline' : 'Pairing'}
-                          </Badge>
-                        </div>
-
-                        <p className="text-sm text-muted-foreground mb-1 break-all">
-                          Device ID: <span className="font-mono">{device.deviceId}</span>
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                          <span>Camera ID: <span className="font-mono">{device.camDeviceId || 'Not paired'}</span></span>
-                          <Badge
-                            variant="secondary"
-                            className={
-                              device.camSynced
-                                ? 'bg-green-500/10 text-green-500 hover:bg-green-500/20 text-xs h-5'
-                                : 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20 text-xs h-5'
-                            }
-                          >
-                            {device.camSynced ? 'Synced' : 'Not Synced'}
-                          </Badge>
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                          <div>
-                            Last seen: <span className="text-foreground">{formatLastSeen(device.lastSeen)}</span>
-                          </div>
-                          {device.pairedAt && (
-                            <div>
-                              Paired: <span className="text-foreground">{new Date(device.pairedAt).toLocaleDateString()}</span>
-                            </div>
-                          )}
-                          {device.pairedByUser && (
-                            <div>
-                              Paired by: <span className="text-foreground">{device.pairedByUser.name}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {device.paired && (
-                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRestartDevice(device.deviceId)}
-                          disabled={restartingDeviceId === device.deviceId}
-                          className="text-amber-600 hover:text-amber-600 hover:bg-amber-500/10 sm:shrink-0 w-full sm:w-auto"
-                        >
-                          {restartingDeviceId === device.deviceId ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          ) : (
-                            <RotateCcw className="h-4 w-4 mr-1" />
-                          )}
-                          Restart
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleUnpairDevice(device.deviceId)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 sm:shrink-0 w-full sm:w-auto"
-                        >
-                          <X className="h-4 w-4 mr-1" />
-                          Unpair
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                );
-              })
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Service Duration Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Timer className="h-5 w-5 text-muted-foreground" />
-            <CardTitle className="text-lg">Service Durations</CardTitle>
-          </div>
-          <CardDescription>
-            Configure how long each service runs per care intensity for {selectedDevice}.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {[
-            { key: 'cleaning', label: 'Cleaning', icon: <Sparkles className="h-4 w-4" />, color: 'var(--chart-1)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: true },
-            { key: 'drying', label: 'Drying', icon: <Wind className="h-4 w-4" />, color: 'var(--chart-2)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: false },
-            { key: 'sterilizing', label: 'Sterilizing', icon: <ShieldCheck className="h-4 w-4" />, color: 'var(--chart-3)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: false },
-          ].map(({ key, label, icon, color, careTypes, singleDuration }) => (
-            <div key={key} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md" style={{ backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`, color }}>
-                  {icon}
-                </div>
-                <h3 className="font-semibold text-sm">{label}</h3>
-              </div>
-              <div className={`grid gap-3 ${singleDuration ? 'grid-cols-1 max-w-xs' : 'grid-cols-1 sm:grid-cols-3'}`}>
-                {(singleDuration ? ['normal'] : careTypes).map((careType) => {
-                  const current = durations[key]?.[careType] ?? 0
-                  const edited = editedDurations[key]?.[careType] ?? 0
-                  const changed = hasDurationChanges(key, careType)
-                  return (
-                    <div key={careType} className="space-y-1.5">
-                      {!singleDuration && (
-                        <Label className="text-xs capitalize text-muted-foreground">{careType}</Label>
-                      )}
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Input
-                            type="number"
-                            min="1"
-                            value={edited || ''}
-                            onChange={(e) => {
-                              if (singleDuration) {
-                                careTypes.forEach(ct => handleDurationChange(key, ct, e.target.value))
-                              } else {
-                                handleDurationChange(key, careType, e.target.value)
-                              }
-                            }}
-                            className="pr-7"
-                            disabled={isSavingDuration}
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">s</span>
-                        </div>
-                        <Button
-                          size="icon"
-                          className="shrink-0"
-                          disabled={!changed || isSavingDuration}
-                          onClick={() => {
-                            if (singleDuration) {
-                              Promise.all(careTypes.map(ct => handleSaveDuration(key, ct)))
-                            } else {
-                              handleSaveDuration(key, careType)
-                            }
-                          }}
-                        >
-                          {isSavingDuration ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Default: {current > 0 ? `${current}s` : '—'}
-                        {changed && <span className="text-amber-600 dark:text-amber-400 ml-2">→ {edited}s</span>}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <ServiceDurationCard
+        durations={durations}
+        editedDurations={editedDurations}
+        isSavingDuration={isSavingDuration}
+        selectedDevice={selectedDevice}
+        onDurationChange={handleDurationChange}
+        hasDurationChanges={hasDurationChanges}
+        onSaveDuration={handleSaveDuration}
+      />
     </div>
   )
 }
