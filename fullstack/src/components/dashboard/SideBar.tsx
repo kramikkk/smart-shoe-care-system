@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 import { getSession } from "@/lib/actions/auth-action";
 
 const menu = [
-  { title: "Overview", url: "/client/dashboard", icon: LayoutDashboard },
+  { title: "Dashboard", url: "/client/dashboard", icon: LayoutDashboard },
   { title: "Transactions", url: "/client/dashboard/transactions", icon: ArrowLeftRight },
   { title: "Monitoring", url: "/client/dashboard/monitoring", icon: Cpu },
   { title: "Settings", url: "/client/dashboard/settings", icon: Settings },

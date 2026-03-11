@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowRight, ArrowLeftRight } from "lucide-react"
+import { ArrowRight, ArrowLeftRight, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
@@ -99,7 +99,7 @@ const RecentTransactionTable = () => {
             <CardContent className="flex-1 min-h-0 overflow-hidden">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
-                    <div className="text-muted-foreground">Loading transactions...</div>
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : recentTransactions.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
