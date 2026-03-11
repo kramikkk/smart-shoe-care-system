@@ -1,9 +1,9 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { HandHeart, HeartHandshake, BicepsFlexed } from 'lucide-react'
 import { Item, ItemContent } from '@/components/ui/item'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { BackButton } from '@/components/kiosk/BackButton'
@@ -45,20 +45,17 @@ function CareContent() {
     {
       id: 'gentle',
       name: 'Gentle',
-      icon: HandHeart,
-      color: 'text-green-600',
+      image: '/Gentle3D.webp',
     },
     {
       id: 'normal',
       name: 'Normal',
-      icon: HeartHandshake,
-      color: 'text-yellow-600',
+      image: '/Normal3D.webp',
     },
     {
       id: 'strong',
       name: 'Strong',
-      icon: BicepsFlexed,
-      color: 'text-red-600',
+      image: '/Strong3D.png',
     },
   ]
 
@@ -71,12 +68,11 @@ function CareContent() {
       </h1>
       <div className='flex gap-8 justify-center'>
         {careTypes.map((care) => {
-          const Icon = care.icon
           const desc = getDescription(care.id)
           
           return (
             <Item key={care.id} className='text-center bg-white/50 p-8 rounded-lg shadow-lg w-80 flex flex-col items-center hover:shadow-xl transition-shadow'>
-              <Icon className={`w-16 h-16 ${care.color}`} />
+              <Image src={care.image} alt={care.name} width={128} height={128} className="w-32 h-32" />
               <ItemContent className="flex flex-col items-center">
                 <h2 className="text-2xl font-bold mb-2">{care.name}</h2>
                 <p className="text-xl text-gray-700 mb-6 px-2">{desc}</p>

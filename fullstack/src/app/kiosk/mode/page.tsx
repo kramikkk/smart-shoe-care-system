@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
-import { Zap, Settings } from 'lucide-react'
 import { Item, ItemContent } from '@/components/ui/item'
 import Link from 'next/link'
+import Image from 'next/image'
 import { BackButton } from '@/components/kiosk/BackButton'
 
 const mode = () => {
@@ -14,7 +14,7 @@ const mode = () => {
       </h1>
       <div className='flex gap-8 justify-center'>
         <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w-100 flex flex-col items-center'>
-        <Zap className="w-16 h-16 text-blue-600" />
+        <Image src="/Automatic3D.webp" alt="Auto Mode" width={128} height={128} className="w-32 h-32" />
           <ItemContent>
             <h2 className="text-2xl font-bold mb-4">Auto Mode</h2>
             <p className="text-xl text-gray-600">Automatic Shoe Type Detection</p>
@@ -28,7 +28,7 @@ const mode = () => {
           </ItemContent>
         </Item>
         <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w-100 flex flex-col items-center'>
-        <Settings className="w-16 h-16 text-cyan-600" />
+        <Image src="/Custom3D.webp" alt="Custom Mode" width={128} height={128} className="w-32 h-32" />
           <ItemContent>
             <h2 className="text-2xl font-bold mb-4">Custom Mode</h2>
             <p className="text-xl text-gray-600">Manual Shoe Type Selection</p>
