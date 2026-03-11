@@ -1,57 +1,70 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent } from '@/components/ui/item'
-import Link from 'next/link'
 import Image from 'next/image'
 import { BackButton } from '@/components/kiosk/BackButton'
+import { StepIndicator } from '@/components/kiosk/StepIndicator'
 
-const custom = () => {
+const CUSTOM_STEPS = ['Mode', 'Shoe Type', 'Service', 'Care Type', 'Payment']
+
+const shoeTypes = [
+  { id: 'mesh',   label: 'Mesh',   image: '/MeshShoes.png',   desc: 'Mesh-like material' },
+  { id: 'canvas', label: 'Canvas', image: '/CanvasShoes.png', desc: 'Fabric-like material' },
+  { id: 'rubber', label: 'Rubber', image: '/RubberShoes.png', desc: 'Rubber-like material' },
+]
+
+const ShoeTypePage = () => {
+  const [selected, setSelected] = useState<string | null>(null)
+  const router = useRouter()
+
+  const handleProceed = () => {
+    if (selected) router.push(`/kiosk/mode/custom/service?shoe=${selected}`)
+  }
+
   return (
     <div className="relative">
       <BackButton />
 
+      <StepIndicator steps={CUSTOM_STEPS} currentStep={1} />
+
       <h1 className="text-5xl font-bold text-center mb-10 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Choose Shoe Type
       </h1>
-      <div className='flex gap-8 justify-center'>
-        <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w flex flex-col items-center'>
-          <Image src="/MeshShoes.png" alt="Mesh" width={64} height={64} className="w-32 h-32 text-blue-600" />
-          <ItemContent>
-            <h2 className="text-2xl font-bold mb-4">Mesh</h2>
-            <p className="text-xl text-gray-600">Mesh-like material</p>
-            <Link href="/kiosk/mode/custom/service?shoe=mesh">
-              <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
-                <p className='text-lg font-bold'>Select Mesh</p>
-              </Button>
-            </Link>
-          </ItemContent>
-        </Item>
-        <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w flex flex-col items-center'>
-          <Image src="/CanvasShoes.png" alt="Canvas" width={64} height={64} className="w-32 h-32 text-green-600" />
-          <ItemContent>
-            <h2 className="text-2xl font-bold mb-4">Canvas</h2>
-            <p className="text-xl text-gray-600">Fabric-like material</p>
-            <Link href="/kiosk/mode/custom/service?shoe=canvas">
-              <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
-                <p className='text-lg font-bold'>Select Canvas</p>
-              </Button>
-            </Link>
-          </ItemContent>
-        </Item>
-        <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w flex flex-col items-center'>
-          <Image src="/RubberShoes.png" alt="Rubber" width={64} height={64} className="w-32 h-32 text-green-600" />
-          <ItemContent>
-            <h2 className="text-2xl font-bold mb-4">Rubber</h2>
-            <p className="text-xl text-gray-600">Rubber-like material</p>
-            <Link href="/kiosk/mode/custom/service?shoe=rubber">
-              <Button className="mt-4 px-6 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95 active:shadow-sm">
-                <p className='text-lg font-bold'>Select Rubber</p>
-              </Button>
-            </Link>
-          </ItemContent>
-        </Item>
+
+      <div className='flex gap-8 justify-center mb-8'>
+        {shoeTypes.map((shoe) => (
+          <Item
+            key={shoe.id}
+            onClick={() => setSelected(shoe.id)}
+            className={`text-center p-8 rounded-lg shadow-lg flex flex-col items-center cursor-pointer transition-all duration-200 select-none
+              ${selected === shoe.id
+                ? 'bg-white/90 ring-4 ring-blue-500 shadow-2xl scale-[1.03]'
+                : 'bg-white/50 hover:bg-white/70 hover:shadow-xl'
+              }`}
+          >
+            <Image src={shoe.image} alt={shoe.label} width={128} height={128} className="w-32 h-32" />
+            <ItemContent>
+              <h2 className="text-2xl font-bold mb-2">{shoe.label}</h2>
+              <p className="text-xl text-gray-600">{shoe.desc}</p>
+            </ItemContent>
+          </Item>
+        ))}
+      </div>
+
+      <div className="flex justify-center">
+        <Button
+          onClick={handleProceed}
+          disabled={!selected}
+          className="px-12 py-6 text-xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
+        >
+          Proceed
+        </Button>
       </div>
     </div>
   )
 }
 
-export default custom
+export default ShoeTypePage

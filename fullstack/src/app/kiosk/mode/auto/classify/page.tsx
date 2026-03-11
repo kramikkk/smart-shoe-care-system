@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Camera, Loader2, CheckCircle, AlertCircle, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useWebSocket } from '@/contexts/WebSocketContext'
+import { StepIndicator } from '@/components/kiosk/StepIndicator'
+
+const AUTO_STEPS = ['Mode', 'Scan Shoes', 'Payment']
 
 type ClassificationState = 'connecting' | 'syncing' | 'classifying' | 'success' | 'error'
 
@@ -246,6 +249,8 @@ export default function ClassifyPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
+      <StepIndicator steps={AUTO_STEPS} currentStep={1} />
+
       {/* Title */}
       <h1 className="text-5xl font-bold text-center mb-8 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Shoe Classification
