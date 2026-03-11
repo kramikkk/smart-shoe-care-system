@@ -150,7 +150,7 @@ const severityConfig = {
   },
 }
 
-const SystemAlertCard = () => {
+const SystemAlertCard = ({ className }: { className?: string }) => {
   const { sensorData, isConnected } = useSensorData()
   const isLoading = sensorData.lastUpdate === null
   const alerts = deriveAlerts(sensorData, isConnected)
@@ -159,7 +159,7 @@ const SystemAlertCard = () => {
   const warningCount = alerts.filter(a => a.severity === 'warning').length
 
   return (
-    <Card className="@container/card flex flex-col h-full">
+    <Card className={`@container/card${className ? ` ${className}` : ''}`}>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -182,7 +182,7 @@ const SystemAlertCard = () => {
             )}
           </div>
         </CardHeader>
-        <CardContent className="flex-1 min-h-0 overflow-auto">
+        <CardContent className={className ? 'flex-1 min-h-0 overflow-auto' : undefined}>
           {isLoading ? (
             <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />

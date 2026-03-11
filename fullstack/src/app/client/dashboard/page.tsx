@@ -37,7 +37,7 @@ export default function DashboardPage() {
                 <RecentTransactionTable />
             </div>
             <div className="xl:col-span-1 h-full">
-                <SystemAlertCard />
+                <SystemAlertCard className="flex flex-col h-full" />
             </div>
         </div>
         </div>
