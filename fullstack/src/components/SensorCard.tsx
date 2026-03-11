@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Progress } from "./ui/progress"
 import { Badge } from "./ui/badge"
+import { Loader2 } from "lucide-react"
 import { SensorData } from "@/data/SensorData"
 import { useSensorData } from "@/contexts/SensorDataContext"
 
@@ -21,7 +22,8 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
   }
   
   const Icon = sensor.icon
-  
+  const isLoading = sensorData.lastUpdate === null
+
   // Calculate real-time values based on sensor type
   let displayValue: string = "0"
   let displayPercentage: number = 0
@@ -125,17 +127,17 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
   const getBadgeClass = (status: string) => {
     switch (status.toLowerCase()) {
       case "normal":
-        return "bg-green-100 text-green-800 border-green-200"
+        return "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
       case "active":
-        return "bg-purple-100 text-purple-800 border-purple-200"
+        return "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800"
       case "warning":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200"
+        return "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800"
       case "critical":
-        return "bg-red-100 text-red-800 border-red-200"
+        return "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
       case "low":
-        return "bg-blue-100 text-blue-800 border-blue-200"
+        return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800"
       case "high":
-        return "bg-red-100 text-red-800 border-red-200"
+        return "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
       default:
         return ""
     }
@@ -148,19 +150,30 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
           <Icon className={`h-5 w-5 ${sensor.color}`} />
           <CardTitle className="text-sm">{sensor.name}</CardTitle>
         </div>
-        <div className="flex items-center gap-2">
-          {!isConnected && id !== 'systemStatus' && (
-            <span className="text-xs text-muted-foreground">Offline</span>
-          )}
-          <Badge variant="outline" className={getBadgeClass(displayStatus)}>{displayStatus}</Badge>
-        </div>
+        {!isLoading && (
+          <div className="flex items-center gap-2">
+            {!isConnected && id !== 'systemStatus' && (
+              <span className="text-xs text-muted-foreground">Offline</span>
+            )}
+            <Badge variant="outline" className={getBadgeClass(displayStatus)}>{displayStatus}</Badge>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex justify-between items-center">
-          <span className="text-2xl font-bold">{displayValue}</span>
-          <span className="text-xs text-muted-foreground">{displayRange}</span>
-        </div>
-        <Progress value={displayPercentage} className="h-3" />
+        {isLoading ? (
+          <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm">Loading...</span>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-between items-center">
+              <span className="text-2xl font-bold">{displayValue}</span>
+              <span className="text-xs text-muted-foreground">{displayRange}</span>
+            </div>
+            <Progress value={displayPercentage} className="h-3" />
+          </>
+        )}
       </CardContent>
     </Card>
   )
