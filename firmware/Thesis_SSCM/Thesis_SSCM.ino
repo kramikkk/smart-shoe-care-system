@@ -201,18 +201,18 @@ unsigned long sterilizingPhaseDuration = 0;  // = serviceDuration / 2
 /* ===================== CLEANING SERVICE STATE ===================== */
 // Cleaning mode phases:
 // Phase 0: Not cleaning
-// Phase 1: Stepper moving to max (480mm), pump ON
-// Phase 2: Stepper returning to 0, pump ON
-// Phase 3: Brushing clockwise (95 seconds)
-// Phase 4: Brushing counter-clockwise (95 seconds)
+// Phase 1: RGB ON, Pump ON, Side linear moving — wait 3s for liquid to travel
+// Phase 2: Top linear moving forward to max position (pump ON)
+// Phase 3: Top linear returning to home (pump ON)
+// Phase 4: Brushing clockwise — pump OFF at start of this phase
+// Phase 5: Brushing counter-clockwise
 // After 3 complete brush cycles, cleaning ends
 
 const long CLEANING_MAX_POSITION = 4800;  // 480mm * 10 steps/mm = 4800 steps
-int cleaningPhase = 0;  // Current cleaning phase (0-4)
+int cleaningPhase = 0;
+const unsigned long CLEANING_PUMP_DELAY_MS = 3000;  // 3s delay before top linear starts
 
 // Brushing cycle state
-// Total cleaning: 300s, Phase 1-2: ~15s, Brushing: ~285s
-// 3 cycles × 2 directions = 6 phases, so 285s ÷ 6 ≈ 47.5s per direction
 const unsigned long BRUSH_DURATION_MS = 47500;  // 47.5 seconds per direction
 const int BRUSH_TOTAL_CYCLES = 3;               // 3 complete cycles (CW + CCW each)
 const int BRUSH_MOTOR_SPEED = 255;              // Motor speed (0-255)
@@ -1143,6 +1143,7 @@ void startService(String shoeType, String serviceType, String careType) {
 
         // Reset service-specific state
         if (currentServiceType == "cleaning") {
+            setRelay(5, false);  // Pump OFF
             cleaningPhase = 0;
             brushCurrentCycle = 0;
             stepper1MoveTo(0);
@@ -1208,34 +1209,31 @@ void startService(String shoeType, String serviceType, String careType) {
 
     // Turn ON relays based on service type
     if (serviceType == "cleaning") {
-        // Start cleaning sequence: stepper moves 0 → 480mm → 0, diaphragm pump ON
         setRelay(2, true);  // Bottom Exhaust
+        setRelay(5, true);  // Diaphragm Pump ON
         Serial.println("Relay 2 (Bottom Exhaust): ON");
+        Serial.println("Relay 5 (Pump): ON");
 
-        // Start stepper moving to max position
-        cleaningPhase = 1;  // Phase 1: moving to max
-        stepper1MoveTo(CLEANING_MAX_POSITION);
-        Serial.print("[Cleaning] Stepper moving to "); 
-        Serial.print(CLEANING_MAX_POSITION / 10); 
-        Serial.println("mm");
-
-        // Move stepper2 (side linear) based on care type (absolute position)
+        // Side linear moves to designated position immediately
         long stepper2TargetSteps = 0;
         if (careType == "strong") {
-            stepper2TargetSteps = 20600;  // 103mm = 103 * 200 steps/mm
+            stepper2TargetSteps = 20600;  // 103mm
         } else if (careType == "normal") {
-            stepper2TargetSteps = 19600;  // 98mm = 98 * 200 steps/mm
+            stepper2TargetSteps = 19600;  // 98mm
         } else if (careType == "gentle") {
-            stepper2TargetSteps = 18600;  // 93mm = 93 * 200 steps/mm
+            stepper2TargetSteps = 18600;  // 93mm
         } else {
-            stepper2TargetSteps = 19600;  // Default to normal (98mm)
+            stepper2TargetSteps = 19600;  // Default normal
         }
         stepper2MoveTo(stepper2TargetSteps);
-        Serial.print("[Cleaning] Side stepper moving to "); 
-        Serial.print(stepper2TargetSteps / 200); 
-        Serial.print("mm ("); 
-        Serial.print(careType); 
-        Serial.println(" care)");
+        Serial.print("[Cleaning] Side linear moving to ");
+        Serial.print(stepper2TargetSteps / 200);
+        Serial.print("mm ("); Serial.print(careType); Serial.println(" care)");
+
+        // Phase 1: 3s pump delay before top linear starts
+        cleaningPhase = 1;
+        brushPhaseStartTime = millis();
+        Serial.println("[Cleaning] Phase 1: Pump ON, waiting 3s before top linear starts");
     } else if (serviceType == "drying") {
         setRelay(3, true);  // Centrifugal Blower Fan
         setRelay(4, true);  // PTC Ceramic Heater
@@ -1270,14 +1268,13 @@ void stopService() {
     // Turn OFF relays based on service type
     if (currentServiceType == "cleaning") {
         setRelay(2, false);  // Bottom Exhaust
-        // Stop stepper and return to home position
+        setRelay(5, false);  // Diaphragm Pump (safety — may already be off)
         cleaningPhase = 0;
         brushCurrentCycle = 0;
-        stepper1MoveTo(0);  // Return to home
-        Serial.println("[Cleaning] Returning stepper to home position");
-        // Return stepper2 to home position
+        stepper1MoveTo(0);
+        Serial.println("[Cleaning] Returning top linear to home position");
         stepper2MoveTo(0);
-        Serial.println("[Cleaning] Returning side stepper to home position");
+        Serial.println("[Cleaning] Returning side linear to home position");
         // Stop brush motors
         motorsCoast();
         Serial.println("[Cleaning] Brush motors stopped");
@@ -1371,7 +1368,7 @@ void handleService() {
     // Check if service duration is complete
     // For cleaning: don't stop if brushing is still in progress (phases 3-4)
     if (elapsed >= serviceDuration) {
-        if (currentServiceType == "cleaning" && cleaningPhase >= 3) {
+        if (currentServiceType == "cleaning" && cleaningPhase >= 4) {
             // Brushing in progress - don't stop yet
         } else {
             stopService();
@@ -1382,64 +1379,67 @@ void handleService() {
     // Handle cleaning mode phases
     if (currentServiceType == "cleaning" && cleaningPhase > 0) {
 
-        // Phase 1 & 2: Stepper movement with pump
-        if (cleaningPhase == 1 || cleaningPhase == 2) {
-            // Check if stepper reached target position
-            if (!stepper1Moving) {
-                if (cleaningPhase == 1) {
-                    // Reached max position, now return to 0
-                    cleaningPhase = 2;
-                    stepper1MoveTo(0);
-                    Serial.println("[Cleaning] Stepper at max, returning to 0");
-                } else if (cleaningPhase == 2) {
-                    // Reached home position, stepper/pump phase complete
-                    setRelay(6, false);  // Turn OFF diaphragm pump
-                    Serial.println("[Cleaning] Stepper at home - pump OFF");
-
-                    // Start brushing phase
-                    cleaningPhase = 3;
-                    brushCurrentCycle = 1;
-                    brushPhaseStartTime = millis();
-                    setMotorsSameSpeed(BRUSH_MOTOR_SPEED);  // Start CW
-                    // First cycle: Start slow servo movement (left 0→180, right 180→0)
-                    setServoPositions(180, false);  // Slow movement
-                    Serial.println("[Cleaning] Starting brush cycle 1/3 - CLOCKWISE (with slow servo rotation)");
-                }
+        // Phase 1: Pump ON + side linear moving — wait 3s then start top linear
+        if (cleaningPhase == 1) {
+            if (millis() - brushPhaseStartTime >= CLEANING_PUMP_DELAY_MS) {
+                cleaningPhase = 2;
+                stepper1MoveTo(CLEANING_MAX_POSITION);
+                Serial.print("[Cleaning] Phase 2: Top linear moving to ");
+                Serial.print(CLEANING_MAX_POSITION / 10);
+                Serial.println("mm");
             }
         }
 
-        // Phase 3: Brushing clockwise
+        // Phase 2: Top linear moving forward to max
+        else if (cleaningPhase == 2) {
+            if (!stepper1Moving) {
+                cleaningPhase = 3;
+                stepper1MoveTo(0);
+                Serial.println("[Cleaning] Phase 3: Top linear returning to home");
+            }
+        }
+
+        // Phase 3: Top linear returning to home
         else if (cleaningPhase == 3) {
-            unsigned long brushElapsed = millis() - brushPhaseStartTime;
-            if (brushElapsed >= BRUSH_DURATION_MS) {
-                // Switch to counter-clockwise
+            if (!stepper1Moving) {
+                // Top linear home — pump OFF, start brushing
+                setRelay(5, false);  // Diaphragm Pump OFF
+                Serial.println("[Cleaning] Top linear at home - Pump OFF");
                 cleaningPhase = 4;
+                brushCurrentCycle = 1;
+                brushPhaseStartTime = millis();
+                setMotorsSameSpeed(BRUSH_MOTOR_SPEED);  // Start CW
+                setServoPositions(180, false);           // Slow servo movement
+                Serial.println("[Cleaning] Phase 4: Brush cycle 1/3 - CLOCKWISE");
+            }
+        }
+
+        // Phase 4: Brushing clockwise
+        else if (cleaningPhase == 4) {
+            if (millis() - brushPhaseStartTime >= BRUSH_DURATION_MS) {
+                cleaningPhase = 5;
                 brushPhaseStartTime = millis();
                 setMotorsSameSpeed(-BRUSH_MOTOR_SPEED);  // Start CCW
-                Serial.println("[Cleaning] Brush cycle " + String(brushCurrentCycle) + "/3 - COUNTER-CLOCKWISE");
+                Serial.println("[Cleaning] Phase 5: Brush cycle " + String(brushCurrentCycle) + "/3 - COUNTER-CLOCKWISE");
             }
         }
 
-        // Phase 4: Brushing counter-clockwise
-        else if (cleaningPhase == 4) {
-            unsigned long brushElapsed = millis() - brushPhaseStartTime;
-            if (brushElapsed >= BRUSH_DURATION_MS) {
-                // Cycle complete
+        // Phase 5: Brushing counter-clockwise
+        else if (cleaningPhase == 5) {
+            if (millis() - brushPhaseStartTime >= BRUSH_DURATION_MS) {
                 brushCurrentCycle++;
-
                 if (brushCurrentCycle <= BRUSH_TOTAL_CYCLES) {
-                    // Start next cycle (back to clockwise)
-                    cleaningPhase = 3;
+                    cleaningPhase = 4;
                     brushPhaseStartTime = millis();
-                    setMotorsSameSpeed(BRUSH_MOTOR_SPEED);  // Start CW
-                    Serial.println("[Cleaning] Starting brush cycle " + String(brushCurrentCycle) + "/3 - CLOCKWISE");
+                    setMotorsSameSpeed(BRUSH_MOTOR_SPEED);  // Back to CW
+                    Serial.println("[Cleaning] Phase 4: Brush cycle " + String(brushCurrentCycle) + "/3 - CLOCKWISE");
                 } else {
-                    // All cycles complete - stop motors and end service
+                    // All cycles complete
                     motorsCoast();
                     cleaningPhase = 0;
                     brushCurrentCycle = 0;
                     Serial.println("[Cleaning] All 3 brush cycles complete - motors OFF");
-                    stopService();  // Cleaning fully complete
+                    stopService();
                     return;
                 }
             }
