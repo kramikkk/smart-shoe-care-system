@@ -1,3 +1,7 @@
+'use client'
+
+import { useRef, useEffect } from 'react'
+import { gsap } from '@/lib/gsap'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -5,9 +9,29 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
 export default function Contact() {
+    const sectionRef = useRef<HTMLElement>(null)
+
+    useEffect(() => {
+        const ctx = gsap.context(() => {
+            gsap.from('[data-contact-inner]', {
+                y: 30,
+                opacity: 0,
+                duration: 0.8,
+                ease: 'power2.out',
+                scrollTrigger: {
+                    trigger: '[data-contact-inner]',
+                    start: 'top 85%',
+                    once: true,
+                },
+            })
+        }, sectionRef)
+
+        return () => ctx.revert()
+    }, [])
+
     return (
-        <section id="contact" className="bg-background @container py-24">
-            <div className="mx-auto max-w-2xl px-6">
+        <section ref={sectionRef} id="contact" className="bg-background @container py-24">
+            <div data-contact-inner className="mx-auto max-w-2xl px-6">
                 <div className="text-center">
                     <h1 className="text-balance font-serif text-4xl font-medium sm:text-5xl">Get Your SSCM Device</h1>
                     <p className="text-muted-foreground mx-auto mt-4 max-w-md text-balance">Interested in purchasing a Smart Shoe Care Machine? Reach out to us and we'll get back to you with pricing and availability.</p>

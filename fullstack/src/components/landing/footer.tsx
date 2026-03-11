@@ -1,3 +1,7 @@
+'use client'
+
+import { useRef, useEffect } from 'react'
+import { gsap } from '@/lib/gsap'
 import Link from 'next/link'
 import { Logo } from '@/components/landing/logo'
 
@@ -9,8 +13,27 @@ const links = [
 ]
 
 export default function Footer() {
+    const footerRef = useRef<HTMLElement>(null)
+
+    useEffect(() => {
+        const ctx = gsap.context(() => {
+            gsap.from(footerRef.current, {
+                opacity: 0,
+                duration: 1,
+                ease: 'power2.out',
+                scrollTrigger: {
+                    trigger: footerRef.current,
+                    start: 'top 95%',
+                    once: true,
+                },
+            })
+        }, footerRef)
+
+        return () => ctx.revert()
+    }, [])
+
     return (
-        <footer className="bg-background @container py-12">
+        <footer ref={footerRef} className="bg-background @container py-12">
             <div className="mx-auto max-w-5xl px-6">
                 <div className="border-y py-8">
                     <div className="@xl:flex-row @xl:items-center flex flex-col gap-6">
