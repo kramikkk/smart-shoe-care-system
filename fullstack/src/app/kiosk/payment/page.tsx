@@ -1,9 +1,9 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { QrCode, Banknote } from 'lucide-react'
 import { Item, ItemContent, ItemHeader } from '@/components/ui/item'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { BackButton } from '@/components/kiosk/BackButton'
@@ -113,7 +113,7 @@ const Payment = () => {
 
   const paymentMethods = [
     {
-      icon: <Banknote className="w-16 h-16 text-blue-600" />,
+      icon: <Image src="/Cash3D.webp" alt="Cash Payment" width={64} height={64} className="w-16 h-16" />,
       title: 'Cash Payment',
       descriptions: [
         'Insert coins or bills into the machine',
@@ -122,7 +122,7 @@ const Payment = () => {
       link: `/kiosk/payment/offline${queryString}`,
     },
     {
-      icon: <QrCode className="w-16 h-16 text-cyan-600" />,
+      icon: <Image src="/QR3D.png" alt="Online Payment" width={64} height={64} className="w-16 h-16" />,
       title: 'Online Payment',
       descriptions: [
         'Scan QR code with your mobile device',

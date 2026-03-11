@@ -1,9 +1,9 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Droplets, Wind, ShieldCheck } from 'lucide-react'
 import { Item, ItemContent } from '@/components/ui/item'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { BackButton } from '@/components/kiosk/BackButton'
 
@@ -19,7 +19,7 @@ const service = () => {
       </h1>
       <div className='flex gap-8 justify-center'>
         <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w flex flex-col items-center'>
-          <Droplets className="w-16 h-16 text-blue-600" />
+          <Image src="/Water3D.webp" alt="Cleaning" width={128} height={128} className="w-32 h-32" />
           <ItemContent>
             <h2 className="text-2xl font-bold mb-4">Cleaning</h2>
             <p className="text-xl text-gray-600">Surface clean your shoes</p>
@@ -31,7 +31,7 @@ const service = () => {
           </ItemContent>
         </Item>
         <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w flex flex-col items-center'>
-          <Wind className="w-16 h-16 text-cyan-600" />
+          <Image src="/Wind3D.webp" alt="Drying" width={128} height={128} className="w-32 h-32" />
           <ItemContent>
             <h2 className="text-2xl font-bold mb-4">Drying</h2>
             <p className="text-xl text-gray-600">Quick dry your shoes</p>
@@ -43,7 +43,7 @@ const service = () => {
           </ItemContent>
         </Item>
         <Item className='text-center bg-white/50 p-8 rounded-lg shadow-lg w flex flex-col items-center'>
-          <ShieldCheck className="w-16 h-16 text-green-600" />
+          <Image src="/Shield3D.webp" alt="Sterilizing" width={128} height={128} className="w-32 h-32" />
           <ItemContent>
             <h2 className="text-2xl font-bold mb-4">Sterilizing</h2>
             <p className="text-xl text-gray-600">Sanitize your shoes</p>

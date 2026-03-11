@@ -1,7 +1,7 @@
 'use client'
 
-import { Droplets, ShieldCheck, Wind } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { Progress } from "@/components/ui/progress"
 import { useSearchParams, useRouter } from 'next/navigation'
 
@@ -173,28 +173,28 @@ const CustomProgress = () => {
     switch (service.toLowerCase()) {
       case 'cleaning':
         return {
-          icon: Droplets,
+          image: '/Water3D.webp',
           name: 'Cleaning',
           gradientFrom: 'from-blue-500',
           gradientTo: 'to-cyan-500'
         }
       case 'drying':
         return {
-          icon: Wind,
+          image: '/Wind3D.webp',
           name: 'Drying',
           gradientFrom: 'from-cyan-500',
           gradientTo: 'to-green-500'
         }
       case 'sterilizing':
         return {
-          icon: ShieldCheck,
+          image: '/Shield3D.webp',
           name: 'Sterilizing',
           gradientFrom: 'from-green-500',
           gradientTo: 'to-emerald-500'
         }
       default:
         return {
-          icon: Droplets,
+          image: '/Water3D.webp',
           name: 'Cleaning',
           gradientFrom: 'from-blue-500',
           gradientTo: 'to-cyan-500'
@@ -211,7 +211,6 @@ const CustomProgress = () => {
   }
 
   const serviceConfig = getServiceConfig()
-  const ServiceIcon = serviceConfig.icon
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-6">
@@ -224,7 +223,7 @@ const CustomProgress = () => {
       <div className='flex justify-center mb-4'>
         <div className="flex flex-col items-center transition-all duration-300">
           <div className={`rounded-full p-4 transition-all duration-300 bg-gradient-to-br ${serviceConfig.gradientFrom} ${serviceConfig.gradientTo} shadow-lg scale-105`}>
-            <ServiceIcon className="w-20 h-20 transition-colors duration-300 text-white" />
+            <Image src={serviceConfig.image} alt={serviceConfig.name} width={80} height={80} className="w-20 h-20" />
           </div>
         </div>
       </div>
