@@ -19,9 +19,7 @@ export default function SystemPage() {
           <SensCard id="atomizerLevel"/>
         </div>
 
-        <div className="flex-1 min-h-0">
-          <SystemAlertCard /> 
-        </div>
+        <SystemAlertCard />
       </div>
     </SensorDataProvider>
   )
