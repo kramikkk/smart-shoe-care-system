@@ -27,8 +27,6 @@ const CustomProgress = () => {
   const [resolvedDuration, setResolvedDuration] = useState<number | null>(null)
 
   const serviceStartedRef = useRef(false)
-  // When true, WS is providing real updates — pause the local fallback timer
-  const wsIsUpdatingRef   = useRef(false)
 
   // Refs for stop-service on unmount
   const sendMessageRef = useRef(sendMessage)
@@ -84,34 +82,17 @@ const CustomProgress = () => {
     console.log(`[Progress] Service started: ${service} (${care}) ${resolvedDuration}s`)
   }, [isConnected, deviceId, resolvedDuration, shoe, service, care, sendMessage])
 
-  // Handle WS messages from ESP32
+  // Drive countdown entirely from WS messages — firmware is the source of truth
   useEffect(() => {
     const unsubscribe = onMessage((message) => {
       if (message.type === 'service-status') {
-        wsIsUpdatingRef.current = true
         setTimeRemaining(message.timeRemaining)
       } else if (message.type === 'service-complete') {
-        wsIsUpdatingRef.current = true
         setTimeRemaining(0)
       }
     })
     return unsubscribe
   }, [onMessage])
-
-  // Fallback local timer — only ticks when WS is NOT providing real updates
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (wsIsUpdatingRef.current) return  // WS is active — skip local tick
-      setTimeRemaining((prev) => {
-        if (prev <= 0) {
-          clearInterval(timer)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
 
   // Send stop-service on unmount (back-navigation guard)
   useEffect(() => {

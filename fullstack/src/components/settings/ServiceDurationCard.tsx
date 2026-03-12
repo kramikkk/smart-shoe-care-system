@@ -30,6 +30,13 @@ type ServiceDurationCardProps = {
   onSaveDuration: (serviceType: string, careType: string) => void
 }
 
+// Firmware hardcoded defaults (Thesis_SSCM.ino)
+const FIRMWARE_DEFAULTS: Record<string, Record<string, number>> = {
+  cleaning:    { gentle: 300, normal: 300, strong: 300 },
+  drying:      { gentle: 60,  normal: 120, strong: 180 },
+  sterilizing: { gentle: 60,  normal: 120, strong: 180 },
+}
+
 const SERVICE_CONFIG = [
   { key: 'cleaning', label: 'Cleaning', icon: <Sparkles className="h-5 w-5" />, color: 'var(--chart-1)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: true },
   { key: 'drying', label: 'Drying', icon: <Wind className="h-5 w-5" />, color: 'var(--chart-2)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: false },
@@ -123,7 +130,7 @@ export function ServiceDurationCard({
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Default: {current > 0 ? `${current}s` : '—'}
+                        Default: {FIRMWARE_DEFAULTS[key]?.[careType] ?? '—'}s
                         {changed && <span className="text-amber-600 dark:text-amber-400 ml-2">→ {edited}s</span>}
                       </p>
                     </div>

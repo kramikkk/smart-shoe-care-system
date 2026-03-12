@@ -21,7 +21,6 @@ export default function ClassifyPage() {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const classificationSentRef = useRef<boolean>(false) // Prevent duplicate requests
   const subscriptionsSetRef = useRef<boolean>(false) // Track if subscriptions are set up
-  const ledEnabledRef = useRef<boolean>(false)
   const syncDelayRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -52,11 +51,8 @@ export default function ClassifyPage() {
 
     // Always send enable-classification when connected (turns LED white)
     // This ensures LED is on even if CAM isn't synced yet
-    if (!ledEnabledRef.current) {
-      ledEnabledRef.current = true
-      sendMessage({ type: 'enable-classification', deviceId: deviceId })
-      console.log('[Classify] Classification LED enabled (white)')
-    }
+    sendMessage({ type: 'enable-classification', deviceId: deviceId })
+    console.log('[Classify] Classification LED enabled (white)')
 
     // Wait for initial sync status before deciding whether to show syncing state
     if (!hasReceivedSyncStatus) {
@@ -201,7 +197,6 @@ export default function ClassifyPage() {
 
     // Reset states immediately for instant visual feedback
     classificationSentRef.current = false
-    ledEnabledRef.current = false
     setError('')
     setResult(null)
 

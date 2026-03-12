@@ -190,6 +190,16 @@ String purgeShoeType = "";
 String purgeCareType = "";
 const unsigned long PURGE_DURATION_MS = 15000;  // 15 seconds
 
+/* ===================== DRYING TEMPERATURE CONTROL ===================== */
+// Target range: 35–40°C for quick drying without damaging shoe materials
+// Below 35°C: heater ON, exhaust OFF  → heat up
+// Above 40°C: heater OFF, exhaust ON  → cool down / release hot air
+// 35–40°C:    maintain current state  (hysteresis band)
+const float DRYING_TEMP_LOW  = 35.0;  // °C — heater turns ON below this
+const float DRYING_TEMP_HIGH = 40.0;  // °C — heater turns OFF, exhaust ON above this
+bool dryingHeaterOn  = false;
+bool dryingExhaustOn = false;
+
 /* ===================== STERILIZING PHASES ===================== */
 // Phase 0: Inactive
 // Phase 1: UVC ON + Mist Maker ON (mist builds up in pipe, fan OFF)
@@ -1228,9 +1238,7 @@ void startService(String shoeType, String serviceType, String careType, unsigned
 
     // Turn ON relays based on service type
     if (serviceType == "cleaning") {
-        setRelay(2, true);  // Bottom Exhaust
         setRelay(5, true);  // Diaphragm Pump ON
-        Serial.println("Relay 2 (Bottom Exhaust): ON");
         Serial.println("Relay 5 (Pump): ON");
 
         // Side linear moves to designated position immediately
@@ -1254,10 +1262,13 @@ void startService(String shoeType, String serviceType, String careType, unsigned
         brushPhaseStartTime = millis();
         Serial.println("[Cleaning] Phase 1: Pump ON, waiting 3s before top linear starts");
     } else if (serviceType == "drying") {
-        setRelay(3, true);  // Centrifugal Blower Fan
-        setRelay(4, true);  // PTC Ceramic Heater
+        setRelay(3, true);  // Centrifugal Blower Fan ON (always on during drying)
+        setRelay(4, true);  // PTC Ceramic Heater ON (temperature control will manage it)
+        dryingHeaterOn  = true;
+        dryingExhaustOn = false;
         Serial.println("Relay 3 (Blower Fan): ON");
         Serial.println("Relay 4 (PTC Heater): ON");
+        Serial.println("[Drying] Temperature control active: " + String(DRYING_TEMP_LOW, 0) + "–" + String(DRYING_TEMP_HIGH, 0) + "°C");
     } else if (serviceType == "sterilizing") {
         // Phase 1: UVC ON + Mist Maker ON (fan OFF, mist builds up in pipe)
         sterilizingPhaseDuration = serviceDuration / 2;
@@ -1286,7 +1297,6 @@ void stopService() {
 
     // Turn OFF relays based on service type
     if (currentServiceType == "cleaning") {
-        setRelay(2, false);  // Bottom Exhaust
         setRelay(5, false);  // Diaphragm Pump (safety — may already be off)
         cleaningPhase = 0;
         brushCurrentCycle = 0;
@@ -1303,6 +1313,9 @@ void stopService() {
     } else if (currentServiceType == "drying") {
         setRelay(3, false);  // Centrifugal Blower Fan
         setRelay(4, false);  // PTC Ceramic Heater
+        setRelay(2, false);  // Ensure exhaust OFF before purge takes over
+        dryingHeaterOn  = false;
+        dryingExhaustOn = false;
         // Start purge: exhaust ON for 15s to cool down chamber
         setRelay(2, true);
         purgeActive = true;
@@ -1330,20 +1343,17 @@ void stopService() {
     Serial.println("Service Type: " + currentServiceType);
     Serial.println("=======================\n");
 
-    // For cleaning: send completion now (no purge needed)
-    // For drying/sterilizing: completion is sent after purge finishes
-    if (currentServiceType == "cleaning") {
-        if (wsConnected && isPaired) {
-            String msg = "{";
-            msg += "\"type\":\"service-complete\",";
-            msg += "\"deviceId\":\"" + deviceId + "\",";
-            msg += "\"serviceType\":\"" + currentServiceType + "\",";
-            msg += "\"shoeType\":\"" + currentShoeType + "\",";
-            msg += "\"careType\":\"" + currentCareType + "\"";
-            msg += "}";
-            webSocket.sendTXT(msg);
-            Serial.println("[WebSocket] Complete: " + currentServiceType);
-        }
+    // Send service-complete immediately for all services — purge runs in background
+    if (wsConnected && isPaired) {
+        String msg = "{";
+        msg += "\"type\":\"service-complete\",";
+        msg += "\"deviceId\":\"" + deviceId + "\",";
+        msg += "\"serviceType\":\"" + currentServiceType + "\",";
+        msg += "\"shoeType\":\"" + currentShoeType + "\",";
+        msg += "\"careType\":\"" + currentCareType + "\"";
+        msg += "}";
+        webSocket.sendTXT(msg);
+        Serial.println("[WebSocket] Complete: " + currentServiceType);
     }
 
     // Clear service data
@@ -1360,23 +1370,42 @@ void handlePurge() {
         setRelay(2, false);  // Bottom Exhaust OFF
         Serial.println("[Purge] Complete - Bottom Exhaust OFF");
 
-        // Send service-complete now that purge is done
-        if (wsConnected && isPaired) {
-            String msg = "{";
-            msg += "\"type\":\"service-complete\",";
-            msg += "\"deviceId\":\"" + deviceId + "\",";
-            msg += "\"serviceType\":\"" + purgeServiceType + "\",";
-            msg += "\"shoeType\":\"" + purgeShoeType + "\",";
-            msg += "\"careType\":\"" + purgeCareType + "\"";
-            msg += "}";
-            webSocket.sendTXT(msg);
-            Serial.println("[WebSocket] Complete (post-purge): " + purgeServiceType);
-        }
-
         purgeServiceType = "";
         purgeShoeType = "";
         purgeCareType = "";
     }
+}
+
+void handleDryingTemperature() {
+    if (!serviceActive || currentServiceType != "drying") return;
+    if (currentTemperature <= 0.0) return;  // No valid reading yet
+
+    if (currentTemperature < DRYING_TEMP_LOW) {
+        // Too cold — heater ON, exhaust OFF
+        if (!dryingHeaterOn) {
+            setRelay(4, true);
+            dryingHeaterOn = true;
+            Serial.println("[Drying] Temp " + String(currentTemperature, 1) + "°C < " + String(DRYING_TEMP_LOW, 0) + "°C — Heater ON");
+        }
+        if (dryingExhaustOn) {
+            setRelay(2, false);
+            dryingExhaustOn = false;
+            Serial.println("[Drying] Exhaust OFF");
+        }
+    } else if (currentTemperature > DRYING_TEMP_HIGH) {
+        // Too hot — heater OFF, exhaust ON to release heat
+        if (dryingHeaterOn) {
+            setRelay(4, false);
+            dryingHeaterOn = false;
+            Serial.println("[Drying] Temp " + String(currentTemperature, 1) + "°C > " + String(DRYING_TEMP_HIGH, 0) + "°C — Heater OFF");
+        }
+        if (!dryingExhaustOn) {
+            setRelay(2, true);
+            dryingExhaustOn = true;
+            Serial.println("[Drying] Exhaust ON (cooling)");
+        }
+    }
+    // Within 35–40°C band: hold current state (hysteresis)
 }
 
 void handleService() {
@@ -2944,6 +2973,7 @@ void loop() {
     /* ================= SERVICE HANDLING ================= */
     // Handle service timer, relay control, and RGB lights
     handleService();
+    handleDryingTemperature();
     handlePurge();
 
     // Small yield to prevent watchdog timeout (allows ESP32 to handle WiFi/system tasks)
