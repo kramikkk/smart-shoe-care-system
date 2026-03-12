@@ -7,8 +7,7 @@ import { Item, ItemContent } from '@/components/ui/item'
 import Image from 'next/image'
 import { BackButton } from '@/components/kiosk/BackButton'
 import { StepIndicator } from '@/components/kiosk/StepIndicator'
-
-const CUSTOM_STEPS = ['Mode', 'Shoe Type', 'Service', 'Care Type', 'Payment']
+import { CUSTOM_STEPS } from '@/lib/kiosk-constants'
 
 const shoeTypes = [
   { id: 'mesh',   label: 'Mesh',   image: '/MeshShoes.png',   desc: 'Mesh-like material' },

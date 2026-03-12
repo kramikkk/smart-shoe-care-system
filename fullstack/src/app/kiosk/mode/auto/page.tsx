@@ -53,7 +53,8 @@ const Auto = () => {
 
   // Calculate stage durations based on shoe type recommendations
   const stageDurations = useMemo(() => ({
-    cleaning: 300, // Cleaning is always 5 minutes
+    // Cleaning timer is always 5 minutes regardless of care type (care only affects machine pressure, not time)
+    cleaning: 300,
     drying: CARE_DURATIONS[recommendations.drying],
     sterilizing: CARE_DURATIONS[recommendations.sterilizing]
   }), [recommendations])
@@ -77,6 +78,14 @@ const Auto = () => {
   // Use centralized WebSocket context
   const { isConnected, deviceId, sendMessage, onMessage } = useWebSocket()
   const lastSentStageRef = useRef<string>('')
+  const sendMessageRef = useRef(sendMessage)
+  const deviceIdRef = useRef(deviceId)
+
+  // Keep refs in sync with current values
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+    deviceIdRef.current = deviceId
+  }, [sendMessage, deviceId])
 
   // Listen for ESP32 messages
   useEffect(() => {
@@ -183,6 +192,16 @@ const Auto = () => {
       router.push(`/kiosk/success/service?shoe=${shoe}&service=package`)
     }
   }, [timeRemaining, router, shoe])
+
+  // Send stop-service message on unmount (handles back-navigation)
+  useEffect(() => {
+    return () => {
+      if (deviceIdRef.current) {
+        sendMessageRef.current({ type: 'stop-service', deviceId: deviceIdRef.current })
+        console.log('[Auto Mode] stop-service sent on page exit')
+      }
+    }
+  }, [])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)

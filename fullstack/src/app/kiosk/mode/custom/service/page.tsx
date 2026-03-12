@@ -1,22 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent } from '@/components/ui/item'
 import Image from 'next/image'
 import { BackButton } from '@/components/kiosk/BackButton'
 import { StepIndicator } from '@/components/kiosk/StepIndicator'
+import { CUSTOM_STEPS } from '@/lib/kiosk-constants'
+import { usePricing } from '@/hooks/usePricing'
 
-const CUSTOM_STEPS = ['Mode', 'Shoe Type', 'Service', 'Care Type', 'Payment']
-
-const defaultPrices: Record<string, number> = {
-  cleaning: 45,
-  drying: 45,
-  sterilizing: 25,
-}
-
-const services = [
+const serviceOptions = [
   { id: 'cleaning',    label: 'Cleaning',    desc: 'Surface clean your shoes', image: '/Water3D.webp' },
   { id: 'drying',      label: 'Drying',      desc: 'Quick dry your shoes',     image: '/Wind3D.webp' },
   { id: 'sterilizing', label: 'Sterilizing', desc: 'Sanitize your shoes',      image: '/Shield3D.webp' },
@@ -28,26 +22,8 @@ const ServicePage = () => {
   const router = useRouter()
 
   const [selected, setSelected] = useState<string | null>(null)
-  const [prices, setPrices] = useState(defaultPrices)
-
-  useEffect(() => {
-    const fetchPricing = async () => {
-      try {
-        const deviceId = localStorage.getItem('kiosk_device_id')
-        const deviceParam = deviceId ? `?deviceId=${deviceId}` : ''
-        const res = await fetch(`/api/pricing${deviceParam}`)
-        const data = await res.json()
-        if (data.success) {
-          const map: Record<string, number> = { ...defaultPrices }
-          for (const item of data.pricing) map[item.serviceType] = item.price
-          setPrices(map)
-        }
-      } catch {
-        // use defaults
-      }
-    }
-    fetchPricing()
-  }, [])
+  const { services } = usePricing()
+  const prices: Record<string, number> = Object.fromEntries(services.map(s => [s.id, s.price]))
 
   const handleProceed = () => {
     if (selected) router.push(`/kiosk/mode/custom/care?shoe=${shoe}&service=${selected}`)
@@ -64,7 +40,7 @@ const ServicePage = () => {
       </h1>
 
       <div className='flex gap-8 justify-center mb-8'>
-        {services.map((svc) => (
+        {serviceOptions.map((svc) => (
           <Item
             key={svc.id}
             onClick={() => setSelected(svc.id)}

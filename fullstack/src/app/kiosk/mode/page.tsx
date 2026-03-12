@@ -7,8 +7,7 @@ import { Item, ItemContent } from '@/components/ui/item'
 import Image from 'next/image'
 import { BackButton } from '@/components/kiosk/BackButton'
 import { StepIndicator } from '@/components/kiosk/StepIndicator'
-
-const CUSTOM_STEPS = ['Mode', 'Shoe Type', 'Service', 'Care Type', 'Payment']
+import { CUSTOM_STEPS, AUTO_STEPS } from '@/lib/kiosk-constants'
 
 const modes = [
   {
@@ -31,6 +30,8 @@ const ModePage = () => {
   const [selected, setSelected] = useState<string | null>(null)
   const router = useRouter()
 
+  const currentSteps = selected === 'auto' ? AUTO_STEPS : CUSTOM_STEPS
+
   const handleProceed = () => {
     const mode = modes.find(m => m.id === selected)
     if (mode) router.push(mode.href)
@@ -40,7 +41,7 @@ const ModePage = () => {
     <div className="relative">
       <BackButton />
 
-      <StepIndicator steps={CUSTOM_STEPS} currentStep={0} />
+      <StepIndicator steps={currentSteps} currentStep={0} />
 
       <h1 className="text-5xl font-bold text-center mb-10 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Select Mode

@@ -2,7 +2,7 @@ import React from 'react'
 import { Check } from 'lucide-react'
 
 interface StepIndicatorProps {
-  steps: string[]
+  steps: readonly string[]
   currentStep: number // 0-based
 }
 

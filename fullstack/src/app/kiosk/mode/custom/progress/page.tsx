@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { Progress } from "@/components/ui/progress"
 import { useSearchParams, useRouter } from 'next/navigation'
+import { useWebSocket } from '@/contexts/WebSocketContext'
 
 const DEFAULT_DURATIONS: Record<string, Record<string, number>> = {
   cleaning:    { gentle: 300, normal: 300, strong: 300 },
@@ -13,17 +14,29 @@ const DEFAULT_DURATIONS: Record<string, Record<string, number>> = {
 
 const CustomProgress = () => {
   const searchParams = useSearchParams()
-  const shoe = searchParams.get('shoe') || 'mesh'
+  const shoe    = searchParams.get('shoe')    || 'mesh'
   const service = searchParams.get('service') || 'cleaning'
-  const care = searchParams.get('care') || 'normal'
-  const router = useRouter()
+  const care    = searchParams.get('care')    || 'normal'
+  const router  = useRouter()
+
+  const { isConnected, deviceId, sendMessage, onMessage } = useWebSocket()
 
   const fallbackDuration = DEFAULT_DURATIONS[service.toLowerCase()]?.[care.toLowerCase()] ?? 120
-  const [totalTime, setTotalTime] = useState(fallbackDuration)
+  const [totalTime, setTotalTime]         = useState(fallbackDuration)
   const [timeRemaining, setTimeRemaining] = useState(fallbackDuration)
-  const [wsConnected, setWsConnected] = useState(false)
-  const [serviceStarted, setServiceStarted] = useState(false)
   const [resolvedDuration, setResolvedDuration] = useState<number | null>(null)
+
+  const serviceStartedRef = useRef(false)
+  // When true, WS is providing real updates — pause the local fallback timer
+  const wsIsUpdatingRef   = useRef(false)
+
+  // Refs for stop-service on unmount
+  const sendMessageRef = useRef(sendMessage)
+  const deviceIdRef    = useRef(deviceId)
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+    deviceIdRef.current    = deviceId
+  }, [sendMessage, deviceId])
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
 
@@ -31,11 +44,11 @@ const CustomProgress = () => {
   useEffect(() => {
     const fetchDuration = async () => {
       try {
-        const deviceId = localStorage.getItem('kiosk_device_id')
-        const url = deviceId
-          ? `/api/duration?deviceId=${encodeURIComponent(deviceId)}`
+        const storedDeviceId = localStorage.getItem('kiosk_device_id')
+        const url = storedDeviceId
+          ? `/api/duration?deviceId=${encodeURIComponent(storedDeviceId)}`
           : '/api/duration'
-        const res = await fetch(url)
+        const res  = await fetch(url)
         const data = await res.json()
         if (data.success) {
           const entry = data.durations.find(
@@ -46,105 +59,49 @@ const CustomProgress = () => {
           setTotalTime(duration)
           setTimeRemaining(duration)
           setResolvedDuration(duration)
+        } else {
+          setResolvedDuration(fallbackDuration)
         }
       } catch {
-        // Fall back to defaults silently
         setResolvedDuration(fallbackDuration)
       }
     }
     fetchDuration()
-  }, [service, care])
+  }, [service, care, fallbackDuration])
 
-  // WebSocket connection to send start-service command and receive updates
+  // Send start-service once when connected and duration is resolved
   useEffect(() => {
-    const deviceId = localStorage.getItem('kiosk_device_id')
-    if (!deviceId || resolvedDuration === null) return
+    if (!isConnected || !deviceId || resolvedDuration === null || serviceStartedRef.current) return
+    serviceStartedRef.current = true
+    sendMessage({
+      type: 'start-service',
+      deviceId,
+      shoeType: shoe,
+      serviceType: service,
+      careType: care,
+      duration: resolvedDuration,
+    })
+    console.log(`[Progress] Service started: ${service} (${care}) ${resolvedDuration}s`)
+  }, [isConnected, deviceId, resolvedDuration, shoe, service, care, sendMessage])
 
-    let ws: WebSocket | null = null
-    let isCleanedUp = false
-
-    const connect = () => {
-      if (isCleanedUp) return
-
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
-      
-      ws = new WebSocket(wsUrl)
-
-      ws.onopen = () => {
-        if (isCleanedUp) {
-          ws?.close()
-          return
-        }
-        
-        setWsConnected(true)
-        ws!.send(JSON.stringify({ type: 'subscribe', deviceId }))
-
-        // Send start-service command to ESP32 (only if not already started)
-        if (!serviceStarted) {
-          ws!.send(JSON.stringify({
-            type: 'start-service',
-            deviceId,
-            shoeType: shoe,
-            serviceType: service,
-            careType: care,
-            duration: resolvedDuration,
-          }))
-          setServiceStarted(true)
-          console.log(`[Progress] Service started: ${service} (${care}) ${resolvedDuration}s`)
-        }
+  // Handle WS messages from ESP32
+  useEffect(() => {
+    const unsubscribe = onMessage((message) => {
+      if (message.type === 'service-status') {
+        wsIsUpdatingRef.current = true
+        setTimeRemaining(message.timeRemaining)
+      } else if (message.type === 'service-complete') {
+        wsIsUpdatingRef.current = true
+        setTimeRemaining(0)
       }
+    })
+    return unsubscribe
+  }, [onMessage])
 
-      ws.onmessage = (event) => {
-        if (isCleanedUp) return
-        
-        try {
-          const message = JSON.parse(event.data)
-
-          // Handle service status updates from ESP32
-          if (message.type === 'service-status') {
-            console.log(`[Progress] Status update: ${message.progress}% complete, ${message.timeRemaining}s remaining`)
-            setTimeRemaining(message.timeRemaining)
-          }
-
-          // Handle service complete notification
-          else if (message.type === 'service-complete') {
-            console.log(`[Progress] Service complete!`)
-            setTimeRemaining(0)
-          }
-        } catch (error) {
-          console.error('[Progress] Error parsing message:', error)
-        }
-      }
-
-      ws.onerror = (error) => {
-        console.error('[Progress] WebSocket error:', error)
-        if (!isCleanedUp) setWsConnected(false)
-      }
-      
-      ws.onclose = () => {
-        if (!isCleanedUp) {
-          console.log('[Progress] WebSocket closed')
-          setWsConnected(false)
-        }
-      }
-    }
-
-    // Small delay to avoid race condition with React StrictMode double-mounting
-    const timer = setTimeout(connect, 100)
-
-    return () => {
-      isCleanedUp = true
-      clearTimeout(timer)
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        ws.close()
-      }
-    }
-  }, [shoe, service, care, resolvedDuration])
-
-  // Fallback local timer (in case WebSocket is not available)
+  // Fallback local timer — only ticks when WS is NOT providing real updates
   useEffect(() => {
     const timer = setInterval(() => {
+      if (wsIsUpdatingRef.current) return  // WS is active — skip local tick
       setTimeRemaining((prev) => {
         if (prev <= 0) {
           clearInterval(timer)
@@ -153,10 +110,19 @@ const CustomProgress = () => {
         return prev - 1
       })
     }, 1000)
-
     return () => clearInterval(timer)
-  }, [service, care])
+  }, [])
 
+  // Send stop-service on unmount (back-navigation guard)
+  useEffect(() => {
+    return () => {
+      if (deviceIdRef.current) {
+        sendMessageRef.current({ type: 'stop-service', deviceId: deviceIdRef.current })
+      }
+    }
+  }, [])
+
+  // Redirect on completion
   useEffect(() => {
     if (timeRemaining === 0) {
       router.push(`/kiosk/success/service?shoe=${shoe}&service=${service}&care=${care}`)
@@ -245,9 +211,9 @@ const CustomProgress = () => {
 
       {/* Connection Status */}
       <div className="flex items-center justify-center gap-2 mb-6">
-        <div className={`w-2 h-2 rounded-full ${wsConnected && serviceStarted ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
         <p className="text-xs text-gray-600">
-          {wsConnected && serviceStarted ? 'Connected to device' : 'Connecting...'}
+          {isConnected ? 'Connected to device' : 'Connecting...'}
         </p>
       </div>
 

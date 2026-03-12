@@ -5,42 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Loader2, CheckCircle2, XCircle, ArrowLeft, TestTube } from 'lucide-react'
-
-type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
-
-interface Service {
-  id: ServiceType
-  name: string
-  description: string
-  price: number
-}
-
-const defaultServices: Service[] = [
-  {
-    id: 'cleaning',
-    name: 'Cleaning',
-    description: 'Professional shoe cleaning',
-    price: 45
-  },
-  {
-    id: 'drying',
-    name: 'Drying',
-    description: 'Quick and effective drying',
-    price: 45
-  },
-  {
-    id: 'sterilizing',
-    name: 'Sterilizing',
-    description: 'UV sterilization treatment',
-    price: 25
-  },
-  {
-    id: 'package',
-    name: 'Package',
-    description: 'Complete care: cleaning, drying, and sterilizing',
-    price: 100
-  }
-]
+import { DEFAULT_SERVICES, Service, ServiceType } from '@/lib/kiosk-constants'
+import { usePricing } from '@/hooks/usePricing'
 
 const OnlinePayment = () => {
   const searchParams = useSearchParams()
@@ -54,39 +20,14 @@ const OnlinePayment = () => {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // State for services with default fallback
-  const [services, setServices] = useState<Service[]>(defaultServices)
-  const [isPricingLoaded, setIsPricingLoaded] = useState(false)
+  const serviceDescriptions: Record<ServiceType, string> = {
+    cleaning: 'Professional shoe cleaning',
+    drying: 'Quick and effective drying',
+    sterilizing: 'UV sterilization treatment',
+    package: 'Complete care: cleaning, drying, and sterilizing',
+  }
 
-  // Fetch pricing from database
-  useEffect(() => {
-    const fetchPricing = async () => {
-      try {
-        // Get device ID from localStorage (set by PairingWrapper)
-        const deviceId = localStorage.getItem('kiosk_device_id')
-        const deviceParam = deviceId ? `?deviceId=${deviceId}` : ''
-
-        const response = await fetch(`/api/pricing${deviceParam}`)
-        const data = await response.json()
-
-        if (data.success) {
-          const fetchedServices: Service[] = data.pricing.map((item: any) => ({
-            id: item.serviceType as ServiceType,
-            name: item.serviceType.charAt(0).toUpperCase() + item.serviceType.slice(1),
-            description: defaultServices.find((s) => s.id === item.serviceType)?.description || '',
-            price: item.price,
-          }))
-          setServices(fetchedServices)
-          setIsPricingLoaded(true)
-        }
-      } catch (error) {
-        console.error('Error fetching pricing, using defaults:', error)
-        setIsPricingLoaded(true) // Use defaults if fetch fails
-      }
-    }
-
-    fetchPricing()
-  }, [])
+  const { services, isLoaded: isPricingLoaded } = usePricing()
 
   // Get selected service data
   const selectedServiceData = useMemo(() => {
@@ -99,6 +40,33 @@ const OnlinePayment = () => {
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const saveTransaction = useCallback(async () => {
+    const deviceId = localStorage.getItem('kiosk_device_id')
+    try {
+      const res = await fetch('/api/transaction/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethod: 'Online',
+          serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1),
+          shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
+          careType: selectedService === 'package'
+            ? 'Auto'
+            : selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
+          deviceId,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        console.log('Transaction saved:', data.transaction.transactionId)
+      } else {
+        console.error('Failed to save transaction:', data.error)
+      }
+    } catch (err) {
+      console.error('Transaction save error:', err)
+    }
+  }, [selectedService, selectedShoe, selectedCare])
+
   const checkPaymentStatus = useCallback(async (intentId: string) => {
     try {
       const response = await fetch(`/api/payment/status?paymentIntentId=${intentId}`)
@@ -107,34 +75,7 @@ const OnlinePayment = () => {
       if (data.success) {
         if (data.status === 'succeeded') {
           // STEP 2A: Save transaction to database when payment succeeds
-          try {
-            // Get device ID from localStorage (set by PairingWrapper)
-            const deviceId = localStorage.getItem('kiosk_device_id')
-
-            const transactionResponse = await fetch('/api/transaction/create', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                paymentMethod: 'Online',
-                serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1), // Capitalize first letter
-                shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
-                careType: selectedService === 'package' ? 'Auto' : selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
-                deviceId, // Link transaction to this kiosk
-              }),
-            })
-
-            const transactionData = await transactionResponse.json()
-
-            if (transactionData.success) {
-              console.log('✅ Transaction saved:', transactionData.transaction.transactionId)
-            } else {
-              console.error('❌ Failed to save transaction:', transactionData.error)
-            }
-          } catch (error) {
-            console.error('❌ Transaction save error:', error)
-            // Continue to success page even if transaction save fails
-            // This ensures user experience isn't blocked
-          }
+          await saveTransaction()
 
           // Redirect to success page
           router.push(`/kiosk/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
@@ -150,7 +91,7 @@ const OnlinePayment = () => {
       console.error('Status check error:', error)
       return false
     }
-  }, [router, selectedService, selectedCare, selectedShoe, selectedServiceData])
+  }, [router, selectedService, selectedCare, selectedShoe, saveTransaction])
 
   const startPolling = useCallback((intentId: string) => {
     // Clear any existing intervals
@@ -274,7 +215,7 @@ const OnlinePayment = () => {
   }
 
   // TEST ONLY: Simulate successful payment
-  const handleTestSuccess = async () => {
+  const handleTestSuccess = useCallback(async () => {
     console.log('🧪 TEST: Simulating payment success')
     // Stop polling
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
@@ -296,39 +237,12 @@ const OnlinePayment = () => {
       }
     }
 
-    // 🧪 TEST: Save transaction to database (same as real payment)
-    try {
-      console.log('🧪 TEST: Saving transaction to database...')
-      // Get device ID from localStorage (set by PairingWrapper)
-      const deviceId = localStorage.getItem('kiosk_device_id')
-
-      const transactionResponse = await fetch('/api/transaction/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentMethod: 'Online',
-          serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1),
-          shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
-          careType: selectedService === 'package' ? 'Auto' : selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
-          deviceId, // Link transaction to this kiosk
-        }),
-      })
-
-      const transactionData = await transactionResponse.json()
-
-      if (transactionData.success) {
-        console.log('🧪 TEST: ✅ Transaction saved:', transactionData.transaction.transactionId)
-      } else {
-        console.error('🧪 TEST: ❌ Failed to save transaction:', transactionData.error)
-      }
-    } catch (error) {
-      console.error('🧪 TEST: ❌ Transaction save error:', error)
-      // Continue to success page even if transaction save fails
-    }
+    // TEST: Save transaction to database (same as real payment)
+    await saveTransaction()
 
     // Redirect immediately to success page with service and care
     router.push(`/kiosk/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
-  }
+  }, [paymentIntentId, saveTransaction, router, selectedShoe, selectedService, selectedCare])
 
   // Loading state - rendered without Card wrapper
   if (paymentState === 'idle' || paymentState === 'creating') {
@@ -387,7 +301,7 @@ const OnlinePayment = () => {
                   <div className="space-y-2">
                     <div>
                       <h3 className="font-bold text-xl text-gray-800">{selectedServiceData.name}</h3>
-                      <p className="text-md text-gray-600">{selectedServiceData.description}</p>
+                      <p className="text-md text-gray-600">{serviceDescriptions[selectedServiceData.id] ?? ''}</p>
                     </div>
                     <div className="pt-2 border-t border-gray-200">
                       <p className="text-4xl font-bold text-blue-600">₱{selectedServiceData.price}</p>

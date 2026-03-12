@@ -8,8 +8,7 @@ import Image from 'next/image'
 import { Suspense } from 'react'
 import { BackButton } from '@/components/kiosk/BackButton'
 import { StepIndicator } from '@/components/kiosk/StepIndicator'
-
-const CUSTOM_STEPS = ['Mode', 'Shoe Type', 'Service', 'Care Type', 'Payment']
+import { CUSTOM_STEPS } from '@/lib/kiosk-constants'
 
 const careTypes = [
   { id: 'gentle', name: 'Gentle', image: '/Gentle3D.webp' },
