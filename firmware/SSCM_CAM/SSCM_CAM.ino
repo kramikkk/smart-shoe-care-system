@@ -1,35 +1,11 @@
-/* Edge Impulse Arduino examples
- * Copyright (c) 2022 EdgeImpulse Inc.
+/*
+ * SSCM CAM Firmware — Gemini HTTP Classification Edition
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * Revised for SSCM 3-way binding:
- *   - ESP-NOW only (no WebSocket on CAM)
- *   - GroupToken-based pairing (automatic, no SETPAIR command needed)
- *   - MAC-lock after first valid pairing broadcast
- *   - Confidence threshold (0.55)
- *   - Optional HTTP MJPEG streaming at /stream and /snapshot
+ * Replaces Edge Impulse local inference with HTTP POST to backend.
+ * CAM captures a JPEG and POSTs it to /api/device/[mainId]/classify.
+ * Backend calls Gemini and broadcasts the result via WebSocket.
+ * CAM ACKs the main board with CAM_STATUS_API_HANDLED (6) via ESP-NOW.
  */
-
-/* Includes ---------------------------------------------------------------- */
-#include <shoe_classification_inferencing.h>
-#include "edge-impulse-sdk/dsp/image/image.hpp"
 
 #include "esp_camera.h"
 #include <WiFi.h>
@@ -37,6 +13,7 @@
 #include <Preferences.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
+#include <HTTPClient.h>
 
 // Select camera model
 #define CAMERA_MODEL_ESP32S3_EYE // Has PSRAM
@@ -74,8 +51,8 @@ typedef struct {
     char     deviceId[24];   // Main board device ID (e.g., SSCM-ABC123)
     char     ssid[32];       // WiFi SSID for CAM to connect (streaming)
     char     password[64];   // WiFi password
-    char     wsHost[64];     // Backend host (informational only)
-    uint16_t wsPort;         // Backend port (informational only)
+    char     wsHost[64];     // Backend host
+    uint16_t wsPort;         // Backend port
 } PairingBroadcast;          // ~197 bytes — within 250-byte ESP-NOW limit
 
 // Pairing acknowledgment from CAM to main board
@@ -89,8 +66,8 @@ typedef struct {
 typedef struct {
     uint8_t type;          // Message type constant
     uint8_t status;        // Status code constant
-    char    shoeType[32];  // "sneaker", "leather", etc.
-    float   confidence;    // 0.0 - 1.0
+    char    shoeType[32];  // unused in Gemini path
+    float   confidence;    // unused in Gemini path
 } CamMessage;              // 38 bytes — well within 250-byte limit
 
 // Message type constants
@@ -111,9 +88,7 @@ typedef struct {
 #define CAM_STATUS_BUSY           3
 #define CAM_STATUS_NOT_READY      4
 #define CAM_STATUS_LOW_CONFIDENCE 5
-
-// Minimum confidence to accept a classification result
-#define CONFIDENCE_THRESHOLD 0.55f
+#define CAM_STATUS_API_HANDLED    6  // Gemini path — backend handles result broadcast
 
 /* ===================== PREFERENCES ===================== */
 Preferences prefs;
@@ -129,7 +104,7 @@ String  storedGroupToken = "";
 /* ===================== PAIRING STATE ===================== */
 bool          pairingAckPending  = false;
 unsigned long pairingTime        = 0;
-const unsigned long PAIRING_ACK_TIMEOUT_MS = 15000; // send ack after 15s even without WiFi
+const unsigned long PAIRING_ACK_TIMEOUT_MS = 15000;
 
 /* ===================== WIFI STATE ===================== */
 bool          wifiConnected       = false;
@@ -144,24 +119,12 @@ bool          classificationInProgress = false;
 /* ===================== FACTORY RESET STATE ===================== */
 volatile bool factoryResetRequested = false;
 
-/* ===================== CLASSIFICATION SETTINGS ===================== */
-#define NUM_SCANS 5
-#define SCAN_DELAY_MS 300
-#define CLASSIFICATION_TIMEOUT_MS 15000
+/* ===================== CAMERA INIT STATE ===================== */
+static bool is_initialised = false;
 
 /* ===================== HTTP SERVER ===================== */
 WebServer httpServer(80);
 #define PART_BOUNDARY "frameboundary"
-
-/* Constant defines -------------------------------------------------------- */
-#define EI_CAMERA_RAW_FRAME_BUFFER_COLS           320
-#define EI_CAMERA_RAW_FRAME_BUFFER_ROWS           240
-#define EI_CAMERA_FRAME_BYTE_SIZE                 3
-
-/* Private variables ------------------------------------------------------- */
-static bool debug_nn    = false;
-static bool is_initialised = false;
-uint8_t *snapshot_buf; // points to the output of the capture
 
 static camera_config_t camera_config = {
     .pin_pwdn  = PWDN_GPIO_NUM,
@@ -187,19 +150,13 @@ static camera_config_t camera_config = {
     .ledc_channel = LEDC_CHANNEL_0,
 
     .pixel_format = PIXFORMAT_JPEG,
-    .frame_size   = FRAMESIZE_QVGA, // 320x240
+    .frame_size   = FRAMESIZE_XGA,  // 1024x768 — stable, 3x more detail than SVGA, no overflow
 
-    .jpeg_quality = 12,
+    .jpeg_quality = 6,              // 0=best quality; 6 is sharp without bloating file size
     .fb_count     = 1,
     .fb_location  = CAMERA_FB_IN_PSRAM,
     .grab_mode    = CAMERA_GRAB_WHEN_EMPTY,
 };
-
-/* Function declarations --------------------------------------------------- */
-bool   ei_camera_init(void);
-void   ei_camera_deinit(void);
-bool   ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf);
-static int ei_camera_get_data(size_t offset, size_t length, float *out_ptr);
 
 /* ===================== CAM DEVICE ID ===================== */
 String generateCamOwnDeviceId() {
@@ -289,7 +246,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
 
         Serial.println("\n[ESP-NOW] Pairing request from: " + String(pb.deviceId));
 
-        // If already paired to a DIFFERENT board, ignore
         if (mainBoardPaired) {
             bool sameBoard = (memcmp(senderMac, mainBoardMac, 6) == 0);
             if (!sameBoard) {
@@ -299,7 +255,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             Serial.println("[ESP-NOW] Re-pair from known board — updating credentials");
         }
 
-        // Validate groupToken: must be exactly 8 uppercase hex characters
         String token = String(pb.groupToken);
         token.toUpperCase();
         if (token.length() != 8) {
@@ -319,7 +274,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             return;
         }
 
-        // Store credentials in NVS
         prefs.putString("ssid",        String(pb.ssid));
         prefs.putString("pass",        String(pb.password));
         prefs.putString("wsHost",      String(pb.wsHost));
@@ -329,7 +283,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
 
         storedGroupToken = token;
 
-        // MAC-lock: only accept future messages from this board
         memcpy(mainBoardMac, senderMac, 6);
         prefs.putBytes("mainMac", mainBoardMac, 6);
         mainBoardPaired = true;
@@ -340,7 +293,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             mainBoardMac[0], mainBoardMac[1], mainBoardMac[2],
             mainBoardMac[3], mainBoardMac[4], mainBoardMac[5]);
 
-        // Start non-blocking WiFi connection
         String ssid = String(pb.ssid);
         String pass = String(pb.password);
         if (ssid.length() > 0) {
@@ -349,7 +301,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             Serial.println("[WiFi] Connecting to: " + ssid);
         }
 
-        // Schedule PairingAck — sent from main loop once WiFi connects (or timeout)
         pairingAckPending = true;
         pairingTime       = millis();
 
@@ -386,7 +337,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             } else if (classificationInProgress) {
                 sendCamMessage(CAM_MSG_CLASSIFY_RESULT, CAM_STATUS_BUSY, "", 0.0f);
             } else {
-                // Set flag — classification runs from main loop for safety
                 classificationRequested = true;
             }
             break;
@@ -400,7 +350,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
 
         case CAM_MSG_LED_ENABLE:
             Serial.println("[ESP-NOW] LED_ENABLE (classification lighting)");
-            // No built-in LED on ESP32-S3 Eye for this purpose
             break;
 
         case CAM_MSG_LED_DISABLE:
@@ -408,7 +357,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             break;
 
         case CAM_MSG_FACTORY_RESET:
-            // Set flag — handled from main loop (unsafe to call prefs/restart from WiFi task)
             Serial.println("[ESP-NOW] FACTORY_RESET received — will reset after callback");
             factoryResetRequested = true;
             break;
@@ -424,7 +372,6 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
 void handleStream() {
     WiFiClient client = httpServer.client();
 
-    // Send multipart stream header
     client.print("HTTP/1.1 200 OK\r\n");
     client.print("Content-Type: multipart/x-mixed-replace; boundary=" PART_BOUNDARY "\r\n");
     client.print("Cache-Control: no-cache\r\n");
@@ -434,10 +381,8 @@ void handleStream() {
     int frameCount = 0;
 
     while (client.connected()) {
-        // Yield to other tasks (WiFi, ESP-NOW)
         yield();
 
-        // If classification requested, break so loop() can handle it
         if (classificationRequested) {
             Serial.println("[Stream] Classification requested — ending stream");
             break;
@@ -449,12 +394,9 @@ void handleStream() {
             continue;
         }
 
-        // Send frame boundary
         client.print("\r\n--" PART_BOUNDARY "\r\n");
         client.print("Content-Type: image/jpeg\r\n");
         client.printf("Content-Length: %u\r\n\r\n", fb->len);
-
-        // Write JPEG data directly
         client.write(fb->buf, fb->len);
 
         esp_camera_fb_return(fb);
@@ -514,8 +456,6 @@ void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
     wifiConnected = true;
     camIp = WiFi.localIP().toString();
     Serial.println("[WiFi] Got IP: " + camIp);
-    // HTTP server and PairingAck will be started from main loop
-    // (safer to do from Arduino task, not WiFi event task)
 }
 
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -524,7 +464,6 @@ void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
     camIp             = "";
     Serial.println("[WiFi] Disconnected — reconnecting...");
 
-    // Reconnect using stored credentials
     String ssid = prefs.getString("ssid", "");
     String pass = prefs.getString("pass", "");
     if (ssid.length() > 0) {
@@ -533,98 +472,72 @@ void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
     }
 }
 
-/* ===================== CLASSIFICATION ===================== */
+/* ===================== CLASSIFICATION — Gemini HTTP path ===================== */
 
-void runClassificationAndRespond() {
-    Serial.println("\n=== Starting Classification (" + String(NUM_SCANS) + " scans) ===");
+void captureAndPostToBackend() {
+    Serial.println("\n=== Capturing JPEG for Gemini classification ===");
 
-    float classConfidences[EI_CLASSIFIER_LABEL_COUNT] = {0};
-    int   successfulScans = 0;
-    unsigned long startTime = millis();
-
-    for (int scan = 0; scan < NUM_SCANS; scan++) {
-        if (millis() - startTime >= CLASSIFICATION_TIMEOUT_MS) {
-            Serial.println("[Classification] Timeout");
-            sendCamMessage(CAM_MSG_CLASSIFY_RESULT, CAM_STATUS_TIMEOUT, "", 0.0f);
-            return;
-        }
-
-        Serial.println("Scan " + String(scan + 1) + "/" + String(NUM_SCANS));
-
-        snapshot_buf = (uint8_t*)malloc(
-            EI_CAMERA_RAW_FRAME_BUFFER_COLS *
-            EI_CAMERA_RAW_FRAME_BUFFER_ROWS *
-            EI_CAMERA_FRAME_BYTE_SIZE);
-
-        if (!snapshot_buf) {
-            ei_printf("ERR: Failed to allocate snapshot buffer!\n");
-            continue;
-        }
-
-        ei::signal_t signal;
-        signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT;
-        signal.get_data     = &ei_camera_get_data;
-
-        if (!ei_camera_capture(EI_CLASSIFIER_INPUT_WIDTH, EI_CLASSIFIER_INPUT_HEIGHT, snapshot_buf)) {
-            ei_printf("Failed to capture image\r\n");
-            free(snapshot_buf);
-            continue;
-        }
-
-        ei_impulse_result_t result = {0};
-        EI_IMPULSE_ERROR err = run_classifier(&signal, &result, debug_nn);
-
-        if (err != EI_IMPULSE_OK) {
-            ei_printf("ERR: Failed to run classifier (%d)\n", err);
-            free(snapshot_buf);
-            continue;
-        }
-
-        successfulScans++;
-        for (uint16_t i = 0; i < EI_CLASSIFIER_LABEL_COUNT; i++) {
-            classConfidences[i] += result.classification[i].value;
-            Serial.println("  " + String(ei_classifier_inferencing_categories[i]) +
-                           ": " + String(result.classification[i].value, 4));
-        }
-
-        free(snapshot_buf);
-
-        if (scan < NUM_SCANS - 1) delay(SCAN_DELAY_MS);
+    if (!is_initialised) {
+        Serial.println("[Classify] Camera not initialized");
+        sendCamMessage(CAM_MSG_CLASSIFY_RESULT, CAM_STATUS_NOT_READY, "", 0.0f);
+        return;
     }
 
-    Serial.println("Successful scans: " + String(successfulScans) + "/" + String(NUM_SCANS));
+    // Drain all buffered frames (fb_count=2) so we capture a truly fresh frame
+    for (int i = 0; i < 3; i++) {
+        camera_fb_t* stale = esp_camera_fb_get();
+        if (stale) esp_camera_fb_return(stale);
+    }
+    delay(500); // Let AEC settle — extra time needed with bright LED strip in chamber
 
-    if (successfulScans == 0) {
+    // Capture the actual frame
+    camera_fb_t* fb = esp_camera_fb_get();
+    if (!fb) {
+        Serial.println("[Classify] Camera capture failed");
         sendCamMessage(CAM_MSG_CLASSIFY_RESULT, CAM_STATUS_ERROR, "", 0.0f);
         return;
     }
 
-    // Find class with highest average confidence
-    float highestAvg = 0.0f;
-    int   bestIndex  = 0;
-    Serial.println("\nAverage confidences:");
-    for (uint16_t i = 0; i < EI_CLASSIFIER_LABEL_COUNT; i++) {
-        float avg = classConfidences[i] / successfulScans;
-        Serial.println("  " + String(ei_classifier_inferencing_categories[i]) +
-                       ": " + String(avg, 4));
-        if (avg > highestAvg) { highestAvg = avg; bestIndex = i; }
-    }
+    Serial.printf("[Classify] Captured %u bytes\n", fb->len);
 
-    String bestLabel = String(ei_classifier_inferencing_categories[bestIndex]);
-    Serial.println("\n>>> RESULT: " + bestLabel + " (" + String(highestAvg * 100, 1) + "%)");
+    // Read backend connection info from prefs
+    String wsHost   = prefs.getString("wsHost", "");
+    uint16_t wsPort = prefs.getUInt("wsPort", 3000);
+    String mainId   = prefs.getString("mainId", "");
+    String token    = storedGroupToken;
 
-    // Apply confidence threshold
-    if (highestAvg < CONFIDENCE_THRESHOLD) {
-        Serial.println("[Classification] LOW CONFIDENCE (" + String(highestAvg * 100, 1) +
-                       "% < " + String(CONFIDENCE_THRESHOLD * 100, 0) + "%)");
-        sendCamMessage(CAM_MSG_CLASSIFY_RESULT, CAM_STATUS_LOW_CONFIDENCE,
-                       bestLabel.c_str(), highestAvg);
+    if (wsHost.isEmpty() || mainId.isEmpty() || token.isEmpty()) {
+        Serial.println("[Classify] Missing prefs (wsHost/mainId/groupToken) — not paired?");
+        esp_camera_fb_return(fb);
+        sendCamMessage(CAM_MSG_CLASSIFY_RESULT, CAM_STATUS_ERROR, "", 0.0f);
         return;
     }
 
-    sendCamMessage(CAM_MSG_CLASSIFY_RESULT, CAM_STATUS_OK,
-                   bestLabel.c_str(), highestAvg);
-    Serial.println("=== Classification Complete ===\n");
+    String url = "http://" + wsHost + ":" + String(wsPort) +
+                 "/api/device/" + mainId + "/classify";
+    Serial.println("[Classify] POST → " + url);
+
+    HTTPClient http;
+    http.begin(url);
+    http.addHeader("Content-Type", "image/jpeg");
+    http.addHeader("X-Group-Token", token);
+    http.setTimeout(20000); // 20s — Gemini can be slow on free tier
+
+    int httpCode = http.sendRequest("POST", fb->buf, fb->len);
+    esp_camera_fb_return(fb); // Free buffer immediately after POST
+
+    if (httpCode > 0) {
+        Serial.printf("[Classify] HTTP %d\n", httpCode);
+    } else {
+        Serial.println("[Classify] HTTP request failed: " + http.errorToString(httpCode));
+    }
+
+    http.end();
+
+    // ACK the main board regardless of HTTP outcome
+    // Backend is responsible for broadcasting the result or error to the tablet
+    sendCamMessage(CAM_MSG_CLASSIFY_RESULT, CAM_STATUS_API_HANDLED, "", 0.0f);
+    Serial.println("=== Classification POST complete — backend handles result ===\n");
 }
 
 /* ===================== FACTORY RESET ===================== */
@@ -636,6 +549,79 @@ void factoryReset() {
     ESP.restart();
 }
 
+/* ===================== CAMERA INIT ===================== */
+
+bool camera_init(void) {
+    if (is_initialised) return true;
+
+    esp_err_t err = esp_camera_init(&camera_config);
+    if (err != ESP_OK) {
+        Serial.printf("Camera init failed with error 0x%x\n", err);
+        return false;
+    }
+
+    sensor_t* s = esp_camera_sensor_get();
+    Serial.printf("[Camera] Sensor PID: 0x%04X\n", s->id.PID);
+
+    // OV5640 — 5MP sensor on Aideepen ESP32-S3-CAM
+    if (s->id.PID == OV5640_PID) {
+        Serial.println("[Camera] OV5640 detected");
+        s->set_vflip(s, 1);             // Flip vertically (camera mounted upside down)
+        s->set_hmirror(s, 0);
+
+        // Auto exposure — slight compensation for bright LED strip
+        s->set_exposure_ctrl(s, 1);     // Auto exposure ON
+        s->set_aec2(s, 0);              // Disable night-mode AEC
+        s->set_ae_level(s, -1);         // Slight underexposure to avoid LED blowout
+        s->set_gain_ctrl(s, 1);         // Auto gain ON
+        s->set_gainceiling(s, GAINCEILING_4X);
+
+        // White balance
+        s->set_whitebal(s, 1);
+        s->set_awb_gain(s, 1);
+        s->set_wb_mode(s, 0);           // Auto WB
+
+        // Image quality — balanced, not aggressive
+        s->set_brightness(s, 0);
+        s->set_contrast(s, 1);
+        s->set_saturation(s, 1);
+        s->set_sharpness(s, 2);
+        s->set_lenc(s, 1);              // Lens correction
+        s->set_bpc(s, 1);
+        s->set_wpc(s, 1);
+        s->set_raw_gma(s, 1);
+    }
+    // OV3660 fallback
+    else if (s->id.PID == OV3660_PID) {
+        s->set_vflip(s, 1);
+        s->set_brightness(s, 0);
+        s->set_ae_level(s, -1);
+        s->set_aec2(s, 0);
+        s->set_contrast(s, 1);
+        s->set_saturation(s, 1);
+        s->set_sharpness(s, 2);
+        s->set_lenc(s, 1);
+        s->set_bpc(s, 1);
+        s->set_wpc(s, 1);
+    }
+    // Generic OV2640 or unknown fallback
+    else {
+        s->set_vflip(s, 1);
+        s->set_brightness(s, 0);
+        s->set_ae_level(s, -1);
+        s->set_aec2(s, 0);
+        s->set_contrast(s, 1);
+        s->set_saturation(s, 1);
+        s->set_sharpness(s, 2);
+        s->set_lenc(s, 1);
+        s->set_bpc(s, 1);
+        s->set_wpc(s, 1);
+    }
+
+    is_initialised = true;
+    return true;
+}
+
 /* ===================== SETUP ===================== */
 
 void setup() {
@@ -644,7 +630,7 @@ void setup() {
 
     Serial.println("\n=================================");
     Serial.println("  ESP32-S3 CAM Shoe Classifier");
-    Serial.println("  ESP-NOW + HTTP Stream Edition");
+    Serial.println("  Gemini HTTP Edition");
     Serial.println("=================================\n");
 
     prefs.begin("cam", false);
@@ -661,11 +647,9 @@ void setup() {
         Serial.println("[Setup] BOOT button released — factory reset cancelled");
     }
 
-    // Generate CAM's own permanent device ID
     camOwnDeviceId = generateCamOwnDeviceId();
     Serial.println("[Startup] CAM Device ID: " + camOwnDeviceId);
 
-    // Load stored pairing state
     size_t macLen = prefs.getBytes("mainMac", mainBoardMac, 6);
     bool macValid = (macLen == 6 &&
         !(mainBoardMac[0] == 0x00 && mainBoardMac[1] == 0x00 &&
@@ -690,17 +674,14 @@ void setup() {
         Serial.println("[Startup] GroupToken: " + storedGroupToken);
     }
 
-    // Register WiFi event handlers (runs in WiFi task, so keep them lightweight)
     WiFi.onEvent(onWiFiConnected,    ARDUINO_EVENT_WIFI_STA_CONNECTED);
     WiFi.onEvent(onWiFiGotIP,        ARDUINO_EVENT_WIFI_STA_GOT_IP);
     WiFi.onEvent(onWiFiDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 
-    // STA mode required for ESP-NOW + WiFi coexistence
     WiFi.mode(WIFI_STA);
     delay(200);
     Serial.println("[WiFi] Mode: STA | MAC: " + WiFi.macAddress());
 
-    // Initialize ESP-NOW
     if (esp_now_init() != ESP_OK) {
         Serial.println("[ESP-NOW] Init FAILED!");
     } else {
@@ -709,7 +690,6 @@ void setup() {
         Serial.println("[ESP-NOW] Initialized — listening for pairing broadcast");
     }
 
-    // If already paired, add main board as ESP-NOW peer for sending
     if (mainBoardPaired) {
         esp_now_peer_info_t peer;
         memset(&peer, 0, sizeof(peer));
@@ -720,7 +700,6 @@ void setup() {
         Serial.println("[ESP-NOW] Added main board as peer");
     }
 
-    // Start WiFi if credentials are available
     String ssid = prefs.getString("ssid", "");
     String pass = prefs.getString("pass", "");
     if (ssid.length() > 0) {
@@ -731,15 +710,14 @@ void setup() {
         Serial.println("[WiFi] No credentials — waiting for pairing broadcast");
     }
 
-    // Initialize camera
-    if (!ei_camera_init()) {
+    if (!camera_init()) {
         Serial.println("[Camera] Init FAILED");
     } else {
         Serial.println("[Camera] Initialized");
     }
 
     Serial.println("\n--- Serial Commands ---");
-    Serial.println("CLASSIFY      - Run local classification test");
+    Serial.println("CLASSIFY      - Capture and POST to backend (Gemini)");
     Serial.println("STATUS        - Show device status");
     Serial.println("UNPAIR        - Clear MAC pairing and groupToken");
     Serial.println("CLEAR         - Clear all stored data (restart required)");
@@ -761,7 +739,6 @@ void loop() {
     }
 
     // --- Send pending PairingAck ---
-    // Send immediately once WiFi is up, or after timeout (without IP)
     if (pairingAckPending) {
         bool wifiReady  = wifiConnected && camIp.length() > 0;
         bool timedOut   = (millis() - pairingTime) >= PAIRING_ACK_TIMEOUT_MS;
@@ -775,7 +752,7 @@ void loop() {
         }
     }
 
-    // --- Factory reset (deferred from ESP-NOW callback — unsafe to run in WiFi task) ---
+    // --- Factory reset ---
     if (factoryResetRequested) {
         factoryResetRequested = false;
         factoryReset();
@@ -785,7 +762,7 @@ void loop() {
     if (classificationRequested && !classificationInProgress) {
         classificationRequested  = false;
         classificationInProgress = true;
-        runClassificationAndRespond();
+        captureAndPostToBackend();
         classificationInProgress = false;
     }
 
@@ -801,7 +778,7 @@ void loop() {
                 Serial.println("[Classify] Already in progress");
             } else {
                 classificationInProgress = true;
-                runClassificationAndRespond();
+                captureAndPostToBackend();
                 classificationInProgress = false;
             }
         }
@@ -842,97 +819,3 @@ void loop() {
 
     delay(5);
 }
-
-/* ===================================================================
- * EDGE IMPULSE CAMERA FUNCTIONS (unchanged from original)
- * =================================================================== */
-
-bool ei_camera_init(void) {
-    if (is_initialised) return true;
-
-    esp_err_t err = esp_camera_init(&camera_config);
-    if (err != ESP_OK) {
-        Serial.printf("Camera init failed with error 0x%x\n", err);
-        return false;
-    }
-
-    sensor_t* s = esp_camera_sensor_get();
-    if (s->id.PID == OV3660_PID) {
-        s->set_brightness(s, 1);
-        s->set_saturation(s, 0);
-    }
-    s->set_vflip(s, 1);  // Flip vertically (camera mounted upside down)
-
-    is_initialised = true;
-    return true;
-}
-
-void ei_camera_deinit(void) {
-    esp_err_t err = esp_camera_deinit();
-    if (err != ESP_OK) {
-        ei_printf("Camera deinit failed\n");
-        return;
-    }
-    is_initialised = false;
-}
-
-bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf) {
-    bool do_resize = false;
-
-    if (!is_initialised) {
-        ei_printf("ERR: Camera is not initialized\r\n");
-        return false;
-    }
-
-    camera_fb_t* fb = esp_camera_fb_get();
-    if (!fb) {
-        ei_printf("Camera capture failed\n");
-        return false;
-    }
-
-    bool converted = fmt2rgb888(fb->buf, fb->len, PIXFORMAT_JPEG, snapshot_buf);
-    esp_camera_fb_return(fb);
-
-    if (!converted) {
-        ei_printf("Conversion failed\n");
-        return false;
-    }
-
-    if ((img_width != EI_CAMERA_RAW_FRAME_BUFFER_COLS) ||
-        (img_height != EI_CAMERA_RAW_FRAME_BUFFER_ROWS)) {
-        do_resize = true;
-    }
-
-    if (do_resize) {
-        ei::image::processing::crop_and_interpolate_rgb888(
-            out_buf,
-            EI_CAMERA_RAW_FRAME_BUFFER_COLS,
-            EI_CAMERA_RAW_FRAME_BUFFER_ROWS,
-            out_buf,
-            img_width,
-            img_height);
-    }
-
-    return true;
-}
-
-static int ei_camera_get_data(size_t offset, size_t length, float *out_ptr) {
-    size_t pixel_ix   = offset * 3;
-    size_t pixels_left = length;
-    size_t out_ptr_ix  = 0;
-
-    while (pixels_left != 0) {
-        // Swap BGR → RGB
-        out_ptr[out_ptr_ix] = (snapshot_buf[pixel_ix + 2] << 16) +
-                              (snapshot_buf[pixel_ix + 1] << 8)  +
-                               snapshot_buf[pixel_ix];
-        out_ptr_ix++;
-        pixel_ix    += 3;
-        pixels_left--;
-    }
-    return 0;
-}
-
-#if !defined(EI_CLASSIFIER_SENSOR) || EI_CLASSIFIER_SENSOR != EI_CLASSIFIER_SENSOR_CAMERA
-#error "Invalid model for current sensor"
-#endif

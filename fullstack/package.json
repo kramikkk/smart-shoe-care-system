@@ -8,6 +8,7 @@
     "start": "NODE_ENV=production tsx server.ts"
   },
   "dependencies": {
+    "@google/genai": "^1.44.0",
     "@prisma/client": "^6.18.0",
     "@prisma/extension-accelerate": "^2.0.2",
     "@radix-ui/react-avatar": "^1.1.10",

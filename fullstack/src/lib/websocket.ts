@@ -466,3 +466,28 @@ export function broadcastDeviceUpdate(deviceId: string, data: {
     data
   })
 }
+
+// Broadcast classification result to all subscribed clients (tablets)
+export function broadcastClassificationResult(
+  deviceId: string,
+  result: string,
+  confidence: number,
+  subCategory: string = ''
+) {
+  broadcastToDevice(deviceId, {
+    type: 'classification-result',
+    deviceId,
+    result,
+    confidence,
+    subCategory,
+  })
+}
+
+// Broadcast classification error to all subscribed clients (tablets)
+export function broadcastClassificationError(deviceId: string, error: string) {
+  broadcastToDevice(deviceId, {
+    type: 'classification-error',
+    deviceId,
+    error,
+  })
+}
