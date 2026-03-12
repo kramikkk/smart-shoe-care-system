@@ -28,6 +28,14 @@ const serviceNames = {
   package: 'Package',
 }
 
+// System default prices (seeded values)
+const FIRMWARE_PRICE_DEFAULTS: Record<string, number> = {
+  cleaning:    45,
+  drying:      25,
+  sterilizing: 25,
+  package:     100,
+}
+
 type ServicePricingCardProps = {
   pricing: ServicePricing[]
   editedPrices: Record<string, number | string>
@@ -91,7 +99,7 @@ export function ServicePricingCard({
                       {serviceNames[item.serviceType as keyof typeof serviceNames]}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Default: ₱{item.price.toFixed(2)}
+                      Default: ₱{(FIRMWARE_PRICE_DEFAULTS[item.serviceType] ?? 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
