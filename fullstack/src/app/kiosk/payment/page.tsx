@@ -1,30 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent, ItemHeader } from '@/components/ui/item'
 import Image from 'next/image'
 import { BackButton } from '@/components/kiosk/BackButton'
 import { StepIndicator } from '@/components/kiosk/StepIndicator'
-
-const CUSTOM_STEPS = ['Mode', 'Shoe Type', 'Service', 'Care Type', 'Payment']
-const AUTO_STEPS = ['Mode', 'Scan Shoes', 'Payment']
-
-type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
-
-interface Service {
-  id: ServiceType
-  name: string
-  price: number
-}
-
-const defaultServices: Service[] = [
-  { id: 'cleaning',    name: 'Cleaning',    price: 45 },
-  { id: 'drying',      name: 'Drying',      price: 45 },
-  { id: 'sterilizing', name: 'Sterilizing', price: 25 },
-  { id: 'package',     name: 'Package',     price: 100 }
-]
+import { CUSTOM_STEPS, AUTO_STEPS, Service, ServiceType } from '@/lib/kiosk-constants'
+import { usePricing } from '@/hooks/usePricing'
 
 const paymentMethods = [
   {
@@ -49,29 +33,7 @@ const Payment = () => {
   const care = searchParams.get('care')
 
   const [selected, setSelected] = useState<string | null>(null)
-  const [services, setServices] = useState<Service[]>(defaultServices)
-
-  useEffect(() => {
-    const fetchPricing = async () => {
-      try {
-        const deviceId = localStorage.getItem('kiosk_device_id')
-        const deviceParam = deviceId ? `?deviceId=${deviceId}` : ''
-        const response = await fetch(`/api/pricing${deviceParam}`)
-        const data = await response.json()
-        if (data.success) {
-          const fetchedServices: Service[] = data.pricing.map((item: any) => ({
-            id: item.serviceType as ServiceType,
-            name: item.serviceType.charAt(0).toUpperCase() + item.serviceType.slice(1),
-            price: item.price,
-          }))
-          setServices(fetchedServices)
-        }
-      } catch {
-        // use defaults
-      }
-    }
-    fetchPricing()
-  }, [])
+  const { services } = usePricing()
 
   const serviceDetails = services.find(s => s.id === service) || services.find(s => s.id === 'package')!
 

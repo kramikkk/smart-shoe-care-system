@@ -3,41 +3,13 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Item, ItemContent } from '@/components/ui/item'
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { BackButton } from '@/components/kiosk/BackButton'
-
-type ServiceType = 'cleaning' | 'drying' | 'sterilizing' | 'package'
-
-interface Service {
-  id: ServiceType
-  name: string
-  price: number
-}
-
-const defaultServices: Service[] = [
-  {
-    id: 'cleaning',
-    name: 'Cleaning',
-    price: 45
-  },
-  {
-    id: 'drying',
-    name: 'Drying',
-    price: 45
-  },
-  {
-    id: 'sterilizing',
-    name: 'Sterilizing',
-    price: 25
-  },
-  {
-    id: 'package',
-    name: 'Package',
-    price: 100
-  }
-]
+import { DEFAULT_SERVICES, Service, ServiceType } from '@/lib/kiosk-constants'
+import { usePricing } from '@/hooks/usePricing'
+import { useWebSocket } from '@/contexts/WebSocketContext'
 
 const Offline = () => {
   const searchParams = useSearchParams()
@@ -46,35 +18,7 @@ const Offline = () => {
   const service = searchParams.get('service') as ServiceType || 'package'
   const care = searchParams.get('care') || 'normal'
 
-  // State for services with default fallback
-  const [services, setServices] = useState<Service[]>(defaultServices)
-
-  // Fetch pricing from database
-  useEffect(() => {
-    const fetchPricing = async () => {
-      try {
-        // Get device ID from localStorage (set by PairingWrapper)
-        const deviceId = localStorage.getItem('kiosk_device_id')
-        const deviceParam = deviceId ? `?deviceId=${deviceId}` : ''
-
-        const response = await fetch(`/api/pricing${deviceParam}`)
-        const data = await response.json()
-
-        if (data.success) {
-          const fetchedServices: Service[] = data.pricing.map((item: any) => ({
-            id: item.serviceType as ServiceType,
-            name: item.serviceType.charAt(0).toUpperCase() + item.serviceType.slice(1),
-            price: item.price,
-          }))
-          setServices(fetchedServices)
-        }
-      } catch {
-        // use defaults
-      }
-    }
-
-    fetchPricing()
-  }, [])
+  const { services } = usePricing()
 
   // Get the service details based on the service parameter
   const selectedService = useMemo(() => {
@@ -86,80 +30,49 @@ const Offline = () => {
   const [amountInserted, setAmountInserted] = useState(0)
   const amountRemaining = Math.max(0, amountDue - amountInserted)
   const [isSaving, setIsSaving] = useState(false)
-  const [wsConnected, setWsConnected] = useState(false)
 
   // Check if payment is complete (amount inserted >= amount due OR amount due is 0)
   const isPaymentComplete = amountDue === 0 || amountInserted >= amountDue
 
-  // WebSocket connection for real-time coin/bill events
+  const { isConnected, sendMessage, onMessage } = useWebSocket()
+
+  // Stable refs for cleanup
+  const sendMessageRef = useRef(sendMessage)
+  const isConnectedRef = useRef(isConnected)
   useEffect(() => {
+    sendMessageRef.current = sendMessage
+    isConnectedRef.current = isConnected
+  }, [sendMessage, isConnected])
+
+  // Enable payment system when connected
+  useEffect(() => {
+    if (!isConnected) return
     const deviceId = localStorage.getItem('kiosk_device_id')
     if (!deviceId) return
+    sendMessage({ type: 'enable-payment', deviceId })
+  }, [isConnected, sendMessage])
 
-    let ws: WebSocket | null = null
-    let isCleanedUp = false
-
-    const connect = () => {
-      if (isCleanedUp) return
-
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(deviceId)}`
-      
-      ws = new WebSocket(wsUrl)
-
-      ws.onopen = () => {
-        if (isCleanedUp) {
-          ws?.close()
-          return
-        }
-        
-        setWsConnected(true)
-        ws!.send(JSON.stringify({ type: 'subscribe', deviceId }))
-        
-        // Enable payment system when entering payment page
-        ws!.send(JSON.stringify({ type: 'enable-payment', deviceId }))
-      }
-
-      ws.onmessage = (event) => {
-        if (isCleanedUp) return
-        
-        try {
-          const message = JSON.parse(event.data)
-          if (message.type === 'coin-inserted') {
-            setAmountInserted((prev) => prev + message.coinValue)
-          } else if (message.type === 'bill-inserted') {
-            setAmountInserted((prev) => prev + message.billValue)
-          }
-        } catch {
-          // ignore malformed messages
-        }
-      }
-
-      ws.onerror = () => {
-        if (!isCleanedUp) setWsConnected(false)
-      }
-
-      ws.onclose = () => {
-        if (!isCleanedUp) setWsConnected(false)
-      }
-    }
-
-    // Small delay to avoid race condition with React StrictMode double-mounting
-    const timer = setTimeout(connect, 100)
-
+  // Disable payment system on unmount
+  useEffect(() => {
     return () => {
-      isCleanedUp = true
-      clearTimeout(timer)
-      
-      // Disable payment system when leaving payment page
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'disable-payment', deviceId }))
-      }
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        ws.close()
+      const deviceId = localStorage.getItem('kiosk_device_id')
+      if (isConnectedRef.current && deviceId) {
+        sendMessageRef.current({ type: 'disable-payment', deviceId })
       }
     }
   }, [])
+
+  // Receive coin/bill events
+  useEffect(() => {
+    const unsubscribe = onMessage((message) => {
+      if (message.type === 'coin-inserted') {
+        setAmountInserted((prev) => prev + message.coinValue)
+      } else if (message.type === 'bill-inserted') {
+        setAmountInserted((prev) => prev + message.billValue)
+      }
+    })
+    return unsubscribe
+  }, [onMessage])
 
   // STEP 3A: Handle payment proceed - save transaction and redirect
   const handleProceed = async () => {
@@ -188,9 +101,12 @@ const Offline = () => {
       })
 
       const data = await response.json()
+      if (!data.success) {
+        console.error('[Offline] Failed to save transaction:', data.error)
+      }
 
-    } catch {
-      // Continue to success page even if transaction save fails
+    } catch (err) {
+      console.error('[Offline] Transaction save network error:', err)
     } finally {
       setIsSaving(false)
       // Redirect to success page
@@ -216,9 +132,9 @@ const Offline = () => {
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 px-2">
-          <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
           <p className="text-xs text-gray-600">
-            {wsConnected ? 'Payment system ready' : 'Connecting...'}
+            {isConnected ? 'Payment system ready' : 'Connecting...'}
           </p>
         </div>
       </div>

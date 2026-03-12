@@ -29,7 +29,7 @@ export default function PaymentSuccess() {
     if (countdown === 0) {
       // Redirect based on shoe, service and care
       if (service === 'package') {
-        router.push(`/kiosk/mode/auto?shoe=${shoe}&care=${care || 'normal'}`);
+        router.push(`/kiosk/mode/auto?shoe=${shoe}`);
       } else if (service) {
         router.push(`/kiosk/mode/custom/progress?shoe=${shoe}&service=${service}&care=${care || 'normal'}`);
       } else {
