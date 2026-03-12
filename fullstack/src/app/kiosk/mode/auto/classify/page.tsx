@@ -6,21 +6,32 @@ import { Camera, Loader2, CheckCircle, AlertCircle, WifiOff } from 'lucide-react
 import { Button } from '@/components/ui/button'
 import { useWebSocket } from '@/contexts/WebSocketContext'
 import { StepIndicator } from '@/components/kiosk/StepIndicator'
+import { BackButton } from '@/components/kiosk/BackButton'
 import { AUTO_STEPS } from '@/lib/kiosk-constants'
 
 type ClassificationState = 'connecting' | 'syncing' | 'classifying' | 'success' | 'error'
+
+type ClassificationResult = {
+  shoeType: 'mesh' | 'canvas' | 'rubber' | 'invalid' | 'no_shoe'
+  confidence: number // -1 = manually selected
+  subCategory?: string
+}
+
+const VALID_SHOE_TYPES = ['mesh', 'canvas', 'rubber'] as const
 
 export default function ClassifyPage() {
   const router = useRouter()
   const { isConnected, deviceId, sendMessage, subscribe, onMessage } = useWebSocket()
   const [state, setState] = useState<ClassificationState>('connecting')
   const [camSynced, setCamSynced] = useState<boolean>(false)
-  const [hasReceivedSyncStatus, setHasReceivedSyncStatus] = useState<boolean>(false) // Track if we've received initial sync status
-  const [result, setResult] = useState<{ shoeType: string; confidence: number } | null>(null)
+  const [hasReceivedSyncStatus, setHasReceivedSyncStatus] = useState<boolean>(false)
+  const [result, setResult] = useState<ClassificationResult | null>(null)
+  const [showPicker, setShowPicker] = useState(false)
   const [error, setError] = useState<string>('')
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const classificationSentRef = useRef<boolean>(false) // Prevent duplicate requests
-  const subscriptionsSetRef = useRef<boolean>(false) // Track if subscriptions are set up
+  const classificationSentRef = useRef<boolean>(false)
+  const subscriptionsSetRef = useRef<boolean>(false)
+  const hasResultRef = useRef<boolean>(false)
   const syncDelayRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -30,45 +41,35 @@ export default function ClassifyPage() {
       return
     }
 
-    // Derive CAM device ID for subscription
     const camDeviceId = deviceId.replace('SSCM-', 'SSCM-CAM-')
 
-    // Wait for WebSocket to be connected
     if (!isConnected) {
       setState('connecting')
       return
     }
 
-    // Set up subscriptions and enable LED only once
     if (!subscriptionsSetRef.current) {
       subscriptionsSetRef.current = true
       console.log('[Classify] WebSocket connected, subscribing to devices')
-
-      // Subscribe to both main device and CAM device
       subscribe(deviceId)
       subscribe(camDeviceId)
     }
 
-    // Always send enable-classification when connected (turns LED white)
-    // This ensures LED is on even if CAM isn't synced yet
     sendMessage({ type: 'enable-classification', deviceId: deviceId })
     console.log('[Classify] Classification LED enabled (white)')
 
-    // Wait for initial sync status before deciding whether to show syncing state
     if (!hasReceivedSyncStatus) {
       setState('connecting')
       console.log('[Classify] Waiting for initial CAM sync status...')
       return
     }
 
-    // Check if CAM is synced via ESP-NOW
     if (!camSynced) {
       setState('syncing')
       console.log('[Classify] CAM not synced yet, waiting...')
       return
     }
 
-    // Prevent duplicate classification requests
     if (classificationSentRef.current) {
       console.log('[Classify] Classification already requested, skipping')
       return
@@ -76,18 +77,13 @@ export default function ClassifyPage() {
 
     console.log('[Classify] CAM synced, starting classification')
 
-    // Small delay then send classification request
     syncDelayRef.current = setTimeout(() => {
       if (isConnected && camSynced && !classificationSentRef.current) {
         classificationSentRef.current = true
         setState('classifying')
-        sendMessage({
-          type: 'start-classification',
-          deviceId: deviceId
-        })
+        sendMessage({ type: 'start-classification', deviceId: deviceId })
         console.log('[Classify] Classification request sent')
 
-        // Set timeout for classification (15 seconds - same as hardware timeout)
         timeoutRef.current = setTimeout(() => {
           setState((currentState) => {
             if (currentState === 'classifying') {
@@ -111,27 +107,22 @@ export default function ClassifyPage() {
     }
   }, [isConnected, deviceId, sendMessage, subscribe, camSynced, hasReceivedSyncStatus])
 
-  // Store refs for cleanup to avoid dependency issues
   const deviceIdRef = useRef(deviceId)
   const sendMessageRef = useRef(sendMessage)
   const isConnectedRef = useRef(isConnected)
 
-  // Keep refs updated
   useEffect(() => {
     deviceIdRef.current = deviceId
     sendMessageRef.current = sendMessage
     isConnectedRef.current = isConnected
   }, [deviceId, sendMessage, isConnected])
 
-  // Separate effect for message handling
   useEffect(() => {
     if (!isConnected || !deviceId) return
 
-    // Register message handler
     const unsubscribe = onMessage((message) => {
       console.log('[Classify] Received:', message)
 
-      // Handle CAM sync status from sensor-data or cam-sync-status messages
       if (message.type === 'sensor-data' && message.camSynced !== undefined) {
         console.log('[Classify] CAM sync status from sensor-data:', message.camSynced)
         setCamSynced(message.camSynced)
@@ -143,21 +134,23 @@ export default function ClassifyPage() {
         setHasReceivedSyncStatus(true)
       }
       else if (message.type === 'classification-result') {
-        // Clear timeout
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
         }
-
+        hasResultRef.current = true
         setResult({
-          shoeType: message.result,
-          confidence: message.confidence
+          shoeType: message.result as ClassificationResult['shoeType'],
+          confidence: message.confidence,
+          subCategory: message.subCategory ?? '',
         })
+        setShowPicker(false)
         setState('success')
       }
       else if (message.type === 'classification-started') {
         console.log('[Classify] Classification started on CAM')
       }
       else if (message.type === 'classification-error') {
+        if (hasResultRef.current) return  // already have a result — ignore late error from main board
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
         }
@@ -175,10 +168,8 @@ export default function ClassifyPage() {
     }
   }, [isConnected, deviceId, onMessage])
 
-  // Cleanup effect for when leaving the page (only runs on unmount)
   useEffect(() => {
     return () => {
-      // Disable classification LED when leaving page
       if (isConnectedRef.current && deviceIdRef.current) {
         sendMessageRef.current({
           type: 'disable-classification',
@@ -187,18 +178,18 @@ export default function ClassifyPage() {
         console.log('[Classify] Classification page exited, LED disabled')
       }
     }
-  }, []) // Empty deps - only runs on mount/unmount
+  }, [])
 
   const handleRetry = () => {
-    // Clear timeout first
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
     }
 
-    // Reset states immediately for instant visual feedback
     classificationSentRef.current = false
+    hasResultRef.current = false
     setError('')
     setResult(null)
+    setShowPicker(false)
 
     if (!deviceId || deviceId === 'No device configured') {
       setError('Device not configured')
@@ -206,25 +197,18 @@ export default function ClassifyPage() {
       return
     }
 
-    // If CAM not synced, go back to syncing state
     if (!camSynced) {
       setState('syncing')
       return
     }
 
-    // Update to classifying state immediately
     setState('classifying')
 
-    // Send classification request immediately
     if (isConnected && camSynced && !classificationSentRef.current) {
       classificationSentRef.current = true
-      sendMessage({
-        type: 'start-classification',
-        deviceId: deviceId
-      })
+      sendMessage({ type: 'start-classification', deviceId: deviceId })
       console.log('[Classify] Classification request sent (retry)')
 
-      // Set timeout for classification (15 seconds)
       timeoutRef.current = setTimeout(() => {
         setState((currentState) => {
           if (currentState === 'classifying') {
@@ -237,9 +221,13 @@ export default function ClassifyPage() {
     }
   }
 
+  const handleManualSelect = (shoeType: 'mesh' | 'canvas' | 'rubber') => {
+    setResult({ shoeType, confidence: -1 })
+    setShowPicker(false)
+  }
+
   const handleProceedToPayment = () => {
-    if (result) {
-      // Auto mode determines care type automatically based on shoe type
+    if (result && VALID_SHOE_TYPES.includes(result.shoeType as typeof VALID_SHOE_TYPES[number])) {
       router.replace(`/kiosk/payment?service=package&shoe=${encodeURIComponent(result.shoeType)}`)
     }
   }
@@ -248,8 +236,11 @@ export default function ClassifyPage() {
     router.push('/kiosk/mode')
   }
 
+  const isValidShoeType = result && VALID_SHOE_TYPES.includes(result.shoeType as typeof VALID_SHOE_TYPES[number])
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
+      <BackButton />
       <StepIndicator steps={AUTO_STEPS} currentStep={1} />
 
       {/* Title */}
@@ -276,9 +267,16 @@ export default function ClassifyPage() {
               <Camera className="w-16 h-16 text-white" />
             </div>
           )}
-          {state === 'success' && (
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
-              <CheckCircle className="w-16 h-16 text-white" />
+          {state === 'success' && result && (
+            <div className={`w-32 h-32 rounded-full flex items-center justify-center ${
+              isValidShoeType
+                ? 'bg-gradient-to-br from-green-500 to-emerald-500'
+                : 'bg-gradient-to-br from-amber-400 to-orange-500'
+            }`}>
+              {isValidShoeType
+                ? <CheckCircle className="w-16 h-16 text-white" />
+                : <AlertCircle className="w-16 h-16 text-white" />
+              }
             </div>
           )}
           {state === 'error' && (
@@ -329,15 +327,68 @@ export default function ClassifyPage() {
               </div>
             </>
           )}
-          {state === 'success' && result && (
+          {state === 'success' && result && !showPicker && (
             <>
-              <h2 className="text-2xl font-bold text-green-600 mb-2">Shoe Detected!</h2>
-              <p className="text-3xl font-bold text-gray-800 capitalize mb-1">
-                {result.shoeType}
-              </p>
-              <p className="text-gray-500">
-                Confidence: {(result.confidence * 100).toFixed(1)}%
-              </p>
+              {isValidShoeType && (
+                <>
+                  <h2 className="text-2xl font-bold text-green-600 mb-2">Shoe Detected!</h2>
+                  <p className="text-3xl font-bold text-gray-800 capitalize mb-1">
+                    {result.shoeType}
+                  </p>
+                  {result.subCategory && (
+                    <p className="text-lg text-gray-600 mb-1">{result.subCategory}</p>
+                  )}
+                  <p className="text-gray-500">
+                    Confidence: {result.confidence === -1 ? 'Manual' : `${(result.confidence * 100).toFixed(1)}%`}
+                  </p>
+                </>
+              )}
+              {result.shoeType === 'no_shoe' && (
+                <>
+                  <h2 className="text-2xl font-bold text-amber-600 mb-2">No Shoe Detected</h2>
+                  <p className="text-gray-500">Please place your shoe in the chamber and try again.</p>
+                  {result.confidence > 0 && (
+                    <p className="text-sm text-gray-400 mt-1">
+                      Confidence: {(result.confidence * 100).toFixed(1)}%
+                    </p>
+                  )}
+                </>
+              )}
+              {result.shoeType === 'invalid' && (
+                <>
+                  <h2 className="text-2xl font-bold text-amber-600 mb-2">Unsupported Shoe Type</h2>
+                  {result.subCategory && (
+                    <p className="text-lg font-semibold text-gray-700 mb-1">{result.subCategory}</p>
+                  )}
+                  <p className="text-gray-500">This machine supports mesh, canvas, and rubber shoes only.</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Confidence: {(result.confidence * 100).toFixed(1)}%
+                  </p>
+                </>
+              )}
+            </>
+          )}
+          {state === 'success' && showPicker && (
+            <>
+              <h2 className="text-2xl font-bold text-gray-700 mb-2">Select Shoe Type</h2>
+              <p className="text-gray-500 mb-4">Choose the material of your shoe:</p>
+              <div className="flex flex-col gap-3 w-full">
+                {(['mesh', 'canvas', 'rubber'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => handleManualSelect(type)}
+                    className="w-full py-4 rounded-2xl border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-xl font-semibold text-gray-700 capitalize"
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowPicker(false)}
+                className="mt-4 text-sm text-gray-400 hover:text-gray-600 underline"
+              >
+                Back
+              </button>
             </>
           )}
           {state === 'error' && (
@@ -351,39 +402,27 @@ export default function ClassifyPage() {
         {/* Buttons */}
         {state === 'syncing' && (
           <div className="flex gap-4 justify-center">
-            <Button
-              onClick={handleCancel}
-              variant="outline"
-              className="px-6 py-3"
-            >
+            <Button onClick={handleCancel} variant="outline" className="px-6 py-3">
               Cancel
             </Button>
           </div>
         )}
-        {state === 'success' && (
+        {state === 'success' && result && !showPicker && (
           <div className="flex gap-4 justify-center">
-            <Button
-              onClick={handleRetry}
-              variant="outline"
-              className="px-6 py-3"
-            >
-              Retry Classification
+            <Button onClick={handleCancel} variant="outline" className="px-6 py-3">
+              Cancel
             </Button>
             <Button
-              onClick={handleProceedToPayment}
-              className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+              onClick={handleRetry}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
             >
-              Proceed to Payment
+              Retry
             </Button>
           </div>
         )}
         {state === 'error' && (
           <div className="flex gap-4 justify-center">
-            <Button
-              onClick={handleCancel}
-              variant="outline"
-              className="px-6 py-3"
-            >
+            <Button onClick={handleCancel} variant="outline" className="px-6 py-3">
               Cancel
             </Button>
             <Button
