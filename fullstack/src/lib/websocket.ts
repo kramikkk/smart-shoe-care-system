@@ -472,7 +472,8 @@ export function broadcastClassificationResult(
   deviceId: string,
   result: string,
   confidence: number,
-  subCategory: string = ''
+  subCategory: string = '',
+  condition: 'normal' | 'too_dirty' = 'normal'
 ) {
   broadcastToDevice(deviceId, {
     type: 'classification-result',
@@ -480,6 +481,7 @@ export function broadcastClassificationResult(
     result,
     confidence,
     subCategory,
+    condition,
   })
 }
 

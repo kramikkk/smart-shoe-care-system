@@ -103,6 +103,29 @@ Low confidence guidance:
     likely one and set confidence to 0.4–0.6
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONDITION ASSESSMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After identifying the shoe type, assess whether the shoe's dirt or staining is
+manageable by a foam-and-brush automated cleaning system.
+
+NORMAL
+  The shoe has little to no visible dirt, or has surface-level dirt/stains that
+  a foam solution and rotating brush can reasonably clean.
+  Examples: dusty soles, light scuff marks, surface grime, faded color from wear,
+            slightly muddy outsoles with mostly clean uppers
+
+TOO_DIRTY
+  The shoe is excessively soiled in a way that a foam-and-brush system CANNOT handle.
+  This means the upper is heavily caked with mud, thick wet soil, paint, tar, oil,
+  or any substance that would require manual pre-treatment before machine cleaning.
+  Examples: uppers completely covered in thick mud, paint-splattered shoes,
+            oil/grease-soaked fabric, heavily saturated wet soil
+
+Key rule: if the UPPER has heavy caked-on mud or a thick layer of non-surface grime → too_dirty
+          if the upper looks worn/dusty/lightly dirty → normal
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -113,7 +136,9 @@ Return JSON with exactly these fields:
                 Examples: "White Canvas Low-tops", "Black Mesh Running Shoes",
                 "Red Rubber Rain Boots", "Brown Leather Oxford", "Pink Suede Heels",
                 "White Leather Sneakers", "Navy Blue Slip-ons", "Inline Roller Skates"
-                Use "" (empty string) for no_shoe.`
+                Use "" (empty string) for no_shoe.
+  condition   — one of: normal, too_dirty
+                Use "normal" for no_shoe and invalid (condition only applies to cleanable shoes).`
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
 
@@ -171,8 +196,9 @@ export async function POST(
             shoeType:    { type: 'string' },
             confidence:  { type: 'number' },
             subCategory: { type: 'string' },
+            condition:   { type: 'string' },
           },
-          required: ['shoeType', 'confidence', 'subCategory'],
+          required: ['shoeType', 'confidence', 'subCategory', 'condition'],
         },
       },
     })
@@ -181,11 +207,13 @@ export async function POST(
       shoeType?: string
       confidence?: number
       subCategory?: string
+      condition?: string
     }
 
     const shoeType    = parsed.shoeType ?? ''
     const confidence  = typeof parsed.confidence === 'number' ? parsed.confidence : 0
     const subCategory = parsed.subCategory ?? ''
+    const condition = (parsed.condition === 'too_dirty' ? 'too_dirty' : 'normal') as 'normal' | 'too_dirty'
 
     console.log(`[Classify] Gemini raw response for ${deviceId}:`, JSON.stringify(parsed))
 
@@ -196,10 +224,10 @@ export async function POST(
       return NextResponse.json({ error: 'Unknown shoe type' }, { status: 422 })
     }
 
-    console.log(`[Classify] ${deviceId}: ${shoeType} — ${subCategory} (${(confidence * 100).toFixed(1)}%)`)
-    broadcastClassificationResult(deviceId, shoeType, confidence, subCategory)
+    console.log(`[Classify] ${deviceId}: ${shoeType} — ${subCategory} (${(confidence * 100).toFixed(1)}%) — condition: ${condition}`)
+    broadcastClassificationResult(deviceId, shoeType, confidence, subCategory, condition)
 
-    return NextResponse.json({ ok: true, shoeType, confidence, subCategory })
+    return NextResponse.json({ ok: true, shoeType, confidence, subCategory, condition })
   } catch (error) {
     console.error('[Classify] Error:', error)
     broadcastClassificationError(deviceId, 'Classification failed — please try again')

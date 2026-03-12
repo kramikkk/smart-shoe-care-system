@@ -6,7 +6,6 @@ import { Camera, Loader2, CheckCircle, AlertCircle, WifiOff } from 'lucide-react
 import { Button } from '@/components/ui/button'
 import { useWebSocket } from '@/contexts/WebSocketContext'
 import { StepIndicator } from '@/components/kiosk/StepIndicator'
-import { BackButton } from '@/components/kiosk/BackButton'
 import { AUTO_STEPS } from '@/lib/kiosk-constants'
 
 type ClassificationState = 'connecting' | 'syncing' | 'classifying' | 'success' | 'error'
@@ -15,6 +14,7 @@ type ClassificationResult = {
   shoeType: 'mesh' | 'canvas' | 'rubber' | 'invalid' | 'no_shoe'
   confidence: number // -1 = manually selected
   subCategory?: string
+  condition?: 'normal' | 'too_dirty'
 }
 
 const VALID_SHOE_TYPES = ['mesh', 'canvas', 'rubber'] as const
@@ -142,6 +142,7 @@ export default function ClassifyPage() {
           shoeType: message.result as ClassificationResult['shoeType'],
           confidence: message.confidence,
           subCategory: message.subCategory ?? '',
+          condition: message.condition === 'too_dirty' ? 'too_dirty' : 'normal',
         })
         setShowPicker(false)
         setState('success')
@@ -237,10 +238,10 @@ export default function ClassifyPage() {
   }
 
   const isValidShoeType = result && VALID_SHOE_TYPES.includes(result.shoeType as typeof VALID_SHOE_TYPES[number])
+  const canProceed = isValidShoeType && result?.condition !== 'too_dirty'
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
-      <BackButton />
       <StepIndicator steps={AUTO_STEPS} currentStep={1} />
 
       {/* Title */}
@@ -341,6 +342,26 @@ export default function ClassifyPage() {
                   <p className="text-gray-500">
                     Confidence: {result.confidence === -1 ? 'Manual' : `${(result.confidence * 100).toFixed(1)}%`}
                   </p>
+                  {result.condition && (
+                    <>
+                      {result.condition === 'too_dirty' ? (
+                        <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-100 text-red-700 font-semibold text-sm">
+                          <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                          Too Dirty
+                        </div>
+                      ) : (
+                        <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 text-green-700 font-semibold text-sm">
+                          <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                          Normal Condition
+                        </div>
+                      )}
+                      {result.condition === 'too_dirty' && (
+                        <p className="mt-3 text-sm text-red-600">
+                          The shoe is too heavily soiled for our system. Please remove excessive mud or dirt before trying again.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </>
               )}
               {result.shoeType === 'no_shoe' && (
@@ -360,7 +381,7 @@ export default function ClassifyPage() {
                   {result.subCategory && (
                     <p className="text-lg font-semibold text-gray-700 mb-1">{result.subCategory}</p>
                   )}
-                  <p className="text-gray-500">This machine supports mesh, canvas, and rubber shoes only.</p>
+                  <p className="text-gray-500">This shoe type is not supported. Our machine cleans mesh, canvas, and rubber shoes only.</p>
                   <p className="text-sm text-gray-400 mt-1">
                     Confidence: {(result.confidence * 100).toFixed(1)}%
                   </p>
@@ -400,7 +421,21 @@ export default function ClassifyPage() {
         </div>
 
         {/* Buttons */}
+        {state === 'connecting' && (
+          <div className="flex gap-4 justify-center">
+            <Button onClick={handleCancel} variant="outline" className="px-6 py-3">
+              Cancel
+            </Button>
+          </div>
+        )}
         {state === 'syncing' && (
+          <div className="flex gap-4 justify-center">
+            <Button onClick={handleCancel} variant="outline" className="px-6 py-3">
+              Cancel
+            </Button>
+          </div>
+        )}
+        {state === 'classifying' && (
           <div className="flex gap-4 justify-center">
             <Button onClick={handleCancel} variant="outline" className="px-6 py-3">
               Cancel
@@ -414,10 +449,19 @@ export default function ClassifyPage() {
             </Button>
             <Button
               onClick={handleRetry}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
+              variant={canProceed ? 'outline' : 'default'}
+              className={canProceed ? 'px-6 py-3' : 'px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white'}
             >
               Retry
             </Button>
+            {canProceed && (
+              <Button
+                onClick={handleProceedToPayment}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
+              >
+                Proceed
+              </Button>
+            )}
           </div>
         )}
         {state === 'error' && (
