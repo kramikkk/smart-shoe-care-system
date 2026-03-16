@@ -37,13 +37,20 @@ export function createWebSocketServer(server: Server) {
     if (pathname === '/api/ws') {
       // Origin validation — allow device connections (no Origin header) and trusted origins
       const origin = request.headers.origin
+      const serverHost = request.headers.host // e.g. "192.168.43.147:3000"
       const allowedOrigins = [
         'http://localhost:3000',
         'http://localhost:3001',
+        'file://',
         process.env.NEXT_PUBLIC_APP_URL,
+        // Extra origins from env (comma-separated)
+        ...(process.env.WS_ALLOWED_ORIGINS ? process.env.WS_ALLOWED_ORIGINS.split(',').map(s => s.trim()) : []),
       ].filter(Boolean)
 
-      if (origin && !allowedOrigins.includes(origin)) {
+      // Also allow same-host connections (tablet accessing via LAN IP)
+      const isSameHost = origin && serverHost && origin === `http://${serverHost}`
+
+      if (origin && !allowedOrigins.includes(origin) && !isSameHost) {
         console.warn(`[WebSocket] Rejected connection from origin: ${origin}`)
         socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
         socket.destroy()
