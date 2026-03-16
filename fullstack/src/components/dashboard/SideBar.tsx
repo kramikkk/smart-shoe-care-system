@@ -61,10 +61,12 @@ const SideBar = () => {
   return (
     <Sidebar collapsible="offcanvas" variant="inset">
         <SidebarHeader className="pt-4">
-            <Link href="/client/dashboard" className="flex flex-col items-center gap-1 py-2 hover:opacity-80 transition-opacity">
-                <Image src="/SSCMlogoTrans.png" alt="Logo" width={256} height={256} priority className="w-full h-auto"/>
-                <span className="text-base font-bold text-center leading-snug px-2">Smart Shoe Care Machine</span>
-                <span className="text-xs text-muted-foreground">Client Portal</span>
+            <Link href="/client/dashboard" className="flex items-center gap-3 px-2 py-2 hover:opacity-80 transition-opacity">
+                <Image src="/SSCMlogoTrans.png" alt="Logo" width={32} height={32} priority className="w-8 h-8 object-contain"/>
+                <div className="flex flex-col">
+                    <span className="text-sm font-bold leading-tight">Smart Shoe Care</span>
+                    <span className="text-xs text-muted-foreground">Client Portal</span>
+                </div>
             </Link>
         </SidebarHeader>
             <SidebarContent>

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 import { signIn } from "@/lib/auth-client"
 import { useRouter } from "next/navigation"
 
@@ -107,20 +107,13 @@ export function LoginForm({
               className="bg-transparent border-white/10 h-12 rounded-sm focus-visible:ring-primary/50"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
           </Field>
 
           <Field>
-            <div className="flex items-center justify-between mb-2">
-              <FieldLabel className="editorial-caps text-[10px] opacity-60" htmlFor="password">Password</FieldLabel>
-              <a
-                href="#"
-                className="text-[10px] uppercase font-bold tracking-widest text-primary/60 hover:text-primary transition-colors"
-              >
-                Reset
-              </a>
-            </div>
+            <FieldLabel className="editorial-caps text-[10px] opacity-60 mb-2 block" htmlFor="password">Password</FieldLabel>
             <div className="relative">
               <Input
                 id="password"
@@ -129,6 +122,7 @@ export function LoginForm({
                 className="bg-transparent border-white/10 h-12 rounded-sm pr-12 focus-visible:ring-primary/50"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 required
               />
               <button
@@ -151,7 +145,14 @@ export function LoginForm({
           disabled={loading}
           className="w-full h-12 rounded-sm font-black uppercase tracking-[0.2em] transition-all hover:tracking-[0.3em] bg-primary text-primary-foreground"
         >
-          {loading ? "Authenticating..." : "Login"}
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Authenticating...
+            </>
+          ) : (
+            "Login"
+          )}
         </Button>
 
         <div className="pt-8 border-t border-white/5 flex items-center justify-between">

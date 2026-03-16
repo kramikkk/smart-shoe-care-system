@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { HeroHeader } from './header'
 import { ChevronRight, ArrowDown } from 'lucide-react'
 import Image from 'next/image'
 import { gsap, ScrollTrigger } from '@/lib/gsap'
@@ -36,7 +35,7 @@ export default function HeroSection() {
                 scrollTrigger: {
                     trigger: containerRef.current,
                     start: 'top top',
-                    end: '+=500%',
+                    end: '+=250%',
                     pin: true,
                     scrub: 1.5,
                     anticipatePin: 1,
@@ -117,7 +116,6 @@ export default function HeroSection() {
 
     return (
         <div ref={containerRef} className="noise-overlay relative w-full h-screen bg-background overflow-hidden flex items-center justify-center perspective-premium">
-            <HeroHeader threshold={5000} />
 
             {/* Smaller Inverting Custom Cursor */}
             <div

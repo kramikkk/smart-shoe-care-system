@@ -11,7 +11,7 @@ import { SensorDataProvider } from "@/contexts/SensorDataContext"
 export default function DashboardPage() {
     return (
         <SensorDataProvider>
-        <div className="flex flex-col gap-4 w-full overflow-x-hidden overflow-y-scroll">
+        <div className="flex flex-col gap-4 w-full overflow-x-hidden overflow-y-auto">
         {/* Stats and Sensor Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             <StatsCard id="totalRevenue" />

@@ -20,7 +20,7 @@ import { format } from "date-fns"
 import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
 export default function TransactionsPage() {
-  const { selectedDevice, devices } = useDeviceFilter()
+  const { selectedDevice } = useDeviceFilter()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [search, setSearch] = useState("")
   const [paymentFilter, setPaymentFilter] = useState<string>("all")
@@ -35,7 +35,18 @@ export default function TransactionsPage() {
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
-        const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}&limit=10000`)
+        const params = new URLSearchParams()
+        params.set('deviceId', selectedDevice || '')
+        params.set('limit', '500')
+        if (paymentFilter !== 'all') params.set('paymentMethod', paymentFilter)
+        if (statusFilter !== 'all') params.set('status', statusFilter)
+        if (dateFrom) params.set('startDate', dateFrom.toISOString())
+        if (dateTo) {
+          const end = new Date(dateTo)
+          end.setHours(23, 59, 59, 999)
+          params.set('endDate', end.toISOString())
+        }
+        const response = await fetch(`/api/transaction/list?${params}`)
         const data = await response.json()
 
         if (data.success) {
@@ -62,7 +73,7 @@ export default function TransactionsPage() {
     }
 
     fetchTransactions()
-  }, [selectedDevice, devices])
+  }, [selectedDevice, paymentFilter, statusFilter, dateFrom, dateTo])
 
   const filteredData = useMemo(() => {
     return transactions.filter((tx) => {
@@ -76,9 +87,6 @@ export default function TransactionsPage() {
         tx.dateTime.toLowerCase().includes(searchLower) ||
         tx.amount.toString().includes(searchLower)
 
-      const matchesPayment =
-        paymentFilter === "all" || tx.paymentMethod === paymentFilter
-
       const matchesService =
         serviceFilter === "all" || tx.serviceType === serviceFilter
 
@@ -88,41 +96,9 @@ export default function TransactionsPage() {
       const matchesCareType =
         careTypeFilter === "all" || tx.careType === careTypeFilter
 
-      const matchesStatus =
-        statusFilter === "all" || tx.status === statusFilter
-
-      // Date filtering
-      const matchesDate = (() => {
-        if (!dateFrom && !dateTo) return true
-
-        const txDate = new Date(tx.dateTime)
-
-        if (dateFrom && dateTo) {
-          const from = new Date(dateFrom)
-          from.setHours(0, 0, 0, 0)
-          const to = new Date(dateTo)
-          to.setHours(23, 59, 59, 999)
-          return txDate >= from && txDate <= to
-        }
-
-        if (dateFrom) {
-          const from = new Date(dateFrom)
-          from.setHours(0, 0, 0, 0)
-          return txDate >= from
-        }
-
-        if (dateTo) {
-          const to = new Date(dateTo)
-          to.setHours(23, 59, 59, 999)
-          return txDate <= to
-        }
-
-        return true
-      })()
-
-      return matchesSearch && matchesPayment && matchesService && matchesShoeType && matchesCareType && matchesStatus && matchesDate
+      return matchesSearch && matchesService && matchesShoeType && matchesCareType
     })
-  }, [transactions, search, paymentFilter, serviceFilter, shoeTypeFilter, careTypeFilter, statusFilter, dateFrom, dateTo])
+  }, [transactions, search, serviceFilter, shoeTypeFilter, careTypeFilter])
 
   return (
     <div className="w-full">

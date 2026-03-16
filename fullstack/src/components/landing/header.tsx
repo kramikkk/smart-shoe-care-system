@@ -13,21 +13,31 @@ const menuItems = [
     { name: 'Contact Us', href: '#contact' },
 ]
 
-interface HeroHeaderProps {
-    threshold?: number
-}
-
-export const HeroHeader = ({ threshold = 50 }: HeroHeaderProps) => {
+export const HeroHeader = () => {
     const [menuState, setMenuState] = React.useState(false)
-    const [isScrolled, setIsScrolled] = React.useState(false)
+    const [isVisible, setIsVisible] = React.useState(true)
+    const lastScrollY = React.useRef(0)
 
     React.useEffect(() => {
+        // Hero is pinned for 250% of viewport height (matches GSAP end: '+=250%')
+        const heroEndScroll = window.innerHeight * 2.5
+
         const handleScroll = () => {
-            setIsScrolled(window.scrollY > threshold)
+            const currentScrollY = window.scrollY
+            if (currentScrollY < heroEndScroll) {
+                // Inside hero section — always show
+                setIsVisible(true)
+            } else {
+                // Past hero — hide on scroll down, reveal on scroll up
+                setIsVisible(currentScrollY < lastScrollY.current)
+            }
+
+            lastScrollY.current = currentScrollY
         }
-        window.addEventListener('scroll', handleScroll)
+
+        window.addEventListener('scroll', handleScroll, { passive: true })
         return () => window.removeEventListener('scroll', handleScroll)
-    }, [threshold])
+    }, [])
 
     return (
         <header className="relative z-[100]">
@@ -35,9 +45,8 @@ export const HeroHeader = ({ threshold = 50 }: HeroHeaderProps) => {
                 data-state={menuState && 'active'}
                 className={cn(
                     'fixed inset-x-0 top-0 w-full transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                    isScrolled
-                        ? 'bg-background/80 border-b border-white/5 backdrop-blur-xl py-4'
-                        : 'bg-transparent py-8'
+                    !isVisible && '-translate-y-full',
+                    'bg-transparent py-8'
                 )}
             >
                 <div className="mx-auto max-w-7xl px-6">
@@ -75,7 +84,7 @@ export const HeroHeader = ({ threshold = 50 }: HeroHeaderProps) => {
                                     <Link href="/client/login">Login</Link>
                                 </Button>
                                 <Button asChild size="sm" className="rounded-full px-6 uppercase tracking-widest text-xs font-bold">
-                                    <Link href="/client/login">Join Now</Link>
+                                    <Link href="#contact">Get Started</Link>
                                 </Button>
                             </div>
 

@@ -1,6 +1,5 @@
 'use client'
 
-import { ModeToggle } from "@/components/ModeToggle"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { DeviceSelector } from "@/components/DeviceSelector"
 import { usePathname } from "next/navigation"
@@ -24,7 +23,6 @@ const NavBar = () => {
       </div>
       <div className="flex items-center gap-4">
         <DeviceSelector />
-        <ModeToggle/>
       </div>
     </nav>
   )
