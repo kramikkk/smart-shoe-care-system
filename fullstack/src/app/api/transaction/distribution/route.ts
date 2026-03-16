@@ -1,17 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth-middleware'
 
 export async function GET(req: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req)
+    if (authResult instanceof NextResponse) {
+      return authResult
+    }
+
+    // Get user's devices for ownership check
+    const userDevices = await prisma.device.findMany({
+      where: { pairedBy: authResult.user.id },
+      select: { deviceId: true }
+    })
+    const userDeviceIds = userDevices.map(d => d.deviceId)
+
     // Get device filter and distribution type from query params
     const { searchParams } = new URL(req.url)
     const deviceId = searchParams.get('deviceId')
     const type = searchParams.get('type') || 'service' // Default to service
 
-    // Build where clause with optional device filter
+    // Build where clause with device ownership enforcement
     const whereClause: any = {}
     if (deviceId) {
+      if (!userDeviceIds.includes(deviceId)) {
+        return NextResponse.json(
+          { success: false, error: 'You do not have access to this device' },
+          { status: 403 }
+        )
+      }
       whereClause.deviceId = deviceId
+    } else {
+      whereClause.deviceId = { in: userDeviceIds }
     }
 
     // Fetch transactions with optional device filter

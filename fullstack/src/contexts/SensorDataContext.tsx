@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { useDeviceFilter } from './DeviceFilterContext'
 
 type SensorData = {
@@ -38,6 +38,7 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
     camSynced: false
   })
   const [isConnected, setIsConnected] = useState(false)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     if (!selectedDevice) {
@@ -50,9 +51,8 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
     // Create WebSocket connection with deviceId parameter (similar to payment page)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = `${protocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(selectedDevice)}`
-    
+
     let ws: WebSocket
-    let reconnectTimeout: NodeJS.Timeout
 
     const connect = () => {
       ws = new WebSocket(wsUrl)
@@ -148,9 +148,9 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
       ws.onclose = () => {
         console.log('[SensorData] WebSocket disconnected, will retry in 5 seconds')
         setIsConnected(false)
-        
+
         // Auto-reconnect after 5 seconds
-        reconnectTimeout = setTimeout(() => {
+        reconnectTimeoutRef.current = setTimeout(() => {
           console.log('[SensorData] Attempting to reconnect...')
           connect()
         }, 5000)
@@ -161,7 +161,7 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
 
     // Cleanup on unmount or device change
     return () => {
-      clearTimeout(reconnectTimeout)
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close()
       }

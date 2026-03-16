@@ -15,7 +15,7 @@ const DEFAULT_DURATIONS: Record<string, Record<string, number>> = {
 const DurationUpdateSchema = z.object({
   serviceType: z.enum(SERVICE_TYPES),
   careType: z.enum(CARE_TYPES),
-  duration: z.number().int().positive('Duration must be a positive number'),
+  duration: z.number().int().min(1).max(7200),
   deviceId: z.string().optional(),
 })
 

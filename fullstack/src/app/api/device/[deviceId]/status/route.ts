@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,9 +12,13 @@ export const dynamic = 'force-dynamic'
  * Returns device pairing status
  */
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ deviceId: string }> }
 ) {
+  // Apply rate limiting (30 requests per minute per IP)
+  const rateLimitResult = rateLimit(request, { maxRequests: 30, windowMs: 60000 })
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { deviceId } = await params
 
@@ -44,11 +49,10 @@ export async function GET(
       data: { lastSeen: new Date() }
     })
 
-    // Return status
+    // Return status (without pairingCode to avoid leaking it)
     return NextResponse.json({
       paired: device.paired,
       deviceId: device.deviceId,
-      pairingCode: device.pairingCode,
       pairedAt: device.pairedAt,
     })
   } catch (error) {

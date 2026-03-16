@@ -37,7 +37,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [isPaired, setIsPaired] = useState<boolean | null>(null)
   const [pairingCode, setPairingCode] = useState<string>('')
   const [deviceId, setDeviceId] = useState<string>('')
-  
+
   const wsRef = useRef<WebSocket | null>(null)
   const connectionStateRef = useRef<ConnectionState>(ConnectionState.DISCONNECTED)
   const reconnectAttemptsRef = useRef<number>(0)
@@ -114,7 +114,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Notify all registered message handlers
-        messageHandlersRef.current.forEach(handler => handler(message))
+        messageHandlersRef.current.forEach(handler => {
+          try {
+            handler(message)
+          } catch (error) {
+            console.error('[WebSocket] Handler error:', error)
+          }
+        })
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)
       }

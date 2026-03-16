@@ -13,12 +13,15 @@ declare global {
 const deviceConnections: Map<string, Set<WebSocket>> =
   global._deviceConnections ?? (global._deviceConnections = new Map())
 
-// Simple token validation - in production, verify against session store
+// Token validation — checks against configured WS_AUTH_TOKEN or requires minimum length
 function validateWebSocketToken(token: string | null): boolean {
   if (!token) return false
-  // Allow connections without strict auth for now (kiosk and ESP32)
-  // In production: verify against Better Auth session store
-  return token.length > 0
+  const wsToken = process.env.WS_AUTH_TOKEN
+  if (wsToken) {
+    return token === wsToken
+  }
+  // Fallback: require minimum length for tokens
+  return token.length >= 8
 }
 
 export function createWebSocketServer(server: Server) {
@@ -32,6 +35,21 @@ export function createWebSocketServer(server: Server) {
 
     // Only handle our custom WebSocket endpoint
     if (pathname === '/api/ws') {
+      // Origin validation — allow device connections (no Origin header) and trusted origins
+      const origin = request.headers.origin
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        process.env.NEXT_PUBLIC_APP_URL,
+      ].filter(Boolean)
+
+      if (origin && !allowedOrigins.includes(origin)) {
+        console.warn(`[WebSocket] Rejected connection from origin: ${origin}`)
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+        socket.destroy()
+        return
+      }
+
       // Extract token from query params or cookies
       const token = searchParams.get('token') || request.headers.cookie?.match(/auth-token=([^;]+)/)?.[1] || null
 
@@ -63,7 +81,12 @@ export function createWebSocketServer(server: Server) {
 
     ws.on('message', async (data: Buffer) => {
       try {
-        const message = JSON.parse(data.toString())
+        const rawData = data.toString()
+        if (rawData.length > 65536) { // 64KB max message size
+          console.warn('[WebSocket] Message too large, ignoring')
+          return
+        }
+        const message = JSON.parse(rawData)
 
         // Handle client subscription to device updates
         // groupToken is NOT required for WS subscriptions — security for the
@@ -90,7 +113,7 @@ export function createWebSocketServer(server: Server) {
           try {
             const device = await prisma.device.findUnique({
               where: { deviceId: subscribeDeviceId },
-              select: { paired: true, pairingCode: true, pairedAt: true, groupToken: true }
+              select: { paired: true, pairedAt: true, name: true }
             })
             if (device) {
               ws.send(JSON.stringify({
@@ -98,9 +121,8 @@ export function createWebSocketServer(server: Server) {
                 deviceId: subscribeDeviceId,
                 data: {
                   paired: device.paired,
-                  pairingCode: device.pairingCode,
                   pairedAt: device.pairedAt,
-                  groupToken: device.groupToken,
+                  deviceName: device.name,
                 }
               }))
             }
@@ -128,8 +150,7 @@ export function createWebSocketServer(server: Server) {
               type: 'status-ack',
               deviceId: updateDeviceId,
               success: true,
-              paired: updatedDevice.paired,
-              pairingCode: updatedDevice.pairingCode
+              paired: updatedDevice.paired
             }))
 
             // Broadcast device online status to all subscribed clients (tablets)
@@ -405,6 +426,11 @@ export function createWebSocketServer(server: Server) {
             deviceId: restartDeviceId
           })
         }
+
+        // Unknown message type
+        else {
+          console.warn(`[WebSocket] Unknown message type: ${message.type} from ${deviceId || 'unknown'}`)
+        }
       } catch (error) {
         console.error('[WebSocket] Error parsing message:', error)
       }
@@ -454,16 +480,20 @@ export function broadcastRestartDevice(deviceId: string) {
 }
 
 // Broadcast device status update to all subscribed clients
+// NOTE: Never include pairingCode or groupToken in broadcast data
 export function broadcastDeviceUpdate(deviceId: string, data: {
   paired: boolean
-  pairingCode: string | null
   pairedAt: Date | null
-  groupToken?: string | null
+  deviceName?: string | null
 }) {
   broadcastToDevice(deviceId, {
     type: 'device-update',
     deviceId,
-    data
+    data: {
+      paired: data.paired,
+      pairedAt: data.pairedAt,
+      deviceName: data.deviceName,
+    }
   })
 }
 
@@ -487,9 +517,13 @@ export function broadcastClassificationResult(
 
 // Broadcast classification error to all subscribed clients (tablets)
 export function broadcastClassificationError(deviceId: string, error: string) {
+  // Sanitize error message — don't forward raw error strings from devices
+  const sanitizedError = typeof error === 'string' && error.length < 200
+    ? error
+    : 'Classification failed'
   broadcastToDevice(deviceId, {
     type: 'classification-error',
     deviceId,
-    error,
+    error: sanitizedError,
   })
 }

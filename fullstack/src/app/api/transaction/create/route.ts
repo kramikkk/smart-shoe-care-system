@@ -9,7 +9,7 @@ const TransactionSchema = z.object({
   serviceType: z.enum(['Cleaning', 'Drying', 'Sterilizing', 'Package']),
   shoeType: z.enum(['Canvas', 'Rubber', 'Mesh']),
   careType: z.enum(['Gentle', 'Normal', 'Strong', 'Auto']),
-  status: z.enum(['Pending', 'Success', 'Failed']).optional().default('Success'),
+  status: z.enum(['Pending', 'Success', 'Failed']).optional().default('Pending'),
   deviceId: z.string().regex(/^SSCM-[A-F0-9]{6}$/, 'Device ID is required and must be in format SSCM-XXXXXX'),
 })
 

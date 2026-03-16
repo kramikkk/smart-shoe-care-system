@@ -56,52 +56,52 @@ export async function POST(
       )
     }
 
-    // Find device
-    const device = await prisma.device.findUnique({
-      where: { deviceId }
-    })
+    // Atomic pair: find unpaired device with matching code and update in one operation
+    let pairedDevice
+    try {
+      pairedDevice = await prisma.device.update({
+        where: {
+          deviceId,
+          paired: false,
+          pairingCode: pairingCode
+        },
+        data: {
+          paired: true,
+          pairedAt: new Date(),
+          pairedBy: session.user.id,
+          pairingCode: null,
+        }
+      })
+    } catch {
+      // Update failed — either device not found, already paired, or wrong code
+      const device = await prisma.device.findUnique({
+        where: { deviceId }
+      })
 
-    if (!device) {
-      return NextResponse.json(
-        { error: 'Device not found' },
-        { status: 404 }
-      )
-    }
+      if (!device) {
+        return NextResponse.json(
+          { error: 'Device not found' },
+          { status: 404 }
+        )
+      }
 
-    // Check if already paired
-    if (device.paired) {
-      return NextResponse.json(
-        { error: 'Device is already paired' },
-        { status: 400 }
-      )
-    }
+      if (device.paired) {
+        return NextResponse.json(
+          { error: 'Device is already paired' },
+          { status: 400 }
+        )
+      }
 
-    // Verify pairing code
-    if (device.pairingCode !== pairingCode) {
       return NextResponse.json(
         { error: 'Invalid pairing code' },
         { status: 401 }
       )
     }
 
-    // Pair the device and track who paired it
-    const pairedDevice = await prisma.device.update({
-      where: { deviceId },
-      data: {
-        paired: true,
-        pairedAt: new Date(),
-        pairedBy: session.user.id,
-        pairingCode: null,
-      }
-    })
-
     // Broadcast update to all WebSocket clients subscribed to this device
-    // groupToken is included so the tablet can store it for subsequent connections
     broadcastDeviceUpdate(deviceId, {
       paired: true,
-      pairingCode: null,
       pairedAt: pairedDevice.pairedAt,
-      groupToken: pairedDevice.groupToken ?? null,
     })
 
     return NextResponse.json({
@@ -173,9 +173,7 @@ export async function DELETE(
     // Broadcast update to all WebSocket clients subscribed to this device
     broadcastDeviceUpdate(deviceId, {
       paired: false,
-      pairingCode: null,
       pairedAt: null,
-      groupToken: null,
     })
 
     return NextResponse.json({

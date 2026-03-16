@@ -33,6 +33,8 @@ export default function TransactionsPage() {
 
   // Fetch transactions from database
   useEffect(() => {
+    const controller = new AbortController()
+
     const fetchTransactions = async () => {
       try {
         const params = new URLSearchParams()
@@ -46,7 +48,7 @@ export default function TransactionsPage() {
           end.setHours(23, 59, 59, 999)
           params.set('endDate', end.toISOString())
         }
-        const response = await fetch(`/api/transaction/list?${params}`)
+        const response = await fetch(`/api/transaction/list?${params}`, { signal: controller.signal })
         const data = await response.json()
 
         if (data.success) {
@@ -68,11 +70,14 @@ export default function TransactionsPage() {
           console.error('Failed to fetch transactions:', data.error)
         }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return
         console.error('Error fetching transactions:', error)
       }
     }
 
     fetchTransactions()
+
+    return () => controller.abort()
   }, [selectedDevice, paymentFilter, statusFilter, dateFrom, dateTo])
 
   const filteredData = useMemo(() => {

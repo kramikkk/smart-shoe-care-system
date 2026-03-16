@@ -39,7 +39,9 @@ export function useDevicePairing() {
       const res = await fetch('/api/device/list')
       const data = await res.json()
       if (data.success) setDevices(withStatus(data.devices))
-    } catch {}
+    } catch (error) {
+      console.error('[DevicePairing] Failed to refresh devices:', error)
+    }
   }
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export function useDevicePairing() {
         router.replace('/client/dashboard/settings')
         await refreshDevices()
       } else { toast.error(data.error || 'Failed to pair device') }
-    } catch { toast.error('Failed to pair device') }
+    } catch (error) { console.error('[DevicePairing] Pair failed:', error); toast.error('Failed to pair device') }
     finally { setIsPairing(false) }
   }
 
@@ -84,7 +86,7 @@ export function useDevicePairing() {
       const data = await res.json()
       if (data.success) { toast.success('Device unpaired successfully'); await refreshDevices() }
       else toast.error(data.error || 'Failed to unpair device')
-    } catch { toast.error('Failed to unpair device') }
+    } catch (error) { console.error('[DevicePairing] Unpair failed:', error); toast.error('Failed to unpair device') }
   }
 
   const handleRestartDevice = async (deviceId: string) => {
@@ -98,7 +100,7 @@ export function useDevicePairing() {
       }
       ws.onerror = () => { toast.error('Failed to send restart command'); setRestartingDeviceId(null) }
       setTimeout(() => { if (ws.readyState !== WebSocket.CLOSED) ws.close(); setRestartingDeviceId(null) }, 5000)
-    } catch { toast.error('Failed to restart device'); setRestartingDeviceId(null) }
+    } catch (error) { console.error('[DevicePairing] Restart failed:', error); toast.error('Failed to restart device'); setRestartingDeviceId(null) }
   }
 
   const handleSaveDeviceName = async (deviceId: string, name: string) => {
@@ -113,7 +115,7 @@ export function useDevicePairing() {
         setEditingDeviceId(null)
         toast.success('Device name updated')
       } else toast.error(data.error || 'Failed to update name')
-    } catch { toast.error('Failed to update name') }
+    } catch (error) { console.error('[DevicePairing] Name update failed:', error); toast.error('Failed to update name') }
   }
 
   const formatLastSeen = (dateString: string) => {

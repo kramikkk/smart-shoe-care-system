@@ -30,10 +30,12 @@ const RecentTransactionTable = () => {
   const { selectedDevice } = useDeviceFilter()
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Fetch recent transactions from API
   useEffect(() => {
     const fetchTransactions = async () => {
+      setError(null)
       try {
         const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}`)
         const data = await response.json()
@@ -54,9 +56,11 @@ const RecentTransactionTable = () => {
           setRecentTransactions(recent)
         } else {
           console.error('Failed to fetch transactions:', data.error)
+          setError('Failed to load transactions')
         }
       } catch (error) {
         console.error('Error fetching transactions:', error)
+        setError('Failed to load transactions')
       } finally {
         setIsLoading(false)
       }
@@ -97,7 +101,11 @@ const RecentTransactionTable = () => {
                 </CardAction>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 overflow-hidden">
-                {isLoading ? (
+                {error ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-destructive text-sm">{error}</div>
+                  </div>
+                ) : isLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>

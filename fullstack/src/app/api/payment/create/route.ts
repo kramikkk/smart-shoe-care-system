@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { rateLimit } from '@/lib/rate-limit'
 
 const PaymentCreateSchema = z.object({
-  amount: z.number().positive('Amount must be positive'),
+  amount: z.number().min(1).max(50000),
   description: z.string().min(1, 'Description is required'),
 })
 

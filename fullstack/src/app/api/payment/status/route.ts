@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PayMongoClient } from '@/lib/paymongo/client'
 import { z } from 'zod'
+import { rateLimit } from '@/lib/rate-limit'
 
 const PaymentStatusQuerySchema = z.object({
   paymentIntentId: z.string().min(1, 'Payment intent ID is required'),
 })
 
 export async function GET(request: NextRequest) {
+  // Apply rate limiting (30 requests per minute per IP)
+  const rateLimitResult = rateLimit(request, { maxRequests: 30, windowMs: 60000 })
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { searchParams } = new URL(request.url)
     const queryParams = Object.fromEntries(searchParams)

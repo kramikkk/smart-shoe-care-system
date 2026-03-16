@@ -22,6 +22,13 @@ export async function GET(req: NextRequest) {
       return authResult
     }
 
+    // Get user's devices for ownership check
+    const userDevices = await prisma.device.findMany({
+      where: { pairedBy: authResult.user.id },
+      select: { deviceId: true }
+    })
+    const userDeviceIds = userDevices.map(d => d.deviceId)
+
     // Parse and validate query parameters
     const searchParams = Object.fromEntries(req.nextUrl.searchParams)
     const validation = TransactionListQuerySchema.safeParse(searchParams)
@@ -50,8 +57,17 @@ export async function GET(req: NextRequest) {
       where.status = status
     }
 
+    // Enforce device ownership
     if (deviceId) {
+      if (!userDeviceIds.includes(deviceId)) {
+        return NextResponse.json(
+          { success: false, error: 'You do not have access to this device' },
+          { status: 403 }
+        )
+      }
       where.deviceId = deviceId
+    } else {
+      where.deviceId = { in: userDeviceIds }
     }
 
     if (startDate || endDate) {

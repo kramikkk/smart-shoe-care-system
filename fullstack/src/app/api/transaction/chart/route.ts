@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth-middleware'
 
 export async function GET(req: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req)
+    if (authResult instanceof NextResponse) {
+      return authResult
+    }
+
+    // Get user's devices for ownership check
+    const userDevices = await prisma.device.findMany({
+      where: { pairedBy: authResult.user.id },
+      select: { deviceId: true }
+    })
+    const userDeviceIds = userDevices.map(d => d.deviceId)
+
     // Get date range and device filter from query params
     const { searchParams } = new URL(req.url)
     const days = parseInt(searchParams.get('days') || '90')
@@ -13,7 +27,7 @@ export async function GET(req: NextRequest) {
     const startDate = new Date(endDate)
     startDate.setDate(startDate.getDate() - days)
 
-    // Build where clause with optional device filter
+    // Build where clause with device ownership enforcement
     const whereClause: any = {
       dateTime: {
         gte: startDate,
@@ -21,9 +35,17 @@ export async function GET(req: NextRequest) {
       },
     }
 
-    // Add device filter if provided
+    // Add device filter with ownership check
     if (deviceId) {
+      if (!userDeviceIds.includes(deviceId)) {
+        return NextResponse.json(
+          { success: false, error: 'You do not have access to this device' },
+          { status: 403 }
+        )
+      }
       whereClause.deviceId = deviceId
+    } else {
+      whereClause.deviceId = { in: userDeviceIds }
     }
 
     // Fetch transactions within date range

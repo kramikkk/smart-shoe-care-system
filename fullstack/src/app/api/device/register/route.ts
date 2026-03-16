@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,11 @@ const DeviceRegisterSchema = z.object({
  *
  * Body: { deviceId: string, pairingCode: string }
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // Apply rate limiting (5 requests per minute per IP)
+  const rateLimitResult = rateLimit(request, { maxRequests: 5, windowMs: 60000 })
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const body = await request.json()
 

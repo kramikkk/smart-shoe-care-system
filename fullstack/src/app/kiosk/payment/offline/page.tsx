@@ -96,6 +96,7 @@ const Offline = () => {
           serviceType: service.charAt(0).toUpperCase() + service.slice(1), // Capitalize first letter
           shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
           careType: service === 'package' ? 'Auto' : care.charAt(0).toUpperCase() + care.slice(1),
+          status: 'Success', // Cash is confirmed at insertion time
           deviceId, // Link transaction to this kiosk
         }),
       })

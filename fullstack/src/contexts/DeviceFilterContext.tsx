@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 
 type DeviceFilterContextType = {
   selectedDevice: string // deviceId
@@ -16,8 +16,11 @@ export function DeviceFilterProvider({ children }: { children: React.ReactNode }
   const [selectedDevice, setSelectedDevice] = useState<string>('')
   const [devices, setDevices] = useState<Array<{ deviceId: string }>>([])
   const [isLoading, setIsLoading] = useState(true)
+  const fetchingRef = useRef(false)
 
   const fetchDevices = async () => {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
     try {
       const response = await fetch('/api/device/list')
       const data = await response.json()
@@ -38,6 +41,7 @@ export function DeviceFilterProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       console.error('Error fetching devices:', error)
     } finally {
+      fetchingRef.current = false
       setIsLoading(false)
     }
   }

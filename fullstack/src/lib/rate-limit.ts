@@ -36,9 +36,12 @@ export function rateLimit(
   config: RateLimitConfig = { maxRequests: 100, windowMs: 60000 } // Default: 100 req/min
 ): NextResponse | null {
   // Get client identifier (IP address)
+  // Use the last entry in x-forwarded-for (appended by trusted reverse proxy)
+  // rather than the first (client-controlled and spoofable)
   const forwarded = request.headers.get('x-forwarded-for')
   const realIp = request.headers.get('x-real-ip')
-  const ip = forwarded ? forwarded.split(',')[0] : realIp || 'unknown'
+  const forwardedParts = forwarded?.split(',').map(s => s.trim()) ?? []
+  const ip = forwardedParts.length > 0 ? forwardedParts[forwardedParts.length - 1] : realIp || 'unknown'
 
   // Create unique key for this endpoint + IP combination
   const pathname = new URL(request.url).pathname
@@ -94,7 +97,8 @@ export function getRateLimitHeaders(
 ): Record<string, string> {
   const forwarded = request.headers.get('x-forwarded-for')
   const realIp = request.headers.get('x-real-ip')
-  const ip = forwarded ? forwarded.split(',')[0] : realIp || 'unknown'
+  const forwardedParts = forwarded?.split(',').map(s => s.trim()) ?? []
+  const ip = forwardedParts.length > 0 ? forwardedParts[forwardedParts.length - 1] : realIp || 'unknown'
   const pathname = new URL(request.url).pathname
   const key = `${ip}:${pathname}`
 

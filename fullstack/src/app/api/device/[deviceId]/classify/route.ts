@@ -5,8 +5,11 @@ import {
   broadcastClassificationResult,
   broadcastClassificationError,
 } from '@/lib/websocket'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
+
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB
 
 const SHOE_TYPES = ['mesh', 'canvas', 'rubber', 'invalid', 'no_shoe']
 
@@ -146,9 +149,22 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ deviceId: string }> }
 ) {
+  // Apply rate limiting (10 requests per minute per IP)
+  const rateLimitResult = rateLimit(request, { maxRequests: 10, windowMs: 60000 })
+  if (rateLimitResult) return rateLimitResult
+
   const { deviceId } = await params
 
   try {
+    // Check image size before processing
+    const contentLength = request.headers.get('content-length')
+    if (contentLength && parseInt(contentLength) > MAX_IMAGE_SIZE) {
+      return NextResponse.json(
+        { error: 'Image too large. Maximum size is 10MB.' },
+        { status: 413 }
+      )
+    }
+
     // Validate X-Group-Token header
     const groupToken = request.headers.get('X-Group-Token')
     if (!groupToken) {
@@ -173,6 +189,14 @@ export async function POST(
     const imageBuffer = Buffer.from(await request.arrayBuffer())
     if (imageBuffer.length === 0) {
       return NextResponse.json({ error: 'Empty image body' }, { status: 400 })
+    }
+
+    // Validate image size after reading
+    if (imageBuffer.length > MAX_IMAGE_SIZE) {
+      return NextResponse.json(
+        { error: 'Image too large. Maximum size is 10MB.' },
+        { status: 413 }
+      )
     }
 
     // Call Gemini with inline base64 JPEG
