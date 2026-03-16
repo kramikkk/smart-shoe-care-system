@@ -17,6 +17,8 @@ import { Eye, EyeOff } from "lucide-react"
 import { signIn } from "@/lib/auth-client"
 import { useRouter } from "next/navigation"
 
+import { motion } from "motion/react"
+
 export function LoginForm({
   className,
   ...props
@@ -54,105 +56,114 @@ export function LoginForm({
   }
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="overflow-hidden p-0">
-        <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
-            <FieldGroup>
-              <div className="flex flex-col items-center gap-2 text-center">
-                <img
-                  src="/SSCMLogoCircle.png"
-                  alt="SSCMLogoCircle"
-                  className="w-25 h-25"
-                />
-                <h1 className="text-2xl font-bold">Welcome back</h1>
-                <p className="text-muted-foreground text-balance">
-                  Login to your SSCM client account
-                </p>
-              </div>
-              
-              {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                  {error}
-                </div>
-              )}
-              
-              <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </Field>
-              <Field>
-                <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <a
-                    href="#"
-                    className="ml-auto text-sm underline-offset-2 hover:underline"
-                  >
-                    Forgot your password?
-                  </a>
-                </div>
-                <div className="relative">
-                  <Input 
-                    id="password" 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="Enter your password" 
-                    className="pr-10"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required 
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </Field>
-              <Field>
-                <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "Logging in..." : "Login"}
-                </Button>
-              </Field>
-              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                Client Dashboard
-              </FieldSeparator>
-              <FieldDescription className="text-center">
-                Only admins can access the dashboard
-              </FieldDescription>
-            </FieldGroup>
-          </form>
-          <div className="bg-muted relative hidden md:block">
-            <img
-              src="/SSCMlogo.png"
-              alt="Image"
-              /*className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"*/
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+    <div className={cn("flex flex-col gap-8 w-full max-w-[400px] px-4 mx-auto", className)} {...props}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="flex flex-col items-start gap-2"
+      >
+        <Link href="/" className="group mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary transition-colors">
+              <img
+                src="/SSCMLogoCircle.png"
+                alt="Logo"
+                className="w-6 h-6 group-hover:invert transition-all"
+              />
+            </div>
+            <span className="editorial-caps text-[10px] tracking-[0.3em] opacity-50 group-hover:opacity-100 transition-opacity">WELCOME BACK</span>
           </div>
-        </CardContent>
-      </Card>
-      <FieldDescription className="px-6 text-center">
-        <span>SSCM Client Dashboard v1.0. © 2025 Smart Shoe Care Machine. All rights reserved.</span>
-      </FieldDescription>
-      <div className="text-center text-sm">
-        <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
-          ← Back to Home
         </Link>
-      </div>
+
+        <h1 className="text-4xl font-black tracking-tighter uppercase italic">
+          Login <br /> <span className="text-primary">Interface</span>
+        </h1>
+        <p className="text-muted-foreground text-sm font-medium">
+          Access your smart shoe care machine dashboard.
+        </p>
+      </motion.div>
+
+      <motion.form
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.2 }}
+        className="space-y-6"
+        onSubmit={handleSubmit}
+      >
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm px-4 py-3 rounded-sm font-medium">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <Field>
+            <FieldLabel className="editorial-caps text-[10px] opacity-60 mb-2 block" htmlFor="email">Email Address</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              placeholder="name@example.com"
+              className="bg-transparent border-white/10 h-12 rounded-sm focus-visible:ring-primary/50"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </Field>
+
+          <Field>
+            <div className="flex items-center justify-between mb-2">
+              <FieldLabel className="editorial-caps text-[10px] opacity-60" htmlFor="password">Password</FieldLabel>
+              <a
+                href="#"
+                className="text-[10px] uppercase font-bold tracking-widest text-primary/60 hover:text-primary transition-colors"
+              >
+                Reset
+              </a>
+            </div>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                className="bg-transparent border-white/10 h-12 rounded-sm pr-12 focus-visible:ring-primary/50"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </Field>
+        </div>
+
+        <Button
+          type="submit"
+          disabled={loading}
+          className="w-full h-12 rounded-sm font-black uppercase tracking-[0.2em] transition-all hover:tracking-[0.3em] bg-primary text-primary-foreground"
+        >
+          {loading ? "Authenticating..." : "Login"}
+        </Button>
+
+        <div className="pt-8 border-t border-white/5 flex items-center justify-between">
+          <span className="text-[10px] font-mono tracking-widest opacity-30 uppercase">© 2026 SSCM</span>
+          <Link
+            href="/"
+            className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground hover:text-primary transition-colors flex items-center gap-2"
+          >
+            ← Home
+          </Link>
+        </div>
+      </motion.form>
     </div>
   )
 }
