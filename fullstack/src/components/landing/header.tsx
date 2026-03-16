@@ -13,85 +13,107 @@ const menuItems = [
     { name: 'Contact Us', href: '#contact' },
 ]
 
-export const HeroHeader = () => {
+interface HeroHeaderProps {
+    threshold?: number
+}
+
+export const HeroHeader = ({ threshold = 50 }: HeroHeaderProps) => {
     const [menuState, setMenuState] = React.useState(false)
     const [isScrolled, setIsScrolled] = React.useState(false)
 
     React.useEffect(() => {
         const handleScroll = () => {
-            setIsScrolled(window.scrollY > 50)
+            setIsScrolled(window.scrollY > threshold)
         }
         window.addEventListener('scroll', handleScroll)
         return () => window.removeEventListener('scroll', handleScroll)
-    }, [])
+    }, [threshold])
 
     return (
-        <header>
+        <header className="relative z-[100]">
             <nav
                 data-state={menuState && 'active'}
-                className={cn('fixed z-20 w-full transition-all duration-300', isScrolled && 'bg-background/75 border-b border-black/5 backdrop-blur-lg')}>
-                <div className="mx-auto max-w-5xl px-6">
-                    <div className="relative flex flex-wrap items-center justify-between gap-6 py-6 lg:gap-0">
-                        <div className="flex w-full justify-between gap-6 lg:w-auto">
-                            <Link
-                                href="/"
-                                aria-label="home"
-                                className="flex items-center space-x-2">
-                                <Logo />
-                            </Link>
+                className={cn(
+                    'fixed inset-x-0 top-0 w-full transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                    isScrolled
+                        ? 'bg-background/80 border-b border-white/5 backdrop-blur-xl py-4'
+                        : 'bg-transparent py-8'
+                )}
+            >
+                <div className="mx-auto max-w-7xl px-6">
+                    <div className="relative flex items-center justify-between">
+                        <Link
+                            href="/"
+                            aria-label="home"
+                            className="flex items-center space-x-2 relative z-[110]">
+                            <Logo />
+                        </Link>
 
-                            <button
-                                onClick={() => setMenuState(!menuState)}
-                                aria-label={menuState ? 'Close Menu' : 'Open Menu'}
-                                className="relative z-20 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden">
-                                <Menu className="in-data-[state=active]:rotate-180 in-data-[state=active]:scale-0 in-data-[state=active]:opacity-0 m-auto size-6 duration-200" />
-                                <X className="in-data-[state=active]:rotate-0 in-data-[state=active]:scale-100 in-data-[state=active]:opacity-100 absolute inset-0 m-auto size-6 -rotate-180 scale-0 opacity-0 duration-200" />
-                            </button>
-                        </div>
-
-                        <div className="absolute inset-0 m-auto hidden size-fit lg:block">
-                            <ul className="flex gap-1">
+                        {/* Desktop Menu */}
+                        <div className="hidden lg:block absolute left-1/2 -translate-x-1/2">
+                            <ul className="flex items-center gap-8">
                                 {menuItems.map((item, index) => (
                                     <li key={index}>
-                                        <Button
-                                            asChild
-                                            variant="ghost"
-                                            size="sm">
-                                            <Link href={item.href} className="text-base">
-                                                <span>{item.name}</span>
-                                            </Link>
-                                        </Button>
+                                        <Link href={item.href} className="group py-2 block">
+                                            <div className="relative overflow-hidden">
+                                                <span className="block text-sm font-medium uppercase tracking-widest text-muted-foreground transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-full">
+                                                    {item.name}
+                                                </span>
+                                                <span className="absolute inset-0 block text-sm font-medium uppercase tracking-widest text-primary transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] translate-y-full group-hover:translate-y-0">
+                                                    {item.name}
+                                                </span>
+                                            </div>
+                                        </Link>
                                     </li>
                                 ))}
                             </ul>
                         </div>
 
-                        <div className="bg-background in-data-[state=active]:block lg:in-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent">
-                            <div className="lg:hidden">
-                                <ul className="space-y-6 text-base">
-                                    {menuItems.map((item, index) => (
-                                        <li key={index}>
-                                            <Link
-                                                href={item.href}
-                                                onClick={() => setMenuState(false)}
-                                                className="text-muted-foreground hover:text-accent-foreground block duration-150">
-                                                <span>{item.name}</span>
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                            <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
-                                <Button asChild size="sm">
-                                    <Link href="/client/login">
-                                        <span>Login</span>
-                                    </Link>
+                        <div className="flex items-center gap-6 relative z-[110]">
+                            <div className="hidden lg:flex items-center gap-4">
+                                <Button asChild variant="ghost" size="sm" className="hover:bg-white/5 uppercase tracking-widest text-xs">
+                                    <Link href="/client/login">Login</Link>
+                                </Button>
+                                <Button asChild size="sm" className="rounded-full px-6 uppercase tracking-widest text-xs font-bold">
+                                    <Link href="/client/login">Join Now</Link>
                                 </Button>
                             </div>
+
+                            <button
+                                onClick={() => setMenuState(!menuState)}
+                                aria-label={menuState ? 'Close Menu' : 'Open Menu'}
+                                className="lg:hidden relative size-10 flex items-center justify-center rounded-full bg-white/5 border border-white/10"
+                            >
+                                <Menu className={cn("size-5 transition-all duration-300 absolute", menuState ? "opacity-0 scale-0 rotate-90" : "opacity-100 scale-100 rotate-0")} />
+                                <X className={cn("size-5 transition-all duration-300 absolute", menuState ? "opacity-100 scale-100 rotate-0" : "opacity-0 scale-0 -rotate-90")} />
+                            </button>
                         </div>
+                    </div>
+                </div>
+
+                {/* Mobile Menu Overlay */}
+                <div className={cn(
+                    "fixed inset-0 bg-background/95 backdrop-blur-2xl lg:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] origin-top",
+                    menuState ? "opacity-100 scale-y-100" : "opacity-0 scale-y-0 pointer-events-none"
+                )}>
+                    <div className="flex flex-col items-center justify-center h-full gap-8">
+                        {menuItems.map((item, index) => (
+                            <Link
+                                key={index}
+                                href={item.href}
+                                onClick={() => setMenuState(false)}
+                                className="text-3xl font-bold tracking-tighter hover:text-primary transition-colors"
+                            >
+                                {item.name}
+                            </Link>
+                        ))}
+                        <Button asChild size="lg" className="mt-8 rounded-full px-12">
+                            <Link href="/client/login">Get Started</Link>
+                        </Button>
                     </div>
                 </div>
             </nav>
         </header>
     )
 }
+

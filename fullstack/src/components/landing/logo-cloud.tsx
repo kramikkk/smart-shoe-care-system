@@ -1,70 +1,53 @@
 'use client'
-import { useEffect, useState } from 'react'
+
+import React from 'react'
 import { NextJS } from '@/components/ui/svgs/nextjs'
 import { TailwindCSS } from '@/components/ui/svgs/tailwindcss'
 import { TypeScript } from '@/components/ui/svgs/typescript'
 import { NeonDB } from '@/components/ui/svgs/neondb'
 import { Prisma } from '@/components/ui/svgs/prisma'
 import { Vercel } from '@/components/ui/svgs/vercel'
-import { AnimatePresence, motion } from 'motion/react'
-import React from 'react'
+import { motion } from 'motion/react'
 
-const frontendLogos: React.ReactNode[] = [
-    <span key="nextjs" className="flex items-center gap-2"><NextJS className="size-8 shrink-0" /><span className="text-sm font-medium">Next.js</span></span>,
-    <span key="tailwind" className="flex items-center gap-2"><TailwindCSS className="size-8 shrink-0" /><span className="text-sm font-medium">Tailwind CSS</span></span>,
-    <span key="typescript" className="flex items-center gap-2"><TypeScript className="size-8 shrink-0" /><span className="text-sm font-medium">TypeScript</span></span>,
+const techLogos = [
+    { name: 'Next.js', icon: <NextJS className="w-8 h-8" /> },
+    { name: 'Tailwind CSS', icon: <TailwindCSS className="w-8 h-8" /> },
+    { name: 'TypeScript', icon: <TypeScript className="w-8 h-8" /> },
+    { name: 'NeonDB', icon: <NeonDB className="w-8 h-8" /> },
+    { name: 'Prisma', icon: <Prisma className="w-8 h-8" /> },
+    { name: 'Vercel', icon: <Vercel className="w-8 h-8" /> },
 ]
-
-const backendLogos: React.ReactNode[] = [
-    <span key="neondb" className="flex items-center gap-2"><NeonDB className="size-8 shrink-0" /><span className="text-sm font-medium">NeonDB</span></span>,
-    <span key="prisma" className="flex items-center gap-2"><Prisma className="size-8 shrink-0" /><span className="text-sm font-medium">Prisma</span></span>,
-    <span key="vercel" className="flex items-center gap-2"><Vercel className="size-8 shrink-0" /><span className="text-sm font-medium">Vercel</span></span>,
-]
-
-type LogoGroup = 'frontend' | 'backend'
-
-const logos: { [key in LogoGroup]: React.ReactNode[] } = {
-    frontend: frontendLogos,
-    backend: backendLogos,
-}
 
 export default function LogoCloud() {
-    const [currentGroup, setCurrentGroup] = useState<LogoGroup>('frontend')
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setCurrentGroup((prev) => {
-                const groups = Object.keys(logos) as LogoGroup[]
-                const currentIndex = groups.indexOf(prev)
-                const nextIndex = (currentIndex + 1) % groups.length
-                return groups[nextIndex]
-            })
-        }, 2500)
-
-        return () => clearInterval(interval)
-    }, [])
-
     return (
-        <section className="bg-background py-12">
-            <div className="mx-auto max-w-5xl px-6">
-                <div className="mx-auto grid h-12 max-w-2xl grid-cols-3 items-center gap-8">
-                    <AnimatePresence
-                        initial={false}
-                        mode="popLayout">
-                        {logos[currentGroup].map((logo, i) => (
-                            <motion.div
-                                key={`${currentGroup}-${i}`}
-                                className="**:fill-foreground! flex items-center justify-center"
-                                initial={{ opacity: 0, y: 12, filter: 'blur(6px)' }}
-                                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                                exit={{ opacity: 0, y: 12, filter: 'blur(6px)', scale: 0.5 }}
-                                transition={{ delay: i * 0.1, duration: 1.5, type: 'spring', bounce: 0.2 }}>
-                                {logo}
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
-                </div>
+        <section className="py-20 bg-background border-y border-white/5 overflow-hidden">
+            <div className="container mx-auto px-6 mb-12 text-center">
+                <span className="text-muted-foreground/50 text-xs uppercase tracking-[0.5em]">Powered by industry leading technology</span>
+            </div>
+            
+            <div className="relative flex overflow-hidden group">
+                <motion.div 
+                    animate={{ x: [0, -1000] }}
+                    transition={{ 
+                        duration: 30, 
+                        repeat: Infinity, 
+                        ease: "linear" 
+                    }}
+                    className="flex gap-20 items-center whitespace-nowrap"
+                >
+                    {[...techLogos, ...techLogos, ...techLogos].map((logo, i) => (
+                        <div key={i} className="flex items-center gap-4 text-muted-foreground hover:text-foreground transition-colors grayscale hover:grayscale-0 opacity-50 hover:opacity-100 duration-500">
+                            {logo.icon}
+                            <span className="text-xl font-bold tracking-tighter uppercase">{logo.name}</span>
+                        </div>
+                    ))}
+                </motion.div>
+                
+                {/* Gradient Masks */}
+                <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-background to-transparent z-10" />
+                <div className="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-background to-transparent z-10" />
             </div>
         </section>
     )
 }
+

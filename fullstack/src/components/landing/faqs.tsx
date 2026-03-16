@@ -4,6 +4,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import Link from 'next/link'
 import { useRef, useEffect } from 'react'
 import { gsap } from '@/lib/gsap'
+import { motion } from 'motion/react'
+import { HelpCircle } from 'lucide-react'
 
 const faqItems = [
     {
@@ -43,29 +45,15 @@ export default function FAQs() {
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            gsap.from('[data-faq-heading]', {
-                y: 30,
+            gsap.from(".faq-container", {
+                y: 50,
                 opacity: 0,
-                duration: 0.7,
-                ease: 'power2.out',
+                duration: 1,
+                ease: "power3.out",
                 scrollTrigger: {
-                    trigger: '[data-faq-heading]',
-                    start: 'top 85%',
-                    once: true,
-                },
-            })
-
-            gsap.from('[data-faq-item]', {
-                x: -20,
-                opacity: 0,
-                duration: 0.6,
-                stagger: 0.08,
-                ease: 'power2.out',
-                scrollTrigger: {
-                    trigger: '[data-faq-item]',
-                    start: 'top 85%',
-                    once: true,
-                },
+                    trigger: sectionRef.current,
+                    start: "top 80%",
+                }
             })
         }, sectionRef)
 
@@ -73,39 +61,57 @@ export default function FAQs() {
     }, [])
 
     return (
-        <section ref={sectionRef} id="faqs" className="bg-background @container py-24">
-            <div className="mx-auto max-w-2xl px-6">
-                <h2 data-faq-heading className="text-center font-serif text-4xl font-medium">Frequently Asked Questions</h2>
-                <Accordion
-                    type="single"
-                    collapsible
-                    className="mt-12">
-                    {faqItems.map((item) => (
-                        <div
-                            data-faq-item
-                            className="group"
-                            key={item.id}>
-                            <AccordionItem
+        <section ref={sectionRef} id="faqs" className="bg-background py-32 relative overflow-hidden">
+             {/* Decorative background */}
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-primary/[0.02] blur-[150px] rounded-full pointer-events-none" />
+
+            <div className="container mx-auto px-6 relative z-10">
+                <div className="faq-container max-w-3xl mx-auto">
+                    <div className="text-center mb-16">
+                        <motion.div 
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            whileInView={{ scale: 1, opacity: 1 }}
+                            className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6"
+                        >
+                            <HelpCircle className="w-6 h-6 text-primary" />
+                        </motion.div>
+                        <h2 className="text-4xl md:text-5xl font-bold tracking-tighter mb-4">Frequently Asked Questions</h2>
+                        <p className="text-muted-foreground text-lg">Everything you need to know about the Smart Shoe Care Machine.</p>
+                    </div>
+
+                    <Accordion type="single" collapsible className="space-y-4">
+                        {faqItems.map((item) => (
+                            <AccordionItem 
+                                key={item.id} 
                                 value={item.id}
-                                className="data-[state=open]:bg-muted/50 peer rounded-xl border-none px-5 py-1 transition-colors">
-                                <AccordionTrigger className="cursor-pointer py-4 text-sm font-medium hover:no-underline">{item.question}</AccordionTrigger>
-                                <AccordionContent>
-                                    <p className="text-muted-foreground pb-2 text-sm">{item.answer}</p>
+                                className="border border-white/5 bg-white/[0.02] rounded-2xl px-6 transition-colors hover:border-white/10 overflow-hidden"
+                            >
+                                <AccordionTrigger className="text-left py-6 text-lg hover:no-underline group">
+                                    <span className="group-hover:text-primary transition-colors">{item.question}</span>
+                                </AccordionTrigger>
+                                <AccordionContent className="pb-6 text-muted-foreground leading-relaxed text-base">
+                                    {item.answer}
                                 </AccordionContent>
                             </AccordionItem>
-                            <hr className="mx-5 group-last:hidden peer-data-[state=open]:opacity-0" />
-                        </div>
-                    ))}
-                </Accordion>
-                <p className="text-muted-foreground mt-8 text-center text-sm">
-                    Still have questions?{' '}
-                    <Link
-                        href="#contact"
-                        className="text-primary font-medium hover:underline">
-                        Contact us
-                    </Link>
-                </p>
+                        ))}
+                    </Accordion>
+
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        whileInView={{ opacity: 1 }}
+                        transition={{ delay: 0.5 }}
+                        className="mt-16 text-center"
+                    >
+                        <p className="text-muted-foreground">
+                            Still have questions?{' '}
+                            <Link href="#contact" className="text-primary font-bold hover:underline underline-offset-4">
+                                Contact our team
+                            </Link>
+                        </p>
+                    </motion.div>
+                </div>
             </div>
         </section>
     )
 }
+

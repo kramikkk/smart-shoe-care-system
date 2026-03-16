@@ -1,157 +1,265 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { HeroHeader } from './header'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ArrowDown } from 'lucide-react'
 import Image from 'next/image'
 import { gsap, ScrollTrigger } from '@/lib/gsap'
+import { motion, useScroll, useTransform, useSpring } from 'motion/react'
 
 export default function HeroSection() {
     const containerRef = useRef<HTMLDivElement>(null)
-    const bgRef = useRef<HTMLDivElement>(null)
-    const imageRef = useRef<HTMLDivElement>(null)
+    const imageWrapperRef = useRef<HTMLDivElement>(null)
+    const introText1Ref = useRef<HTMLDivElement>(null)
+    const introText2Ref = useRef<HTMLDivElement>(null)
+    const contentRef = useRef<HTMLDivElement>(null)
+    const startTextRef = useRef<HTMLDivElement>(null)
+
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            setMousePos({
+                x: e.clientX,
+                y: e.clientY
+            })
+        }
+        window.addEventListener('mousemove', handleMouseMove)
+        return () => window.removeEventListener('mousemove', handleMouseMove)
+    }, [])
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            // Word-by-word heading animation
-            const heading = containerRef.current?.querySelector('h1')
-            if (heading) {
-                const words = heading.textContent?.split(' ') ?? []
-                heading.innerHTML = words
-                    .map((w) => `<span class="inline-block overflow-hidden"><span class="inline-block word-reveal">${w}</span></span>`)
-                    .join(' ')
-
-                gsap.from('.word-reveal', {
-                    y: '110%',
-                    opacity: 0,
-                    duration: 0.8,
-                    stagger: 0.1,
-                    ease: 'power3.out',
-                })
-            }
-
-            // Subtitle + CTA fade in
-            gsap.from('[data-hero-sub]', {
-                y: 20,
-                opacity: 0,
-                duration: 0.7,
-                delay: 0.6,
-                ease: 'power2.out',
+            const tl = gsap.timeline({
+                scrollTrigger: {
+                    trigger: containerRef.current,
+                    start: 'top top',
+                    end: '+=500%',
+                    pin: true,
+                    scrub: 1.5,
+                    anticipatePin: 1,
+                }
             })
 
-            gsap.from('[data-hero-btn]', {
-                y: 20,
-                opacity: 0,
-                duration: 0.7,
-                delay: 0.8,
-                ease: 'power2.out',
-            })
+            // Initial states
+            gsap.set(imageWrapperRef.current, { scale: 1, opacity: 1 })
+            gsap.set([introText1Ref.current, introText2Ref.current], { opacity: 0, y: 150, scale: 0.5 })
+            gsap.set(contentRef.current, { opacity: 0, y: 100 })
+            gsap.set(startTextRef.current, { opacity: 1, y: 0, scale: 1 })
 
-            // Logo image entrance + float loop
-            if (imageRef.current) {
-                gsap.from(imageRef.current, {
-                    scale: 0.85,
+            // Sequence
+            // Phase 0: Immediate Reveal Transition
+            tl.to(startTextRef.current, { opacity: 0, y: -100, scale: 1.2, duration: 2, ease: "power2.inOut" })
+
+            // Phase 1: Cleaning Intro
+            tl.to(introText1Ref.current, { opacity: 1, y: 0, scale: 1, z: 0, duration: 1.5 }, "-=0.5")
+                .from(".reveal-text-1-mask", {
+                    clipPath: "inset(0 100% 0 0)",
+                    duration: 1.5,
+                    ease: "expo.out"
+                }, "-=1.2")
+                .from(".reveal-char-1", {
+                    yPercent: 120,
+                    rotationX: -45,
                     opacity: 0,
-                    duration: 1,
-                    delay: 0.3,
-                    ease: 'power2.out',
-                })
+                    stagger: 0.03,
+                    duration: 1.2,
+                    ease: "power4.out"
+                }, "-=1.2")
+                .to(".parallax-bg-1", { y: -500, z: -1200, opacity: 0.15, duration: 3, ease: "none" }, "-=2")
+                .to(".parallax-bg-2", { y: 250, z: 600, opacity: 0.3, duration: 3, ease: "none" }, "-=2")
+                .to(introText1Ref.current, { opacity: 0, y: -250, z: 800, scale: 1.1, duration: 1.5, ease: "power4.in" })
 
-                gsap.to(imageRef.current, {
-                    y: -8,
+            // Phase 2: Hygiene Intro
+            tl.to(introText2Ref.current, { opacity: 1, y: 0, scale: 1, z: 0, duration: 1.5 })
+                .from(".reveal-text-2-mask", {
+                    clipPath: "inset(0 0 0 100%)",
+                    duration: 1.5,
+                    ease: "expo.out"
+                }, "-=1.2")
+                .from(".reveal-char-2", {
+                    yPercent: -120,
+                    rotationX: 45,
+                    opacity: 0,
+                    stagger: 0.03,
+                    duration: 1.2,
+                    ease: "power4.out"
+                }, "-=1.2")
+                .to(".parallax-bg-3", { y: -600, z: -1500, opacity: 0.15, duration: 3, ease: "none" }, "-=2")
+                .to(".parallax-bg-4", { y: 300, z: 800, opacity: 0.3, duration: 3, ease: "none" }, "-=2")
+                .to(introText2Ref.current, { opacity: 0, y: -250, z: 1000, scale: 1.1, duration: 1.5, ease: "power4.in" }, "+=0.3")
+
+            // Transition to final layout
+            tl.to(imageWrapperRef.current, {
+                scale: 1,
+                duration: 5,
+                ease: "expo.inOut"
+            })
+                .to(".hero-dim-overlay", {
+                    opacity: 0.6,
+                    duration: 4,
+                    ease: "power2.inOut"
+                }, "-=4")
+                .to(contentRef.current, {
+                    opacity: 1,
+                    y: 0,
+                    scale: 1,
                     duration: 3,
-                    ease: 'sine.inOut',
-                    yoyo: true,
-                    repeat: -1,
-                    delay: 1.3,
-                })
-            }
+                    ease: "power4.out"
+                }, "-=2")
 
-            // Background parallax
-            if (bgRef.current) {
-                gsap.to(bgRef.current, {
-                    y: '30%',
-                    ease: 'none',
-                    scrollTrigger: {
-                        trigger: containerRef.current,
-                        start: 'top top',
-                        end: 'bottom top',
-                        scrub: true,
-                    },
-                })
-            }
         }, containerRef)
 
         return () => ctx.revert()
     }, [])
 
-    // Magnetic CTA effect
-    const handleBtnMouseMove = (e: React.MouseEvent<HTMLAnchorElement>) => {
-        const btn = e.currentTarget
-        const rect = btn.getBoundingClientRect()
-        const x = e.clientX - rect.left - rect.width / 2
-        const y = e.clientY - rect.top - rect.height / 2
-        gsap.to(btn, { x: x * 0.3, y: y * 0.3, duration: 0.3, ease: 'power2.out' })
-    }
-
-    const handleBtnMouseLeave = (e: React.MouseEvent<HTMLAnchorElement>) => {
-        gsap.to(e.currentTarget, { x: 0, y: 0, duration: 0.5, ease: 'elastic.out(1, 0.5)' })
-    }
-
     return (
-        <>
-            <HeroHeader />
-            <main className="overflow-hidden" ref={containerRef}>
-                <section id="home" className="bg-background">
-                    <div className="relative py-40">
-                        <div
-                            ref={bgRef}
-                            className="mask-radial-from-45% mask-radial-to-75% mask-radial-at-top mask-radial-[75%_100%] aspect-2/3 absolute inset-0 opacity-75 blur-xl md:aspect-square lg:aspect-video dark:opacity-5">
-                            <Image
-                                src="https://images.unsplash.com/photo-1685013640715-8701bbaa2207?q=80&w=2198&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                                alt="hero background"
-                                width={2198}
-                                height={1685}
-                                className="h-full w-full object-cover object-top"
-                            />
-                        </div>
-                        <div className="relative z-10 mx-auto w-full max-w-5xl sm:pl-6">
-                            <div className="flex items-center justify-between max-md:flex-col">
-                                <div className="max-w-md max-sm:px-6">
-                                    <h1 className="text-balance font-serif text-4xl font-medium sm:text-5xl">Smart Shoe Care Machine</h1>
-                                    <p {...{ 'data-hero-sub': '' }} className="text-muted-foreground mt-4 text-balance">An IoT Automated Solution for Cleaning, Sterilization and Drying Shoes with Integrated Image Recognition</p>
+        <div ref={containerRef} className="noise-overlay relative w-full h-screen bg-background overflow-hidden flex items-center justify-center perspective-premium">
+            <HeroHeader threshold={5000} />
 
-                                    <Button
-                                        asChild
-                                        className="mt-6 pr-1.5">
-                                        <Link
-                                            href="/client/login"
-                                            onMouseMove={handleBtnMouseMove}
-                                            onMouseLeave={handleBtnMouseLeave}
-                                            {...{ 'data-hero-btn': '' }}>
-                                            <span className="text-nowrap">Get Started</span>
-                                            <ChevronRight className="opacity-50" />
-                                        </Link>
-                                    </Button>
-                                </div>
-                                <div
-                                    ref={imageRef}
-                                    className="flex items-center justify-center max-md:mt-10">
-                                    <Image
-                                        src="/SSCMlogoTrans.png"
-                                        alt="Smart Shoe Care Machine"
-                                        width={400}
-                                        height={400}
-                                        className="object-contain"
-                                    />
-                                </div>
-                            </div>
+            {/* Smaller Inverting Custom Cursor */}
+            <div
+                className="fixed top-0 left-0 w-12 h-12 bg-white rounded-full mix-blend-difference pointer-events-none z-[9999] transition-transform duration-100 ease-out"
+                style={{
+                    transform: `translate(${mousePos.x}px, ${mousePos.y}px) translate(-50%, -50%)`
+                }}
+            />
+
+            {/* Final Scroll Dimming Overlay (Positioned above machine, below text) */}
+            <div className="hero-dim-overlay absolute inset-0 bg-black opacity-0 z-20 pointer-events-none" />
+
+
+
+            {/* Interactive Machine Wrapper */}
+            <div
+                ref={imageWrapperRef}
+                className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none"
+            >
+                <div className="relative w-screen h-screen flex items-center justify-center transform-gpu">
+
+
+                    <Image
+                        src="/SSCMHero.png"
+                        alt="SSCM Machine"
+                        fill
+                        className="relative z-10 object-cover drop-shadow-[0_0_150px_rgba(var(--primary),0.3)] transition-transform duration-500 ease-out"
+                        priority
+                    />
+                </div>
+            </div>
+
+            {/* Phase 0: Immediate Reveal Text */}
+            <div className="absolute inset-0 z-30 flex items-end justify-start pointer-events-none px-12 md:px-24 pb-24">
+                <div ref={startTextRef} className="flex flex-col gap-0">
+                    <span className="editorial-caps text-primary block mb-2">01 / FOAM & BRUSH</span>
+                    <h2 className="text-5xl md:text-[8rem] font-black tracking-tighter text-white uppercase italic leading-[0.85] pb-4">
+                        SHOE <br /> <span className="text-primary text-outline">CLEANING</span>
+                    </h2>
+                </div>
+            </div>
+
+            {/* Cinematic Text Reveals */}
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none px-6 overflow-hidden">
+                {/* Layer 1: CLEANING */}
+                <div ref={introText1Ref} className="w-full px-12 md:px-32 relative opacity-0 translate-y-24 scale-50 flex justify-start">
+                    <div className="absolute top-1/2 left-0 -translate-y-1/2 opacity-10 text-[30rem] font-black tracking-tighter text-white whitespace-nowrap parallax-bg-1 blur-sm pointer-events-none">
+                        DRYING
+                    </div>
+
+                    <div className="relative z-10 flex flex-col items-start translate-x-[-10%]">
+                        <span className="editorial-caps text-primary/60 mb-2">02 / HEAT & AIR</span>
+                        <div className="overflow-hidden reveal-text-1-mask border-l-4 border-primary pl-12 pb-8">
+                            <h2 className="text-5xl md:text-[8rem] font-black tracking-tighter text-white uppercase mb-0 leading-[0.85] italic">
+                                {"DRYING".split("").map((c, i) => (
+                                    <span key={i} className="reveal-char-1 inline-block">{c}</span>
+                                ))}
+                                <span className="block text-primary pr-12">
+                                    TECHNOLOGY
+                                </span>
+                            </h2>
                         </div>
                     </div>
-                </section>
-            </main>
-        </>
+
+                    <div className="absolute bottom-[-150px] left-32 opacity-40 text-xs font-mono tracking-[1em] text-primary whitespace-nowrap parallax-bg-2 uppercase">
+                        [ 40.7128° C, 74.0060° F ]
+                    </div>
+                </div>
+
+                {/* Layer 2: HYGIENE */}
+                <div ref={introText2Ref} className="w-full px-12 md:px-32 absolute relative opacity-0 translate-y-24 scale-50 flex justify-end">
+                    <div className="absolute top-1/2 right-0 -translate-y-1/2 opacity-10 text-[30rem] font-black tracking-tighter text-white whitespace-nowrap parallax-bg-3 blur-sm pointer-events-none text-right">
+                        PURE
+                    </div>
+
+                    <div className="relative z-10 flex flex-col items-end translate-x-[10%] text-right">
+                        <span className="editorial-caps text-white mb-2">03 / UV-C & MIST</span>
+                        <div className="overflow-hidden reveal-text-2-mask border-r-4 border-white pr-12 pb-8">
+                            <h2 className="text-5xl md:text-[8rem] font-black tracking-tighter text-white uppercase mb-0 leading-[0.85] italic">
+                                {"PURE".split("").map((c, i) => (
+                                    <span key={i} className="reveal-char-2 inline-block text-primary">{c}</span>
+                                ))}
+                                <br />
+                                {"STERILIZING".split("").map((c, i) => (
+                                    <span key={i} className="reveal-char-2 inline-block">{c}</span>
+                                ))}
+                            </h2>
+                        </div>
+                    </div>
+
+                    <div className="absolute top-[-200px] right-32 opacity-40 text-xs font-mono tracking-[1em] text-white whitespace-nowrap parallax-bg-4 uppercase">
+                        HYGIENE_STATUS: OPTIMAL
+                    </div>
+                </div>
+
+
+            </div>
+
+            {/* Main Content Overlay */}
+            <div ref={contentRef} className="absolute inset-0 z-40 flex flex-col items-start justify-center pointer-events-none px-12 md:px-24 opacity-0 translate-y-24">
+                <div className="max-w-6xl text-left pointer-events-auto">
+                    <span className="editorial-caps text-primary mb-12 block">04 / SMART SHOE CARE MACHINE</span>
+                    <h1 className="text-6xl md:text-[7rem] lg:text-[8.5rem] font-black tracking-tighter leading-[0.75] mb-12 uppercase italic">
+                        SMART SHOE <br /> <span className="text-primary text-outline">CARE MACHINE</span>
+                    </h1>
+
+                    <div className="flex flex-col md:flex-row items-start justify-start gap-12 mb-16 max-w-2xl">
+                        <div className="text-lg md:text-2xl text-muted-foreground font-medium leading-tight">
+                            The future of Shoe Care. An IoT Automated Solution for Cleaning, Sterilization and Drying Shoes with Integrated Image Recognition
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-start gap-8">
+                        <div
+                            onClick={() => {
+                                const contact = document.getElementById('contact');
+                                if (contact) {
+                                    contact.scrollIntoView({ behavior: 'smooth' });
+                                }
+                            }}
+                            className="group relative px-12 py-6 bg-primary text-primary-foreground rounded-sm font-black uppercase tracking-[0.2em] transition-all duration-500 hover:tracking-[0.4em] overflow-hidden cursor-pointer pointer-events-auto"
+                        >
+                            <span className="relative z-10">Order Now</span>
+                            <div className="absolute inset-0 bg-white translate-y-full group-hover:translate-y-0 transition-transform duration-500 mix-blend-difference" />
+                        </div>
+                        <Link
+                            href="/client/login"
+                            className="editorial-caps text-white border-b border-white/20 pb-2 hover:text-primary hover:border-primary transition-colors"
+                        >
+                            Explore Interface
+                        </Link>
+                    </div>
+                </div>
+            </div>
+
+            {/* Enhanced Scroll Indicator */}
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 text-muted-foreground/30 z-50">
+                <span className="text-[9px] uppercase tracking-[0.6em] font-mono">ENGAGE SYSTEM</span>
+                <div className="h-12 w-px bg-gradient-to-b from-primary/50 to-transparent animate-bounce" />
+            </div>
+        </div>
     )
 }
+
+
