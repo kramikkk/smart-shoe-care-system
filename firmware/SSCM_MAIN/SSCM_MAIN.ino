@@ -44,7 +44,7 @@ const unsigned long WS_RECONNECT_INTERVAL = 5000; // Try to reconnect every 5 se
 
 /* ===================== STATUS UPDATE ===================== */
 unsigned long lastStatusUpdate = 0;
-const unsigned long STATUS_UPDATE_INTERVAL = 60000; // Update status every 1 minute
+const unsigned long STATUS_UPDATE_INTERVAL = 30000; // Update status every 30 seconds
 
 /* ===================== ESP-NOW - ESP32-CAM COMMUNICATION ===================== */
 // Hybrid communication: ESP-NOW for classification (fast, offline-capable),
@@ -145,9 +145,10 @@ const unsigned long BILL_PULSE_DEBOUNCE_TIME = 100;     // 100ms between pulses 
 const unsigned long BILL_COMPLETE_TIMEOUT = 300;        // 300ms to confirm bill insertion complete
 
 /* ===================== PAYMENT CONTROL ===================== */
-bool paymentEnabled = false;  // Only accept payments when explicitly enabled from frontend
-unsigned long paymentEnableTime = 0;  // Timestamp when payment relay was turned on
+volatile bool paymentEnabled = false;  // Only accept payments when explicitly enabled from frontend
+volatile unsigned long paymentEnableTime = 0;  // Timestamp when payment relay was turned on
 const unsigned long PAYMENT_STABILIZATION_DELAY = 3000;  // 3 second delay after relay turns on
+static portMUX_TYPE paymentMux = portMUX_INITIALIZER_UNLOCKED;  // For atomic pulse read+clear
 
 /* ===================== 8-CHANNEL RELAY ===================== */
 #define RELAY_1_PIN 3   // Channel 1: Bill + Coin (combined power for both acceptors)
@@ -159,7 +160,7 @@ const unsigned long PAYMENT_STABILIZATION_DELAY = 3000;  // 3 second delay after
 #define RELAY_7_PIN 7   // Channel 7: Ultrasonic Mist Maker
 #define RELAY_8_PIN 6   // Channel 8: UVC Light
 
-// Most relay modules are active LOW (LOW = ON, HIGH = OFF)
+// This relay module is active HIGH (HIGH = ON, LOW = OFF)
 #define RELAY_ON HIGH
 #define RELAY_OFF LOW
 
@@ -271,9 +272,9 @@ unsigned long lastServoUpdate = 0;
 const unsigned long SERVO_UPDATE_INTERVAL = 15;  // Update servos every 15ms for smooth movement
 
 // Servo speed control for cleaning brushing phases
-// Slow: 180° over entire 3 cycles (~285s) = 285000ms / 15ms / 180° ≈ 106 updates per degree
+// Slow: 180° over entire 3 cycles (~285s) = 285000ms / 15ms / 180° ≈ 105 updates per degree
 // Fast: 180° over ~2s = move 1° every update
-const int SERVO_SLOW_STEP_INTERVAL = 106;  // Updates between each 1° step (slow over all 3 cycles)
+const int SERVO_SLOW_STEP_INTERVAL = 105;  // Updates between each 1° step (slow over all 3 cycles)
 const int SERVO_FAST_STEP_INTERVAL = 1;    // Updates between each 1° step (fast return)
 int servoStepInterval = SERVO_SLOW_STEP_INTERVAL;  // Current step interval
 int servoStepCounter = 0;                  // Counter for step interval
@@ -300,8 +301,8 @@ int currentLeftMotorSpeed = 0;   // Left motor speed (-255 to 255, negative = re
 int currentRightMotorSpeed = 0;  // Right motor speed (-255 to 255, negative = reverse)
 
 /* ===================== TB6600 STEPPER MOTOR DRIVER - TOP LINEAR STEPPER ===================== */
-#define STEPPER1_STEP_PIN 36     // GPIO 35 - STEP/PULSE pin (PUL+/PUL-)
-#define STEPPER1_DIR_PIN 35      // GPIO 36 - DIRECTION pin (DIR+/DIR-)
+#define STEPPER1_STEP_PIN 36     // GPIO 36 - STEP/PULSE pin (PUL+/PUL-)
+#define STEPPER1_DIR_PIN 35      // GPIO 35 - DIRECTION pin (DIR+/DIR-)
 // ENA+ hardwired to GND (motor ALWAYS ENABLED - no ESP32 control needed)
 
 // Top Linear Stepper configuration - Optimized for NEMA11 linear actuator (max 80mm/s)
@@ -547,11 +548,9 @@ void initESPNow() {
     pairedCamIp       = prefs.getString("camIp", "");
 
     if (pairedCamDeviceId.length() > 0) {
-        Serial.println("[ESP-NOW] Restored CAM ID: " + pairedCamDeviceId + " — awaiting PairingAck to confirm ready");
-        // Do NOT set camIsReady=true here — require live PairingAck from CAM each boot.
-        // Setting pairingBroadcastStarted=true makes the retry loop send broadcasts
-        // until the CAM responds, preventing classification against an unresponsive CAM.
-        pairingBroadcastStarted = true;
+        Serial.println("[ESP-NOW] Restored CAM ID: " + pairedCamDeviceId + " — pairing broadcast will start after WiFi connects");
+        // pairingBroadcastStarted is set by sendPairingBroadcast() once WiFi confirms connected,
+        // ensuring validated credentials are sent to the CAM.
     }
 
     // Add peer: use direct CAM MAC if known, otherwise broadcast
@@ -713,7 +712,8 @@ void handleWiFiPortal() {
         delay(1);
     }
 
-    // Read the request
+    // Read the request with a short timeout to prevent blocking the main loop
+    client.setTimeout(100);  // 100ms max — prevents 1s stall per request
     String request = "";
     if (client.available()) {
         request = client.readString();
@@ -732,7 +732,9 @@ void handleWiFiPortal() {
         String pass = request.substring(passIndex + 6);
 
         ssid = urlDecode(ssid);
+        ssid.trim();
         pass = urlDecode(pass);
+        pass.trim();
 
         prefs.putString("ssid", ssid);
         prefs.putString("pass", pass);
@@ -769,31 +771,20 @@ void handleWiFiPortal() {
 String generatePairingCode() {
     String code = "";
     for (int i = 0; i < 6; i++) {
-        code += String(random(0, 10));
+        code += String(esp_random() % 10);
     }
     return code;
 }
 
 String generateDeviceId() {
-    // Generate unique device ID from ESP32 chip ID
+    // Use lower 3 bytes of EfuseMac — device-specific (not OUI) part of the MAC
     uint64_t chipid = ESP.getEfuseMac();
-    String id = "SSCM-";
-
-    // Extract bytes from chip ID
-    uint8_t byte0 = (chipid >> 0) & 0xFF;
-    uint8_t byte1 = (chipid >> 8) & 0xFF;
-    uint8_t byte2 = (chipid >> 16) & 0xFF;
-
-    // Format as hex
-    if (byte2 < 16) id += "0";
-    id += String(byte2, HEX);
-    if (byte1 < 16) id += "0";
-    id += String(byte1, HEX);
-    if (byte0 < 16) id += "0";
-    id += String(byte0, HEX);
-
-    id.toUpperCase();
-    return id;
+    char id[12];
+    snprintf(id, sizeof(id), "SSCM-%02X%02X%02X",
+             (uint8_t)((chipid >> 16) & 0xFF),
+             (uint8_t)((chipid >> 8)  & 0xFF),
+             (uint8_t)((chipid >> 0)  & 0xFF));
+    return String(id);
 }
 
 void sendDeviceRegistration() {
@@ -831,32 +822,13 @@ void sendDeviceRegistration() {
     http.end();
 }
 
-void sendStatusUpdate() {
-    if (WiFi.status() != WL_CONNECTED) return;
-
-    HTTPClient http;
-    String url = String(BACKEND_URL) + "/api/device/status";
-
-    http.begin(url);
-    http.addHeader("Content-Type", "application/json");
-
-    String payload = "{";
-    payload += "\"deviceId\":\"" + deviceId + "\"";
-    payload += "}";
-
-    int httpCode = http.POST(payload);
-    if (httpCode < 0) {
-        Serial.println("[HTTP] Status update error: " + http.errorToString(httpCode));
-    }
-
-    http.end();
-}
 
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
         case WStype_DISCONNECTED: {
             Serial.println("[WebSocket] Disconnected");
             wsConnected = false;
+            lastWsReconnect = 0;  // Force immediate reconnect attempt
             break;
         }
 
@@ -1062,6 +1034,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
         case WStype_ERROR: {
             Serial.println("[WebSocket] Error");
             wsConnected = false;
+            lastWsReconnect = 0;  // Force immediate reconnect attempt
             break;
         }
     }
@@ -1079,6 +1052,7 @@ void connectWebSocket() {
     webSocket.begin(BACKEND_HOST, BACKEND_PORT, wsPath);
     webSocket.onEvent(webSocketEvent);
     webSocket.setReconnectInterval(5000);
+    lastWsReconnect = millis();  // Prevent reconnect timer from firing immediately
 }
 
 void connectWiFi() {
@@ -1417,7 +1391,12 @@ void handleService() {
     // For cleaning: don't stop if brushing is still in progress (phases 3-4)
     if (elapsed >= serviceDuration) {
         if (currentServiceType == "cleaning" && cleaningPhase >= 4) {
-            // Brushing in progress - don't stop yet
+            // Brushing in progress — allow up to 5s grace period past duration
+            if (elapsed >= serviceDuration + 5000) {
+                Serial.println("[Service] Cleaning hard cutoff reached — forcing stop");
+                stopService();
+                return;
+            }
         } else {
             stopService();
             return;
@@ -1601,7 +1580,7 @@ void sendCamPairedToBackend() {
 }
 
 /* ===================== DHT22 FUNCTIONS ===================== */
-bool readDHT22() {
+bool readDHT11() {
     float temp = dht.readTemperature();  // Celsius
     float hum = dht.readHumidity();
 
@@ -1657,68 +1636,79 @@ void sendCamSyncStatus() {
 
 /* ===================== ULTRASONIC FUNCTIONS ===================== */
 bool readAtomizerLevel() {
-    // Manual trigger for better reliability with JSN-SR20-Y1
     digitalWrite(ATOMIZER_TRIG_PIN, LOW);
-    delayMicroseconds(5);  // Ensure clean LOW state
+    delayMicroseconds(5);   // Clean LOW state
     digitalWrite(ATOMIZER_TRIG_PIN, HIGH);
-    delayMicroseconds(20); // 20us pulse (JSN-SR20-Y1 needs at least 10us)
+    delayMicroseconds(50);  // 50us — well above 20us minimum for stable trigger
     digitalWrite(ATOMIZER_TRIG_PIN, LOW);
 
-    // Wait for echo (no timeout — sensor auto-lows after ~40ms on no echo)
-    unsigned long duration = pulseIn(ATOMIZER_ECHO_PIN, HIGH);
+    // 40ms timeout: matches sensor's own no-echo timeout per datasheet
+    unsigned long duration = pulseIn(ATOMIZER_ECHO_PIN, HIGH, 40000);
 
-    // Check for invalid reading (0 = timeout or no echo)
     if (duration == 0) {
-        Serial.println("[Atomizer] Error: No echo");
+        // No echo = liquid within 7cm dead zone = container FULL
+        Serial.println("[Atomizer] FULL (within dead zone)");
         currentAtomizerDistance = 0;
-        return false;
+        return true;
     }
 
-    // Calculate distance: duration in microseconds, speed of sound = 343 m/s
-    // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
-    int distance = (duration * 0.034) / 2;
+    // Datasheet formula: distance = (duration × 348 m/s) / 2
+    // 348 m/s = 0.0174 cm/µs  (one-way)
+    float distance = duration * 0.0174f;
 
-    // Validate range (JSN-SR20-Y1: 2cm to 21cm container height)
-    if (distance < 2 || distance > 21) {
-        Serial.println("[Atomizer] Out of range: " + String(distance) + " cm");
-        currentAtomizerDistance = 0;
-        return false;
+    if (distance > 21.0f) {
+        Serial.println("[Atomizer] Out of range: " + String(distance, 1) + " cm");
+        currentAtomizerDistance = 21;  // Treat as empty
+        return true;
     }
 
-    currentAtomizerDistance = distance;
+    int d = (int)roundf(distance);
+    if (d <= 7) {
+        // Within dead zone or near-full — clamp to FULL
+        currentAtomizerDistance = 0;
+    } else {
+        currentAtomizerDistance = d;
+    }
     return true;
 }
 
 bool readFoamLevel() {
-    // Manual trigger for better reliability with JSN-SR20-Y1
+    // 50ms gap after atomizer read — prevents cross-sensor echo interference
+    delay(50);
+
     digitalWrite(FOAM_TRIG_PIN, LOW);
-    delayMicroseconds(5);  // Ensure clean LOW state
+    delayMicroseconds(5);   // Clean LOW state
     digitalWrite(FOAM_TRIG_PIN, HIGH);
-    delayMicroseconds(20); // 20us pulse (JSN-SR20-Y1 needs at least 10us)
+    delayMicroseconds(50);  // 50us — well above 20us minimum for stable trigger
     digitalWrite(FOAM_TRIG_PIN, LOW);
 
-    // Wait for echo (no timeout — sensor auto-lows after ~40ms on no echo)
-    unsigned long duration = pulseIn(FOAM_ECHO_PIN, HIGH);
+    // 40ms timeout: matches sensor's own no-echo timeout per datasheet
+    unsigned long duration = pulseIn(FOAM_ECHO_PIN, HIGH, 40000);
 
-    // Check for invalid reading (0 = timeout or no echo)
     if (duration == 0) {
-        Serial.println("[Foam] Error: No echo");
+        // No echo = liquid within 7cm dead zone = container FULL
+        Serial.println("[Foam] FULL (within dead zone)");
         currentFoamDistance = 0;
-        return false;
+        return true;
     }
 
-    // Calculate distance: duration in microseconds, speed of sound = 343 m/s
-    // distance = (duration / 2) / 29.1 cm (or duration * 0.034 / 2)
-    int distance = (duration * 0.034) / 2;
+    // Datasheet formula: distance = (duration × 348 m/s) / 2
+    // 348 m/s = 0.0174 cm/µs  (one-way)
+    float distance = duration * 0.0174f;
 
-    // Validate range (JSN-SR20-Y1: 2cm to 21cm container height)
-    if (distance < 2 || distance > 21) {
-        Serial.println("[Foam] Out of range: " + String(distance) + " cm");
-        currentFoamDistance = 0;
-        return false;
+    if (distance > 21.0f) {
+        Serial.println("[Foam] Out of range: " + String(distance, 1) + " cm");
+        currentFoamDistance = 21;  // Treat as empty
+        return true;
     }
 
-    currentFoamDistance = distance;
+    int d = (int)roundf(distance);
+    if (d <= 7) {
+        // Within dead zone or near-full — clamp to FULL
+        currentFoamDistance = 0;
+    } else {
+        currentFoamDistance = d;
+    }
     return true;
 }
 
@@ -1986,11 +1976,9 @@ void updateStepper1Position() {
         if (currentStepper1Position < targetStepper1Position) {
             // Step forward
             stepper1Step(true);
-            yield();  // Allow WiFi/WebSocket processing
         } else if (currentStepper1Position > targetStepper1Position) {
             // Step backward
             stepper1Step(false);
-            yield();  // Allow WiFi/WebSocket processing
         } else {
             // Reached target
             stepper1Moving = false;
@@ -2094,11 +2082,9 @@ void updateStepper2Position() {
         if (currentStepper2Position < targetStepper2Position) {
             // Step forward
             stepper2Step(true);
-            yield();  // Allow WiFi/WebSocket processing
         } else if (currentStepper2Position > targetStepper2Position) {
             // Step backward
             stepper2Step(false);
-            yield();  // Allow WiFi/WebSocket processing
         } else {
             // Reached target
             stepper2Moving = false;
@@ -2170,7 +2156,9 @@ void IRAM_ATTR handleCoinPulse() {
     // Debounce: ignore if less than COIN_PULSE_DEBOUNCE_TIME has passed
     if (currentTime - lastCoinPulseTime > COIN_PULSE_DEBOUNCE_TIME) {
         lastCoinPulseTime = currentTime;
+        portENTER_CRITICAL_ISR(&paymentMux);
         currentCoinPulses++;
+        portEXIT_CRITICAL_ISR(&paymentMux);
     }
 }
 
@@ -2191,7 +2179,9 @@ void IRAM_ATTR handleBillPulse() {
     // Debounce: ignore if less than BILL_PULSE_DEBOUNCE_TIME has passed
     if (currentTime - lastBillPulseTime > BILL_PULSE_DEBOUNCE_TIME) {
         lastBillPulseTime = currentTime;
+        portENTER_CRITICAL_ISR(&paymentMux);
         currentBillPulses++;
+        portEXIT_CRITICAL_ISR(&paymentMux);
     }
 }
 
@@ -2203,9 +2193,13 @@ void factoryReset() {
         CamMessage msg;
         memset(&msg, 0, sizeof(msg));
         msg.type = CAM_MSG_FACTORY_RESET;
-        esp_now_send(camMacAddress, (uint8_t*)&msg, sizeof(msg));
-        Serial.println("[FactoryReset] Waiting 3s for CAM to reset...");
-        delay(3000);
+        // Send 3 times to improve delivery reliability (ESP-NOW is fire-and-forget)
+        for (int i = 0; i < 3; i++) {
+            esp_now_send(camMacAddress, (uint8_t*)&msg, sizeof(msg));
+            delay(500);
+        }
+        Serial.println("[FactoryReset] Waiting for CAM to process reset...");
+        delay(1000);
     } else {
         Serial.println("[FactoryReset] CAM not reachable (ESP-NOW not ready) — skipping CAM reset");
     }
@@ -2390,9 +2384,8 @@ void setup() {
         Serial.println("[Setup] WiFi credentials found - connecting");
         WiFi.mode(WIFI_STA);
         delay(100);
-        initESPNow();
+        initESPNow();  // Init only — pairing broadcast deferred until WiFi connects
         delay(100);
-        sendPairingBroadcast();  // Send groupToken + WiFi creds to CAM
         connectWiFi();
     }
 }
@@ -2417,8 +2410,12 @@ void loop() {
 
         // Check if coin insertion is complete (no new pulse for COIN_COMPLETE_TIMEOUT ms)
         if (timeSinceLastPulse >= COIN_COMPLETE_TIMEOUT) {
-            // Coin insertion complete - process the value
+            // Atomically snapshot and clear to avoid losing ISR pulses mid-read
+            portENTER_CRITICAL(&paymentMux);
             unsigned int coinValue = currentCoinPulses;
+            currentCoinPulses = 0;
+            portEXIT_CRITICAL(&paymentMux);
+
             totalCoinPesos += coinValue;
             totalPesos = totalCoinPesos + totalBillPesos;
             prefs.putUInt("totalCoinPesos", totalCoinPesos);
@@ -2429,8 +2426,6 @@ void loop() {
                 String coinMsg = "{\"type\":\"coin-inserted\",\"deviceId\":\"" + deviceId + "\",\"coinValue\":" + String(coinValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
                 webSocket.sendTXT(coinMsg);
             }
-
-            currentCoinPulses = 0;
         }
     }
 
@@ -2440,26 +2435,25 @@ void loop() {
 
         // Check if bill insertion is complete (no new pulse for BILL_COMPLETE_TIMEOUT ms)
         if (timeSinceLastPulse >= BILL_COMPLETE_TIMEOUT) {
-            // Bill insertion complete - calculate value (1 pulse = 10 pesos)
-            unsigned int billValue = currentBillPulses * 10;
+            // Atomically snapshot and clear to avoid losing ISR pulses mid-read
+            portENTER_CRITICAL(&paymentMux);
+            unsigned int billPulses = currentBillPulses;
+            currentBillPulses = 0;
+            portEXIT_CRITICAL(&paymentMux);
 
-            // Accept all bills - process and count
+            // 1 pulse = 10 pesos
+            unsigned int billValue = billPulses * 10;
+
             totalBillPesos += billValue;
             totalPesos = totalCoinPesos + totalBillPesos;
-
-            // Save totals to persistent storage
             prefs.putUInt("totalBillPesos", totalBillPesos);
 
             Serial.println("[BILL] " + String(billValue) + " PHP (Total: " + String(totalPesos) + " PHP)");
 
-            // Send bill insertion event via WebSocket (only if paired)
             if (isPaired && wsConnected) {
                 String billMsg = "{\"type\":\"bill-inserted\",\"deviceId\":\"" + deviceId + "\",\"billValue\":" + String(billValue) + ",\"totalPesos\":" + String(totalPesos) + "}";
                 webSocket.sendTXT(billMsg);
             }
-
-            // Reset pulse counter for next bill
-            currentBillPulses = 0;
         }
     }
 
@@ -2559,10 +2553,14 @@ void loop() {
             }
         }
         else if (cmd == "SERVO_DEMO") {
-            setServoPositions(0);
-            setServoPositions(90);
-            setServoPositions(180);
-            Serial.println("Servo demo started (0°→90°→180°)");
+            setServoPositions(0, true);
+            delay(2000);
+            setServoPositions(90, true);
+            delay(2000);
+            setServoPositions(180, true);
+            delay(2000);
+            setServoPositions(0, true);
+            Serial.println("Servo demo complete (0°→90°→180°→0°)");
         }
         else if (cmd.startsWith("SERVO_")) {
             // Parse SERVO_XXX where XXX is angle for LEFT servo (0-180)
@@ -2941,7 +2939,7 @@ void loop() {
             lastDHTRead = millis();
 
             // Read DHT22 sensor
-            bool readSuccess = readDHT22();
+            bool readSuccess = readDHT11();
 
             // Send data via WebSocket only if reading was successful
             if (readSuccess && wsConnected) {

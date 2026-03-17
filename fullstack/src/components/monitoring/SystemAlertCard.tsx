@@ -20,12 +20,12 @@ type Alert = {
   description: string
 }
 
-const MIN_DIST = 2
-const MAX_DIST = 21
-const TANK_MAX_LITERS = 8
+const MIN_DIST = 7   // cm — sensor dead zone (firmware clamps ≤7 to 0)
+const MAX_DIST = 21  // cm — container height (empty)
+const TANK_MAX_LITERS = 5.3
 
 function distanceToPercent(distance: number): number {
-  if (distance <= 0) return 0
+  if (distance === 0) return 100  // FULL: liquid within dead zone
   const d = Math.min(Math.max(distance, MIN_DIST), MAX_DIST)
   return ((MAX_DIST - d) / (MAX_DIST - MIN_DIST)) * 100
 }

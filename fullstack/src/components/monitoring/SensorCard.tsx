@@ -50,17 +50,17 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
 
   if (id === 'atomizerLevel') {
     // Convert distance to liters
-    // Container: 21cm height, 8L max
-    // Sensor blind zone: 2cm min distance → usable range is 2cm (full) to 21cm (empty)
-    // Map: distance 2cm → 8L, distance 21cm → 0L
-    const MIN_DIST = 2   // cm — sensor blind zone limit
+    // Container: 21cm height, 5.3L usable max (7–21cm = 14cm usable range)
+    // Firmware sends 0 = FULL (within 7cm dead zone), 7–21cm = usable range
+    // Map: 0 or 7cm → 5.3L (full), 21cm → 0L (empty)
+    const MIN_DIST = 7   // cm — sensor dead zone (firmware clamps ≤7 to 0)
     const MAX_DIST = 21  // cm — container height (empty)
-    const d = Math.min(Math.max(sensorData.atomizerDistance, MIN_DIST), MAX_DIST)
-    const liters = sensorData.atomizerDistance > 0
-      ? ((MAX_DIST - d) / (MAX_DIST - MIN_DIST)) * 8
-      : 0
+    const TANK_L = 5.3
+    const liters = sensorData.atomizerDistance === 0
+      ? TANK_L  // FULL: liquid within dead zone
+      : ((MAX_DIST - Math.min(Math.max(sensorData.atomizerDistance, MIN_DIST), MAX_DIST)) / (MAX_DIST - MIN_DIST)) * TANK_L
     displayValue = `${liters.toFixed(1)}L`
-    displayPercentage = (liters / 8) * 100
+    displayPercentage = (liters / TANK_L) * 100
     // Status: Critical (<20%), Warning (20-40%), Normal (>40%)
     if (displayPercentage < 20) {
       displayStatus = 'Critical'
@@ -73,17 +73,17 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
 
   if (id === 'foamLevel') {
     // Convert distance to liters
-    // Container: 21cm height, 8L max
-    // Sensor blind zone: 2cm min distance → usable range is 2cm (full) to 21cm (empty)
-    // Map: distance 2cm → 8L, distance 21cm → 0L
-    const MIN_DIST = 2   // cm — sensor blind zone limit
+    // Container: 21cm height, 5.3L usable max (7–21cm = 14cm usable range)
+    // Firmware sends 0 = FULL (within 7cm dead zone), 7–21cm = usable range
+    // Map: 0 or 7cm → 5.3L (full), 21cm → 0L (empty)
+    const MIN_DIST = 7   // cm — sensor dead zone (firmware clamps ≤7 to 0)
     const MAX_DIST = 21  // cm — container height (empty)
-    const d = Math.min(Math.max(sensorData.foamDistance, MIN_DIST), MAX_DIST)
-    const liters = sensorData.foamDistance > 0
-      ? ((MAX_DIST - d) / (MAX_DIST - MIN_DIST)) * 8
-      : 0
+    const TANK_L = 5.3
+    const liters = sensorData.foamDistance === 0
+      ? TANK_L  // FULL: liquid within dead zone
+      : ((MAX_DIST - Math.min(Math.max(sensorData.foamDistance, MIN_DIST), MAX_DIST)) / (MAX_DIST - MIN_DIST)) * TANK_L
     displayValue = `${liters.toFixed(1)}L`
-    displayPercentage = (liters / 8) * 100
+    displayPercentage = (liters / TANK_L) * 100
     // Status: Critical (<20%), Warning (20-40%), Normal (>40%)
     if (displayPercentage < 20) {
       displayStatus = 'Critical'
