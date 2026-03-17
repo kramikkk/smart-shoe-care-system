@@ -25,6 +25,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Disable browser scroll restoration — required to prevent GSAP ScrollTrigger
+            pin position jumps when reloading mid-scroll on the landing page. */}
+        <script dangerouslySetInnerHTML={{ __html: 'history.scrollRestoration="manual"' }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
