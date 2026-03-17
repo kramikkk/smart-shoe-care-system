@@ -47,8 +47,8 @@ export function LoginForm({
         return
       }
 
-      // Successful login - redirect to dashboard
-      router.replace("/client/dashboard")
+      const role = result.data?.user?.role
+      router.replace(role === 'admin' ? '/admin/dashboard' : '/client/dashboard')
     } catch (err) {
       setError("An error occurred. Please try again.")
       setLoading(false)

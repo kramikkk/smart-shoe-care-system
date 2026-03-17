@@ -2,6 +2,7 @@ import { betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import prisma from '@/lib/prisma'
 import { nextCookies } from 'better-auth/next-js'
+import { admin } from 'better-auth/plugins'
 
 // Get trusted origins from environment variable or use defaults
 const getTrustedOrigins = () => {
@@ -21,5 +22,5 @@ export const auth = betterAuth({
     enabled: true,
   },
   trustedOrigins: getTrustedOrigins(),
-  plugins: [nextCookies()],
+  plugins: [nextCookies(), admin()],
 })

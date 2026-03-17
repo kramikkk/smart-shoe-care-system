@@ -9,6 +9,9 @@ export default async function LoginPage() {
       headers: await headers(),
     });
     if (session) {
+      if (session.user.role === 'admin') {
+        redirect("/admin/dashboard");
+      }
       redirect("/client/dashboard");
     }
     

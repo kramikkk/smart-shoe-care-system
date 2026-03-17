@@ -8,6 +8,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  admin
+  client
+
+  @@map("user_role")
+}
+
 model User {
   id            String    @id
   name          String
@@ -16,6 +23,10 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @default(now()) @updatedAt
+  role          UserRole?
+  banned        Boolean?
+  banReason     String?
+  banExpires    DateTime?
   accounts      Account[]
   sessions      Session[]
 

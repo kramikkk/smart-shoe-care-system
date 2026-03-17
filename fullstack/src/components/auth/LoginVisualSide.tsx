@@ -52,7 +52,7 @@ export function LoginVisualSide() {
             transition={{ delay: 0.7, duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
             className="text-5xl md:text-7xl font-black tracking-tighter text-white uppercase italic leading-[0.85]"
           >
-            CLIENT <br /> <span className="text-primary text-outline">DASHBOARD</span>
+            SSCM <br /> <span className="text-primary text-outline">DASHBOARD</span>
           </motion.h2>
         </div>
       </div>

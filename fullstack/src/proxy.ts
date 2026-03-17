@@ -25,20 +25,49 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route)) || isPublicDeviceRoute
 
   if (isPublicRoute) {
+    // For /client/login, redirect already-authenticated users by role
+    if (pathname === '/client/login') {
+      const session = await auth.api.getSession({ headers: request.headers })
+      if (session) {
+        if (session.user.role === 'admin') {
+          return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+        }
+        return NextResponse.redirect(new URL('/client/dashboard', request.url))
+      }
+    }
     return NextResponse.next()
   }
 
-  // Check if path requires admin authentication
-  const isAdminRoute = pathname.startsWith('/client')
-
-  if (isAdminRoute) {
-    // Check for session
-    const session = await auth.api.getSession({
-      headers: request.headers
-    })
-
+  // Admin routes — require admin role
+  if (pathname.startsWith('/admin')) {
+    const session = await auth.api.getSession({ headers: request.headers })
     if (!session) {
-      // Redirect to login if not authenticated
+      return NextResponse.redirect(new URL('/client/login', request.url))
+    }
+    if (session.user.role !== 'admin') {
+      return NextResponse.redirect(new URL('/client/dashboard', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // Client dashboard — require auth; redirect admins to their dashboard
+  if (pathname.startsWith('/client/dashboard')) {
+    const session = await auth.api.getSession({ headers: request.headers })
+    if (!session) {
+      const loginUrl = new URL('/client/login', request.url)
+      loginUrl.searchParams.set('callbackUrl', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+    if (session.user.role === 'admin') {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // Other /client routes — require auth
+  if (pathname.startsWith('/client')) {
+    const session = await auth.api.getSession({ headers: request.headers })
+    if (!session) {
       const loginUrl = new URL('/client/login', request.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
       return NextResponse.redirect(loginUrl)
