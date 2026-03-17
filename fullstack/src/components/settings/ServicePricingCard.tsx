@@ -56,7 +56,7 @@ export function ServicePricingCard({
   hasChanges,
 }: ServicePricingCardProps) {
   return (
-    <Card>
+    <Card className="glass-card border-none">
       <CardHeader>
         <div className="flex items-center gap-2">
           <Tag className="h-5 w-5 text-muted-foreground" />
@@ -74,9 +74,6 @@ export function ServicePricingCard({
               <div
                 key={item.id}
                 className="border rounded-lg p-4 space-y-4 transition-colors"
-                style={{
-                  ['--hover-border-color' as any]: iconColor
-                }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = iconColor
                 }}

@@ -10,17 +10,7 @@ import { useSensorData } from "@/contexts/SensorDataContext"
 const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
   const sensor = SensorData[id]
 
-  // Safely get sensor data - use default values if provider not available
-  let sensorData, isConnected
-  try {
-    const context = useSensorData()
-    sensorData = context.sensorData
-    isConnected = context.isConnected
-  } catch (error) {
-    console.error('[SensorCard] Failed to get sensor data context:', error)
-    sensorData = { temperature: 0, humidity: 0, atomizerDistance: 0, foamDistance: 0, lastUpdate: null, serviceActive: false, serviceType: '', serviceProgress: 0, serviceTimeRemaining: 0, camSynced: false }
-    isConnected = false
-  }
+  const { sensorData, isConnected } = useSensorData()
 
   const Icon = sensor.icon
   const isLoading = sensorData.lastUpdate === null
@@ -145,7 +135,7 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
   }
 
   return (
-    <Card>
+    <Card className="glass-card border-none">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <div className="flex items-center gap-2">
           <Icon className={`h-5 w-5 ${sensor.color}`} />

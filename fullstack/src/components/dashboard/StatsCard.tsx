@@ -40,6 +40,7 @@ const StatsCard = ({ id }: { id: StatsType }) => {
     const fetchStats = async () => {
       try {
         const response = await fetch(`/api/transaction/stats?deviceId=${selectedDevice}`)
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         const data = await response.json()
 
         if (data.success) {
@@ -59,7 +60,7 @@ const StatsCard = ({ id }: { id: StatsType }) => {
 
   if (isLoading || !stats) {
     return (
-      <Card className="@container/card">
+      <Card className="@container/card glass-card border-none">
         <CardContent className="flex items-center justify-center h-24">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </CardContent>
@@ -92,7 +93,7 @@ const StatsCard = ({ id }: { id: StatsType }) => {
   const Icon = currentConfig.icon
 
   return (
-    <Card className="@container/card">
+    <Card className="@container/card glass-card border-none">
       <CardHeader>
         <div className="flex items-center gap-2">
           <Icon className={`size-5 ${currentConfig.iconColor}`} />

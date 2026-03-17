@@ -161,6 +161,7 @@ export default function AreaChartCard() {
         else if (timeRange === "7d") days = 7
 
         const response = await fetch(`/api/transaction/chart?days=${days}&deviceId=${selectedDevice}`)
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         const data = await response.json()
 
         if (data.success) {
@@ -178,11 +179,9 @@ export default function AreaChartCard() {
     fetchChartData()
   }, [timeRange, selectedDevice])
 
-  const filteredData = chartData
-
   return (
-    <Card className="pt-0 h-full flex flex-col">
-      <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row shrink-0">
+    <Card className="pt-0 h-full flex flex-col glass-card border-none overflow-hidden">
+      <CardHeader className="flex items-center gap-2 space-y-0 py-5 sm:flex-row shrink-0">
         <div className="grid flex-1 gap-1">
           <CardTitle>Transaction + Revenue Chart</CardTitle>
           <CardDescription>
@@ -235,7 +234,7 @@ export default function AreaChartCard() {
           <div className="flex items-center justify-center w-full">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : filteredData.length === 0 ? (
+        ) : chartData.length === 0 ? (
           <div className="flex items-center justify-center w-full">
             <div className="text-muted-foreground">No data available</div>
           </div>
@@ -244,7 +243,7 @@ export default function AreaChartCard() {
           config={chartConfig}
           className="aspect-auto h-full w-full"
         >
-          <AreaChart data={filteredData}>
+          <AreaChart data={chartData}>
             <defs>
               <linearGradient id="fillRevenue" x1="0" y1="0" x2="0" y2="1">
                 <stop

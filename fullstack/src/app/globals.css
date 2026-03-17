@@ -139,6 +139,14 @@ html {
   --border: oklch(0.2 0 0);
   --input: oklch(0.2 0 0);
   --ring: oklch(0.6 0.2 250);
+  --sidebar: oklch(0.03 0 0);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-accent: oklch(1 0 0 / 0.05);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(1 0 0 / 0.05);
+  --sidebar-primary: oklch(0.6 0.2 250);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-ring: oklch(0.6 0.2 250);
 }
 
 @layer base {
@@ -163,7 +171,9 @@ html {
   }
 
   .glass-card {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+    @apply bg-white/5 border border-white/10;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
   }
 
   .animate-spin-slow {

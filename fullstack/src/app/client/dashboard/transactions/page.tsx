@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import { motion } from "motion/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CalendarIcon, FileClock, X, Search } from "lucide-react"
+import { CalendarIcon, FileClock, X, Search, Download } from "lucide-react"
 import { TransactionDataTable } from "@/components/transactions/TransactionDataTable"
 import { columns, Transaction } from "@/components/transactions/TransactionColumns"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -49,6 +50,7 @@ export default function TransactionsPage() {
           params.set('endDate', end.toISOString())
         }
         const response = await fetch(`/api/transaction/list?${params}`, { signal: controller.signal })
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         const data = await response.json()
 
         if (data.success) {
@@ -105,274 +107,184 @@ export default function TransactionsPage() {
     })
   }, [transactions, search, serviceFilter, shoeTypeFilter, careTypeFilter])
 
+  const handleExport = () => {
+    if (filteredData.length === 0) return
+
+    const headers = ["Transaction ID", "Service", "Shoe Type", "Care Type", "Amount", "Status", "Date"]
+    const csvContent = [
+      headers.join(","),
+      ...filteredData.map(tx => [
+        tx.transactionId,
+        `"${tx.serviceType}"`,
+        `"${tx.shoeType}"`,
+        `"${tx.careType}"`,
+        tx.amount,
+        tx.status,
+        `"${tx.dateTime}"`
+      ].join(","))
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", `SSCM_Transactions_${format(new Date(), "yyyy-MM-dd")}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
-    <div className="w-full">
-      <Card className="pb-2">
-        <CardHeader className="px-4 sm:px-6">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      className="w-full pb-8"
+    >
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Transaction <span className="text-primary">History</span></h1>
+        <p className="text-muted-foreground">View and export your device transaction records.</p>
+      </div>
+
+      <Card className="glass-card border-none overflow-hidden gap-0 py-2">
+        <CardHeader className="px-4 sm:px-6 py-4 pb-2">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <FileClock className="size-4 sm:size-5 text-purple-500" />
-                <CardTitle className="text-lg sm:text-xl">Transaction History</CardTitle>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <FileClock className="size-4 sm:size-5 text-primary" />
               </div>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                Showing {filteredData.length} transaction{filteredData.length !== 1 ? 's' : ''}
-              </p>
+              <div>
+                <CardTitle className="text-lg sm:text-xl">History <span className="text-primary">Log</span></CardTitle>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                  Showing {filteredData.length} records
+                </p>
+              </div>
             </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={filteredData.length === 0}
+              className="h-9 border-white/10 bg-white/5 hover:bg-primary/10 hover:text-primary transition-all gap-2"
+            >
+              <Download className="size-4" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </Button>
           </div>
         </CardHeader>
-        <CardContent className="px-4 sm:px-6">
-          <div className="space-y-3 sm:space-y-4">
-            {/* Search + Filters */}
-            <div className="flex flex-col gap-3">
-              {/* Top Row - Search Bar + Date Range + Clear Button */}
-              <div className="flex flex-col lg:flex-row gap-3">
-                {/* Search Bar */}
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+        <CardContent className="px-4 sm:px-6 pt-2 pb-6 border-none">
+          <div className="flex flex-col gap-5">
+            {/* Premium Search & Filter Toolbar */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="flex flex-col gap-6 p-4 rounded-2xl bg-white/[0.02] border border-white/5"
+            >
+              {/* Primary Row: Search & Range */}
+              <div className="flex flex-col xl:flex-row gap-4">
+                {/* Unified Search Input */}
+                <div className="relative flex-1 group">
+                  <div className="absolute inset-0 bg-primary/10 rounded-xl blur-lg opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 group-focus-within:text-primary group-focus-within:scale-110 transition-all z-20" />
                   <Input
-                    placeholder="Search by ID, service, amount..."
-                    className="pl-10 pr-10 h-10 sm:h-11 border-2 text-sm sm:text-base"
+                    placeholder="Search transaction ID, service, or amount..."
+                    className="relative z-10 pl-11 pr-11 h-12 border-white/10 bg-white/5 text-sm rounded-xl focus-visible:ring-primary/20 focus-visible:bg-white/[0.08] focus-visible:border-primary/30 transition-all shadow-2xl"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
                   {search && (
                     <button
                       onClick={() => setSearch("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label="Clear search"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-red-400 transition-colors z-20"
                     >
                       <X className="size-4" />
                     </button>
                   )}
                 </div>
 
-                {/* Date Range + Clear Button Group */}
-                <div className="flex flex-col gap-2 lg:flex-row lg:flex-shrink-0">
-                  {/* Date Range Container */}
-                  <div className="flex gap-2">
-                    {/* From Date */}
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={`h-10 sm:h-11 flex-1 lg:w-[140px] lg:flex-initial justify-start text-left font-normal border-2 text-sm ${!dateFrom && "text-muted-foreground"}`}
-                        >
-                          <CalendarIcon className="mr-1 sm:mr-2 h-4 w-4 flex-shrink-0" />
-                          <span className="truncate">{dateFrom ? format(dateFrom, "MMM dd") : "From"}</span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dateFrom}
-                          onSelect={setDateFrom}
-                          autoFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                {/* Date Controls */}
+                <div className="grid grid-cols-2 xl:flex bg-white/5 p-1 rounded-xl border border-white/10 h-12 shadow-inner">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className={`h-full px-2 sm:px-5 flex-1 justify-center xl:justify-start text-[10px] sm:text-[11px] font-semibold tracking-wide hover:bg-white/5 rounded-lg transition-colors ${!dateFrom && "text-muted-foreground/60"}`}
+                      >
+                        <CalendarIcon className="mr-2 h-3.5 w-3.5 text-primary/70 shrink-0" />
+                        <span className="truncate">{dateFrom ? format(dateFrom, "MMM dd, yyyy") : "Start Date"}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-card/98 border-white/10 backdrop-blur-2xl shadow-2xl" align="end">
+                      <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus />
+                    </PopoverContent>
+                  </Popover>
 
-                    {/* To Date */}
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={`h-10 sm:h-11 flex-1 lg:w-[140px] lg:flex-initial justify-start text-left font-normal border-2 text-sm ${!dateTo && "text-muted-foreground"}`}
-                        >
-                          <CalendarIcon className="mr-1 sm:mr-2 h-4 w-4 flex-shrink-0" />
-                          <span className="truncate">{dateTo ? format(dateTo, "MMM dd") : "To"}</span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dateTo}
-                          onSelect={setDateTo}
-                          autoFocus
-                          disabled={(date) => dateFrom ? date < dateFrom : false}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                  <div className="w-[1px] h-3.5 bg-white/10 self-center mx-1 hidden xl:block" />
 
-                  {/* Clear Filters Button */}
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setPaymentFilter("all")
-                      setServiceFilter("all")
-                      setShoeTypeFilter("all")
-                      setCareTypeFilter("all")
-                      setStatusFilter("all")
-                      setDateFrom(undefined)
-                      setDateTo(undefined)
-                    }}
-                    disabled={paymentFilter === "all" && serviceFilter === "all" && shoeTypeFilter === "all" && careTypeFilter === "all" && statusFilter === "all" && !dateFrom && !dateTo}
-                    className="h-10 sm:h-11 px-3 sm:px-4 border-2 gap-2 w-full lg:w-auto text-sm"
-                  >
-                    <X className="size-4" />
-                    <span>Clear</span>
-                  </Button>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className={`h-full px-2 sm:px-5 flex-1 justify-center xl:justify-start text-[10px] sm:text-[11px] font-semibold tracking-wide hover:bg-white/5 rounded-lg transition-colors ${!dateTo && "text-muted-foreground/60"}`}
+                      >
+                        <CalendarIcon className="mr-2 h-3.5 w-3.5 text-primary/70 shrink-0" />
+                        <span className="truncate">{dateTo ? format(dateTo, "MMM dd, yyyy") : "End Date"}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-card/98 border-white/10 backdrop-blur-2xl shadow-2xl" align="end">
+                      <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus disabled={(date) => dateFrom ? date < dateFrom : false} />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
-              {/* Bottom Row - Filter Selects (Full Width) */}
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-                {/* Payment Method Filter */}
-                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                  <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
-                    <SelectValue placeholder="Payment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Payment</SelectItem>
-                    <SelectItem value="Cash">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-green-500"></div>
-                        Cash
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Online">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-blue-500"></div>
-                        Online
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Secondary Row: Category Filters */}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 px-1">Filter by</div>
 
-                {/* Service Filter */}
-                <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                  <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
-                    <SelectValue placeholder="Service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Service</SelectItem>
-                    <SelectItem value="Cleaning">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-blue-500"></div>
-                        Cleaning
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Drying">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-orange-500"></div>
-                        Drying
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Sterilizing">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-purple-500"></div>
-                        Sterilizing
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Package">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-pink-500"></div>
-                        Package
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Status Filter */}
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Status</SelectItem>
-                    <SelectItem value="Success">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-green-500"></div>
-                        Success
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Pending">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-yellow-500"></div>
-                        Pending
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Failed">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-red-500"></div>
-                        Failed
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Shoe Type Filter */}
-                <Select value={shoeTypeFilter} onValueChange={setShoeTypeFilter}>
-                  <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
-                    <SelectValue placeholder="Shoe Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Shoe Type</SelectItem>
-                    <SelectItem value="Canvas">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-amber-500"></div>
-                        Canvas
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Rubber">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-slate-500"></div>
-                        Rubber
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Mesh">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-cyan-500"></div>
-                        Mesh
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Care Type Filter */}
-                <div className="col-span-2 sm:col-span-2 md:col-span-1">
-                  <Select value={careTypeFilter} onValueChange={setCareTypeFilter}>
-                    <SelectTrigger className="h-10 sm:h-11 border-2 w-full text-sm">
-                      <SelectValue placeholder="Care Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Care Type</SelectItem>
-                      <SelectItem value="Gentle">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-green-500"></div>
-                          Gentle
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Normal">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-blue-500"></div>
-                          Normal
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Strong">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-red-500"></div>
-                          Strong
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Auto">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-purple-500"></div>
-                          Auto
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {[
+                    { label: "Payment", value: paymentFilter, setter: setPaymentFilter, options: ["Cash", "Online"], placeholder: "Any Payment" },
+                    { label: "Service", value: serviceFilter, setter: setServiceFilter, options: ["Cleaning", "Drying", "Sterilizing", "Package"], placeholder: "Any Service" },
+                    { label: "Status", value: statusFilter, setter: setStatusFilter, options: ["Success", "Pending", "Failed"], placeholder: "Any Status" },
+                    { label: "Shoe", value: shoeTypeFilter, setter: setShoeTypeFilter, options: ["Canvas", "Rubber", "Mesh"], placeholder: "Any Shoe" },
+                    { label: "Care", value: careTypeFilter, setter: setCareTypeFilter, options: ["Gentle", "Normal", "Strong", "Auto"], placeholder: "Any Care" }
+                  ].map((filter) => (
+                    <Select key={filter.label} value={filter.value} onValueChange={filter.setter}>
+                      <SelectTrigger className="h-9 w-[135px] border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-[11px] font-medium rounded-lg transition-all">
+                        <SelectValue placeholder={filter.label} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card/98 border-white/10 backdrop-blur-2xl">
+                        <SelectItem value="all">{filter.placeholder}</SelectItem>
+                        {filter.options.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ))}
                 </div>
+
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setPaymentFilter("all"); setServiceFilter("all"); setShoeTypeFilter("all");
+                    setCareTypeFilter("all"); setStatusFilter("all"); setDateFrom(undefined); setDateTo(undefined); setSearch("");
+                  }}
+                  disabled={paymentFilter === "all" && serviceFilter === "all" && shoeTypeFilter === "all" && careTypeFilter === "all" && statusFilter === "all" && !dateFrom && !dateTo && !search}
+                  className="h-9 px-5 hover:bg-red-500/10 border-white/5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 hover:text-red-400 transition-all rounded-lg group"
+                >
+                  <X className="size-3 mr-2 group-hover:rotate-90 transition-transform duration-300" />
+                  <span>Reset All</span>
+                </Button>
               </div>
-            </div>
+            </motion.div>
 
             {/* Table */}
             <TransactionDataTable columns={columns} data={filteredData} />
           </div>
         </CardContent>
       </Card>
-    </div>
+    </motion.div>
   )
 }

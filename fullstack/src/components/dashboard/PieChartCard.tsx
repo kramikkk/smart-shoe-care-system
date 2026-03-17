@@ -103,6 +103,7 @@ export function PieChartCard() {
       setIsLoading(true)
       try {
         const response = await fetch(`/api/transaction/distribution?deviceId=${selectedDevice}&type=${distributionType}`)
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         const data = await response.json()
 
         if (data.success) {
@@ -147,7 +148,7 @@ export function PieChartCard() {
 
   if (isLoading) {
     return (
-      <Card className="flex flex-col h-full">
+      <Card className="flex flex-col h-full glass-card border-none">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
           <CardTitle className="text-sm sm:text-base lg:text-lg">{getTitle()}</CardTitle>
           <Select value={distributionType} onValueChange={(value) => setDistributionType(value as DistributionType)}>
@@ -170,7 +171,7 @@ export function PieChartCard() {
 
   if (serviceData.length === 0) {
     return (
-      <Card className="flex flex-col h-full">
+      <Card className="flex flex-col h-full glass-card border-none">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
           <CardTitle className="text-sm sm:text-base lg:text-lg">{getTitle()}</CardTitle>
           <Select value={distributionType} onValueChange={(value) => setDistributionType(value as DistributionType)}>
@@ -192,7 +193,7 @@ export function PieChartCard() {
   }
 
   return (
-    <Card data-chart={id} className="flex flex-col min-h-[400px]">
+    <Card data-chart={id} className="flex flex-col min-h-[400px] glass-card border-none">
       <ChartStyle id={id} config={chartConfig} />
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
         <CardTitle className="text-sm sm:text-base lg:text-lg">{getTitle()}</CardTitle>
@@ -318,6 +319,7 @@ export function PieChartCard() {
             >
               <Label
                 content={({ viewBox }) => {
+                  if (activeIndex < 0 || !serviceData[activeIndex]) return null
                   if (viewBox && "cx" in viewBox && "cy" in viewBox) {
                     return (
                       <text

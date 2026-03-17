@@ -109,7 +109,7 @@ export function DevicePairingCard({
         </DialogContent>
       </Dialog>
 
-      <Card>
+      <Card className="glass-card border-none">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
             <div>
@@ -152,7 +152,7 @@ export function DevicePairingCard({
                       placeholder="6-digit code"
                       maxLength={6}
                       value={pairingCode}
-                      onChange={(e) => onPairingCodeChange(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => onPairingCodeChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     />
                   </div>
                 </div>

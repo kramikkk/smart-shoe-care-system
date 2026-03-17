@@ -38,6 +38,7 @@ const RecentTransactionTable = () => {
       setError(null)
       try {
         const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}`)
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         const data = await response.json()
 
         if (data.success) {
@@ -84,11 +85,11 @@ const RecentTransactionTable = () => {
 
   return (
     <div className="flex flex-col h-full">
-        <Card className="flex flex-col h-full">
+        <Card className="flex flex-col h-full glass-card border-none">
             <CardHeader className="shrink-0">
                 <div className="flex items-center gap-2">
                   <ArrowLeftRight className="text-purple-500" />
-                  <CardTitle>Recent Transactions</CardTitle>
+                  <CardTitle>Recent <span className="text-primary">Transactions</span></CardTitle>
                 </div>
                 <CardAction>
                   <Link

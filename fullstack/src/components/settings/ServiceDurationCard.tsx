@@ -53,7 +53,7 @@ export function ServiceDurationCard({
   onSaveDuration,
 }: ServiceDurationCardProps) {
   return (
-    <Card>
+    <Card className="glass-card border-none">
       <CardHeader>
         <div className="flex items-center gap-2">
           <Timer className="h-5 w-5 text-muted-foreground" />
@@ -90,7 +90,7 @@ export function ServiceDurationCard({
                 </div>
               </div>
 
-              <div className={`grid gap-3 ${singleDuration ? 'grid-cols-1' : 'grid-cols-3'}`}>
+              <div className={`grid gap-3 ${singleDuration ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}>
                 {(singleDuration ? ['normal'] : careTypes).map((careType) => {
                   const current = durations[key]?.[careType] ?? 0
                   const edited = editedDurations[key]?.[careType] ?? 0
@@ -143,7 +143,7 @@ export function ServiceDurationCard({
                   size="sm"
                   className="w-full"
                   disabled={!hasDurationChanges(key, 'normal') || isSavingDuration}
-                  onClick={() => Promise.all(careTypes.map(ct => onSaveDuration(key, ct)))}
+                  onClick={async () => { await Promise.all(careTypes.map(ct => onSaveDuration(key, ct))) }}
                 >
                   {isSavingDuration ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                   Save

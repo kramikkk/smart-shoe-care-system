@@ -1,5 +1,6 @@
-'use client'
+"use client"
 
+import { motion } from "motion/react"
 import { Loader2, Settings } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
@@ -10,6 +11,23 @@ import { useDevicePairing } from "@/hooks/useDevicePairing"
 import { useServicePricing } from "@/hooks/useServicePricing"
 import { useServiceDuration } from "@/hooks/useServiceDuration"
 
+const containerVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.6,
+      staggerChildren: 0.1
+    }
+  }
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0 }
+}
+
 export default function SettingsPage() {
   const { selectedDevice } = useDeviceFilter()
   const pairing = useDevicePairing()
@@ -18,65 +36,75 @@ export default function SettingsPage() {
 
   if (pricing.isLoading || duration.isLoading) {
     return (
-      <div className="w-full">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Settings className="h-5 w-5 text-purple-500" />
-              <CardTitle>Client Settings</CardTitle>
-            </div>
-            <CardDescription>Loading settings...</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center justify-center h-40">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </CardContent>
-        </Card>
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground animate-pulse">Loading settings...</p>
       </div>
     )
   }
 
   return (
-    <div className="w-full space-y-6">
-      <DevicePairingCard
-        devices={pairing.devices}
-        isPairing={pairing.isPairing}
-        pairingDialogOpen={pairing.pairingDialogOpen}
-        pairingDeviceId={pairing.pairingDeviceId}
-        pairingCode={pairing.pairingCode}
-        editingDeviceId={pairing.editingDeviceId}
-        editingDeviceName={pairing.editingDeviceName}
-        restartingDeviceId={pairing.restartingDeviceId}
-        unpairConfirmId={pairing.unpairConfirmId}
-        onPairingDialogOpenChange={pairing.setPairingDialogOpen}
-        onPairingDeviceIdChange={pairing.setPairingDeviceId}
-        onPairingCodeChange={pairing.setPairingCode}
-        onPairDevice={pairing.handlePairDevice}
-        onUnpairDevice={pairing.handleUnpairDevice}
-        onRestartDevice={pairing.handleRestartDevice}
-        onEditingDeviceIdChange={pairing.setEditingDeviceId}
-        onEditingDeviceNameChange={pairing.setEditingDeviceName}
-        onSaveDeviceName={pairing.handleSaveDeviceName}
-        onUnpairConfirmIdChange={pairing.setUnpairConfirmId}
-        formatLastSeen={pairing.formatLastSeen}
-      />
-      <ServicePricingCard
-        pricing={pricing.pricing}
-        editedPrices={pricing.editedPrices}
-        isSaving={pricing.isSaving}
-        selectedDevice={selectedDevice}
-        onPriceChange={pricing.handlePriceChange}
-        onSave={pricing.handleSave}
-        hasChanges={pricing.hasChanges}
-      />
-      <ServiceDurationCard
-        durations={duration.durations}
-        editedDurations={duration.editedDurations}
-        isSavingDuration={duration.isSaving}
-        selectedDevice={selectedDevice}
-        onDurationChange={duration.handleDurationChange}
-        hasDurationChanges={duration.hasDurationChanges}
-        onSaveDuration={duration.handleSaveDuration}
-      />
-    </div>
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+      className="w-full space-y-8 pb-12"
+    >
+      <motion.div variants={itemVariants} className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Client <span className="text-primary">Settings</span></h1>
+        </div>
+        <p className="text-muted-foreground">Manage your devices, pricing, and service durations.</p>
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <DevicePairingCard
+          devices={pairing.devices}
+          isPairing={pairing.isPairing}
+          pairingDialogOpen={pairing.pairingDialogOpen}
+          pairingDeviceId={pairing.pairingDeviceId}
+          pairingCode={pairing.pairingCode}
+          editingDeviceId={pairing.editingDeviceId}
+          editingDeviceName={pairing.editingDeviceName}
+          restartingDeviceId={pairing.restartingDeviceId}
+          unpairConfirmId={pairing.unpairConfirmId}
+          onPairingDialogOpenChange={pairing.setPairingDialogOpen}
+          onPairingDeviceIdChange={pairing.setPairingDeviceId}
+          onPairingCodeChange={pairing.setPairingCode}
+          onPairDevice={pairing.handlePairDevice}
+          onUnpairDevice={pairing.handleUnpairDevice}
+          onRestartDevice={pairing.handleRestartDevice}
+          onEditingDeviceIdChange={pairing.setEditingDeviceId}
+          onEditingDeviceNameChange={pairing.setEditingDeviceName}
+          onSaveDeviceName={pairing.handleSaveDeviceName}
+          onUnpairConfirmIdChange={pairing.setUnpairConfirmId}
+          formatLastSeen={pairing.formatLastSeen}
+        />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <ServicePricingCard
+          pricing={pricing.pricing}
+          editedPrices={pricing.editedPrices}
+          isSaving={pricing.isSaving}
+          selectedDevice={selectedDevice}
+          onPriceChange={pricing.handlePriceChange}
+          onSave={pricing.handleSave}
+          hasChanges={pricing.hasChanges}
+        />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <ServiceDurationCard
+          durations={duration.durations}
+          editedDurations={duration.editedDurations}
+          isSavingDuration={duration.isSaving}
+          selectedDevice={selectedDevice}
+          onDurationChange={duration.handleDurationChange}
+          hasDurationChanges={duration.hasDurationChanges}
+          onSaveDuration={duration.handleSaveDuration}
+        />
+      </motion.div>
+    </motion.div>
   )
 }

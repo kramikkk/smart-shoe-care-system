@@ -34,18 +34,6 @@ export const columns: ColumnDef<Transaction>[] = [
     header: "Transaction ID",
   },
   {
-    accessorKey: "deviceId",
-    header: "Device ID",
-    cell: ({ row }) => {
-      const deviceId = row.getValue("deviceId") as string | null | undefined
-      return (
-        <div className="text-sm font-mono">
-          {deviceId || "Unknown"}
-        </div>
-      )
-    },
-  },
-  {
     accessorKey: "dateTime",
     header: "Date & Time",
   },

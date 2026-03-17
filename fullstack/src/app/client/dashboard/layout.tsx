@@ -18,19 +18,25 @@ export default async function AdminLayout({
         <SidebarProvider defaultOpen={defaultOpen}>
             <DeviceFilterProvider>
                 <SideBar/>
-                <SidebarInset className="flex flex-col h-screen">
-                <main className="w-full flex flex-col flex-1 overflow-hidden">
-                    <NavBar/>
-                    <div className="px-4 pb-4 flex-1 flex flex-col overflow-y-auto">
-                        <ThemeProvider
-                        attribute="class"
-                        defaultTheme="system"
-                        enableSystem
-                        disableTransitionOnChange
-                        ></ThemeProvider>
-                        {children}
+                <SidebarInset className="flex flex-col h-screen bg-transparent">
+                    <div className="landing relative flex-1 flex flex-col overflow-hidden min-h-screen">
+                        {/* Background Decorative Blobs */}
+                        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 blur-[120px] rounded-full pointer-events-none z-0" />
+                        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/10 blur-[120px] rounded-full pointer-events-none z-0" />
+                        
+                        <main className="relative z-10 w-full flex flex-col flex-1 overflow-hidden">
+                            <NavBar/>
+                            <div className="px-4 pb-4 flex-1 flex flex-col overflow-y-auto">
+                                <ThemeProvider
+                                    attribute="class"
+                                    defaultTheme="dark"
+                                    enableSystem={false}
+                                    disableTransitionOnChange
+                                />
+                                {children}
+                            </div>
+                        </main>
                     </div>
-                </main>
                 </SidebarInset>
                 <Toaster />
             </DeviceFilterProvider>

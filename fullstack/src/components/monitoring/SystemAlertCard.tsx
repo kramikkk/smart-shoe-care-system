@@ -159,7 +159,7 @@ const SystemAlertCard = ({ className }: { className?: string }) => {
   const warningCount = alerts.filter(a => a.severity === 'warning').length
 
   return (
-    <Card className={`@container/card${className ? ` ${className}` : ''}`}>
+    <Card className={`@container/card glass-card border-none${className ? ` ${className}` : ''}`}>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
