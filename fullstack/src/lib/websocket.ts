@@ -120,7 +120,7 @@ export function createWebSocketServer(server: Server) {
           try {
             const device = await prisma.device.findUnique({
               where: { deviceId: subscribeDeviceId },
-              select: { paired: true, pairedAt: true, name: true }
+              select: { paired: true, pairedAt: true, name: true, pairingCode: true }
             })
             if (device) {
               ws.send(JSON.stringify({
@@ -130,6 +130,7 @@ export function createWebSocketServer(server: Server) {
                   paired: device.paired,
                   pairedAt: device.pairedAt,
                   deviceName: device.name,
+                  pairingCode: device.paired ? null : device.pairingCode,
                 }
               }))
             }
@@ -487,11 +488,11 @@ export function broadcastRestartDevice(deviceId: string) {
 }
 
 // Broadcast device status update to all subscribed clients
-// NOTE: Never include pairingCode or groupToken in broadcast data
 export function broadcastDeviceUpdate(deviceId: string, data: {
   paired: boolean
   pairedAt: Date | null
   deviceName?: string | null
+  pairingCode?: string | null
 }) {
   broadcastToDevice(deviceId, {
     type: 'device-update',
@@ -500,6 +501,7 @@ export function broadcastDeviceUpdate(deviceId: string, data: {
       paired: data.paired,
       pairedAt: data.pairedAt,
       deviceName: data.deviceName,
+      pairingCode: data.paired ? null : (data.pairingCode ?? null),
     }
   })
 }

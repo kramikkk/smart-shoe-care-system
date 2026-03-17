@@ -8,13 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  admin
-  client
-
-  @@map("user_role")
-}
-
 model User {
   id            String    @id
   name          String
@@ -23,10 +16,10 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @default(now()) @updatedAt
-  role          UserRole?
-  banned        Boolean?
-  banReason     String?
   banExpires    DateTime?
+  banReason     String?
+  banned        Boolean?
+  role          UserRole?
   accounts      Account[]
   sessions      Session[]
 
@@ -39,10 +32,11 @@ model Session {
   token     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  impersonatedBy String?
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("session")
 }
@@ -105,10 +99,10 @@ model ServicePricing {
   id          String   @id @default(cuid())
   serviceType String
   price       Float
-  deviceId    String?
-  device      Device?  @relation(fields: [deviceId], references: [deviceId])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  deviceId    String?
+  device      Device?  @relation(fields: [deviceId], references: [deviceId])
 
   @@unique([deviceId, serviceType])
   @@index([deviceId])
@@ -117,13 +111,13 @@ model ServicePricing {
 
 model ServiceDuration {
   id          String   @id @default(cuid())
-  serviceType String   // 'cleaning', 'drying', 'sterilizing'
-  careType    String   // 'gentle', 'normal', 'strong'
-  duration    Int      // seconds
+  serviceType String
+  careType    String
+  duration    Int
   deviceId    String?
-  device      Device?  @relation(fields: [deviceId], references: [deviceId])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  device      Device?  @relation(fields: [deviceId], references: [deviceId])
 
   @@unique([deviceId, serviceType, careType])
   @@index([deviceId])
@@ -133,7 +127,6 @@ model ServiceDuration {
 model Device {
   id           String            @id @default(cuid())
   deviceId     String            @unique
-  name         String?
   pairingCode  String?
   paired       Boolean           @default(false)
   pairedAt     DateTime?
@@ -141,13 +134,21 @@ model Device {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   pairedBy     String?
-  camSynced    Boolean           @default(false)
   camDeviceId  String?
-  groupToken   String?   @unique // 8-char hex shared secret for 3-way binding
-  camIp        String?           // CAM's WiFi IP for optional HTTP streaming
-  transactions Transaction[]
-  pricing      ServicePricing[]
+  camIp        String?
+  camSynced    Boolean           @default(false)
+  groupToken   String?           @unique
+  name         String?
   durations    ServiceDuration[]
+  pricing      ServicePricing[]
+  transactions Transaction[]
 
   @@map("device")
+}
+
+enum UserRole {
+  admin
+  client
+
+  @@map("user_role")
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
 import { rateLimit } from '@/lib/rate-limit'
+import { broadcastDeviceUpdate } from '@/lib/websocket'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,6 +63,13 @@ export async function POST(request: NextRequest) {
         paired: false,
         ...(groupToken ? { groupToken } : {}),
       }
+    })
+
+    // Notify kiosk of new pairing code via WebSocket
+    broadcastDeviceUpdate(device.deviceId, {
+      paired: device.paired,
+      pairedAt: device.pairedAt,
+      pairingCode: device.pairingCode,
     })
 
     return NextResponse.json({

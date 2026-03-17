@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { Users, Server, Wifi, DollarSign, Plus, Loader2, RefreshCw } from 'lucide-react'
+import { Users, Server, Wifi, DollarSign, Plus, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 
 interface Stats {
@@ -84,6 +92,8 @@ export default function AdminDashboardPage() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [clientsLoading, setClientsLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteClient, setConfirmDeleteClient] = useState<Client | null>(null)
   const [form, setForm] = useState({ name: '', email: '', password: '' })
 
   const fetchStats = async () => {
@@ -117,6 +127,26 @@ export default function AdminDashboardPage() {
     fetchClients()
   }, [])
 
+  const handleDeleteClient = async () => {
+    if (!confirmDeleteClient) return
+    setDeletingId(confirmDeleteClient.id)
+    setConfirmDeleteClient(null)
+    try {
+      const res = await fetch(`/api/admin/clients/${confirmDeleteClient.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete client')
+      }
+      toast.success('Client deleted')
+      fetchClients()
+      fetchStats()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete client')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name || !form.email || !form.password) return
@@ -143,6 +173,22 @@ export default function AdminDashboardPage() {
   }
 
   return (
+    <>
+      <Dialog open={!!confirmDeleteClient} onOpenChange={(open) => { if (!open) setConfirmDeleteClient(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Client Account</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className="font-semibold text-foreground">{confirmDeleteClient?.name}</span>? This will unpair all their devices and permanently remove the account. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteClient(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteClient}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     <motion.div
       initial="hidden"
       animate="visible"
@@ -203,7 +249,8 @@ export default function AdminDashboardPage() {
                         <th className="text-left pb-3 pr-4 text-xs tracking-widest uppercase text-muted-foreground font-semibold">Name</th>
                         <th className="text-left pb-3 pr-4 text-xs tracking-widest uppercase text-muted-foreground font-semibold">Email</th>
                         <th className="text-center pb-3 pr-4 text-xs tracking-widest uppercase text-muted-foreground font-semibold">Devices</th>
-                        <th className="text-left pb-3 text-xs tracking-widest uppercase text-muted-foreground font-semibold">Joined</th>
+                        <th className="text-left pb-3 pr-4 text-xs tracking-widest uppercase text-muted-foreground font-semibold">Joined</th>
+                        <th className="pb-3 text-xs tracking-widest uppercase text-muted-foreground font-semibold" />
                       </tr>
                     </thead>
                     <tbody>
@@ -216,12 +263,25 @@ export default function AdminDashboardPage() {
                               {client.deviceCount}
                             </span>
                           </td>
-                          <td className="py-3 text-muted-foreground">
+                          <td className="py-3 pr-4 text-muted-foreground">
                             {new Date(client.createdAt).toLocaleDateString('en-PH', {
                               year: 'numeric',
                               month: 'short',
                               day: 'numeric',
                             })}
+                          </td>
+                          <td className="py-3 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              disabled={deletingId === client.id}
+                              onClick={() => setConfirmDeleteClient(client)}
+                            >
+                              {deletingId === client.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : <Trash2 className="w-3.5 h-3.5" />}
+                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -304,5 +364,6 @@ export default function AdminDashboardPage() {
         </div>
       </motion.div>
     </motion.div>
+    </>
   )
 }

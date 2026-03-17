@@ -50,7 +50,10 @@ export async function POST(request: NextRequest) {
   let createdUserId: string | undefined
   try {
     const result = await auth.api.createUser({
-      body: { name, email, password, role: 'client' },
+      // role cast needed: Better Auth's type only knows "user"|"admin",
+      // but at runtime it passes through to Prisma where 'client' is valid in our enum.
+      // Without this, Better Auth injects defaultRole:"user" which fails our user_role enum.
+      body: { name, email, password, role: 'client' as any },
       headers: await headers(),
     })
     createdUserId = result.user.id

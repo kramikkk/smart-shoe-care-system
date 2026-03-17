@@ -20,6 +20,7 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    disableSignUp: true, // all accounts created by admin only
   },
   trustedOrigins: getTrustedOrigins(),
   plugins: [nextCookies(), admin()],

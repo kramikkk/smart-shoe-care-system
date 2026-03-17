@@ -1,4 +1,4 @@
-import { auth } from '../src/lib/auth'
+import { hashPassword } from 'better-auth/crypto'
 import prisma from '../src/lib/prisma'
 
 async function main() {
@@ -13,26 +13,30 @@ async function main() {
   // Check if admin already exists
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
-    // Ensure role is set to admin
     await prisma.user.update({ where: { email }, data: { role: 'admin' } })
     console.log(`Admin user already exists (${email}), ensured role=admin`)
     return
   }
 
-  // Create user via Better Auth
-  const result = await auth.api.signUpEmail({
-    body: { email, name, password },
-  })
+  const hashedPassword = await hashPassword(password)
+  const id = crypto.randomUUID().replace(/-/g, '')
 
-  if (!result?.user) {
-    throw new Error('Failed to create admin user')
-  }
-
-  // Promote to admin
-  await prisma.user.update({
-    where: { id: result.user.id },
-    data: { role: 'admin' },
-  })
+  await prisma.$transaction([
+    prisma.user.create({
+      data: { id, name, email, emailVerified: true, role: 'admin' },
+    }),
+    prisma.account.create({
+      data: {
+        id: crypto.randomUUID().replace(/-/g, ''),
+        accountId: id,
+        providerId: 'credential',
+        userId: id,
+        password: hashedPassword,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    }),
+  ])
 
   console.log(`Admin user created: ${email}`)
 }

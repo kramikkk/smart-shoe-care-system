@@ -47,7 +47,7 @@ export function LoginForm({
         return
       }
 
-      const role = result.data?.user?.role
+      const role = (result.data?.user as any)?.role
       router.replace(role === 'admin' ? '/admin/dashboard' : '/client/dashboard')
     } catch (err) {
       setError("An error occurred. Please try again.")

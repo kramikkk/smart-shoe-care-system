@@ -49,11 +49,11 @@ export async function GET(
       data: { lastSeen: new Date() }
     })
 
-    // Return status (without pairingCode to avoid leaking it)
     return NextResponse.json({
       paired: device.paired,
       deviceId: device.deviceId,
       pairedAt: device.pairedAt,
+      pairingCode: device.paired ? null : device.pairingCode,
     })
   } catch (error) {
     console.error('Device status check error:', error)
