@@ -222,8 +222,7 @@ static portMUX_TYPE paymentMux =
     portMUX_INITIALIZER_UNLOCKED; // For atomic pulse read+clear
 
 /* ===================== 8-CHANNEL RELAY ===================== */
-#define RELAY_1_PIN                                                            \
-  3 // Channel 1: Bill + Coin (combined power for both acceptors)
+#define RELAY_1_PIN 3 // Channel 1: Bill + Coin (combined power for both acceptors)
 #define RELAY_2_PIN 8  // Channel 2: Bottom Exhaust
 #define RELAY_3_PIN 18 // Channel 3: Centrifugal Blower Fan
 #define RELAY_4_PIN 17 // Channel 4: Left PTC Ceramic Heater
@@ -1314,6 +1313,20 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
 #endif
       delay(2000);
       ESP.restart();
+    } else if (message.indexOf("\"type\":\"serial-command\"") != -1) {
+      int cmdIndex = message.indexOf("\"command\":\"");
+      if (cmdIndex != -1) {
+        int cmdStart = cmdIndex + 11; // length of "\"command\":\""
+        int cmdEnd = message.indexOf("\"", cmdStart);
+        if (cmdEnd != -1) {
+          String serialCmd = message.substring(cmdStart, cmdEnd);
+          serialCmd.trim();
+          if (serialCmd.length() > 0 && serialCmd.length() <= 256) {
+            wsLog("info", "WS cmd: " + serialCmd);
+            handleSerialCommand(serialCmd);
+          }
+        }
+      }
     }
     break;
   }
@@ -2442,11 +2455,13 @@ void stepper1Stop() {
 #endif
 }
 
-// Home the stepper (reset position to zero)
+// Home the stepper (declare current physical location as position 0)
 void stepper1Home() {
   currentStepper1Position = 0;
   targetStepper1Position = 0;
   stepper1Moving = false;
+  prefs.putLong("s1pos", 0); // persist immediately so reboot keeps the zero
+  wsLog("info", "S1 zeroed at current position (NVS saved)");
 #if SSCM_DEBUG
   Serial.println("[Top Linear] Homed - position reset to 0");
 #endif
@@ -2575,11 +2590,13 @@ void stepper2Stop() {
 #endif
 }
 
-// Home the stepper (reset position to zero)
+// Home the stepper (declare current physical location as position 0)
 void stepper2Home() {
   currentStepper2Position = 0;
   targetStepper2Position = 0;
   stepper2Moving = false;
+  prefs.putLong("s2pos", 0); // persist immediately so reboot keeps the zero
+  wsLog("info", "S2 zeroed at current position (NVS saved)");
 #if SSCM_DEBUG
   Serial.println("[Side Linear] Homed - position reset to 0");
 #endif
@@ -2866,6 +2883,13 @@ void setup() {
 
   currentLeftPosition = 0;
   currentRightPosition = 180;
+
+#if SSCM_DEBUG
+  Serial.println("[Servo] Left attached:" + String(servoLeft.attached()) +
+                 " pin:" + String(SERVO_LEFT_PIN));
+  Serial.println("[Servo] Right attached:" + String(servoRight.attached()) +
+                 " pin:" + String(SERVO_RIGHT_PIN));
+#endif
   targetLeftPosition = 0;
   targetRightPosition = 180;
 
@@ -2921,6 +2945,16 @@ void setup() {
                  "/" + String(STEPPER2_DIR_PIN) + ", " +
                  String(stepper2Speed / STEPPER2_STEPS_PER_MM) + "mm/s");
 #endif
+
+  // Auto-return to 0 on boot so the machine is always ready for cleaning
+  if (currentStepper1Position != 0) {
+    Serial.println("[Setup] S1 not at 0 (" + String(currentStepper1Position) + "), returning to home");
+    stepper1MoveTo(0);
+  }
+  if (currentStepper2Position != 0) {
+    Serial.println("[Setup] S2 not at 0 (" + String(currentStepper2Position) + "), returning to home");
+    stepper2MoveTo(0);
+  }
 
   // Initialize WS2812B LED Strip (NeoPixel)
   strip.begin(); // Initialize NeoPixel strip object
@@ -3023,6 +3057,442 @@ void setup() {
     delay(100);
     connectWiFi();
   }
+}
+
+/* =================== SERIAL COMMAND HANDLER =================== */
+
+void handleSerialCommand(String cmd) {
+  cmd.trim();
+  if (cmd.length() == 0) return;
+
+  if (cmd == "RESET_WIFI") {
+      prefs.remove("ssid");
+      prefs.remove("pass");
+#if SSCM_DEBUG
+      Serial.println("WiFi reset, restarting...");
+#endif
+      delay(1000);
+      ESP.restart();
+    } else if (cmd == "RESET_PAIRING") {
+      prefs.putBool("paired", false);
+      isPaired = false;
+      pairingCode = generatePairingCode();
+#if SSCM_DEBUG
+      Serial.println("Pairing reset, code: " + pairingCode);
+#endif
+      delay(1000);
+      ESP.restart();
+    } else if (cmd == "RESET_MONEY") {
+      totalCoinPesos = 0;
+      totalBillPesos = 0;
+      totalPesos = 0;
+      currentCoinPulses = 0;
+      currentBillPulses = 0;
+      prefs.putUInt("totalCoinPesos", 0);
+      prefs.putUInt("totalBillPesos", 0);
+#if SSCM_DEBUG
+      Serial.println("Money counters reset");
+#endif
+    } else if (cmd == "FACTORY_RESET") {
+#if SSCM_DEBUG
+      Serial.println("[Serial] Factory reset command received!");
+#endif
+      factoryReset();
+    } else if (cmd == "STATUS") {
+      wsLog("info", "Device: " + deviceId);
+      wsLog("info", "WiFi: " + String(wifiConnected ? WiFi.localIP().toString() : "Disconnected"));
+      wsLog("info", "WS: " + String(wsConnected ? "OK" : "Down"));
+      wsLog("info", "Paired: " + String(isPaired ? "Yes" : pairingCode));
+      wsLog("info", "Money: " + String(totalPesos) + " PHP");
+      wsLog("info", "Temp: " + String(currentTemperature) + "C, Humidity: " + String(currentHumidity) + "%");
+      wsLog("info", "Stepper1: " + String(currentStepper1Position / 10.0) + "mm" + (stepper1Moving ? " (moving)" : ""));
+      wsLog("info", "Stepper2: " + String(currentStepper2Position / 200.0) + "mm" + (stepper2Moving ? " (moving)" : ""));
+#if SSCM_DEBUG
+      Serial.println("\nDevice: " + deviceId);
+      Serial.println("WiFi: " + String(wifiConnected ? WiFi.localIP().toString()
+                                                     : "Disconnected"));
+      Serial.println("WS: " + String(wsConnected ? "OK" : "Down"));
+      Serial.println("Paired: " + String(isPaired ? "Yes" : pairingCode));
+      Serial.println("Money: " + String(totalPesos) + " PHP");
+      Serial.println("Temp: " + String(currentTemperature) +
+                     "°C, Humidity: " + String(currentHumidity) + "%");
+      Serial.println("Stepper1: " + String(currentStepper1Position / 10.0) +
+                     "mm" + (stepper1Moving ? " (moving)" : ""));
+      Serial.println("Stepper2: " + String(currentStepper2Position / 200.0) +
+                     "mm" + (stepper2Moving ? " (moving)" : ""));
+#endif
+    } else if (cmd.startsWith("RELAY")) {
+      // Commands: RELAY_1_ON, RELAY_1_OFF, RELAY_ALL_OFF
+      if (cmd == "RELAY_ALL_OFF") {
+        allRelaysOff();
+      } else {
+        // Parse RELAY_X_ON or RELAY_X_OFF
+        int firstUnderscore = cmd.indexOf('_');
+        int secondUnderscore = cmd.indexOf('_', firstUnderscore + 1);
+
+        if (firstUnderscore != -1 && secondUnderscore != -1) {
+          String channelStr =
+              cmd.substring(firstUnderscore + 1, secondUnderscore);
+          String action = cmd.substring(secondUnderscore + 1);
+
+          int channel = channelStr.toInt();
+          if (channel >= 1 && channel <= 8) {
+            if (action == "ON") {
+              setRelay(channel, true);
+            } else if (action == "OFF") {
+              setRelay(channel, false);
+            } else {
+#if SSCM_DEBUG
+              Serial.println("[ERROR] Use: RELAY_X_ON/OFF or RELAY_ALL_OFF");
+#endif
+            }
+          } else {
+#if SSCM_DEBUG
+            Serial.println("[ERROR] Invalid channel (1-8)");
+#endif
+          }
+        } else {
+#if SSCM_DEBUG
+          Serial.println("[ERROR] Use: RELAY_X_ON/OFF or RELAY_ALL_OFF");
+#endif
+        }
+      }
+    } else if (cmd == "SERVO_DEMO") {
+      // Blocking demo that still drives the non-blocking update loop
+      const int demoAngles[] = {0, 90, 180, 0};
+      for (int i = 0; i < 4; i++) {
+        setServoPositions(demoAngles[i], true);
+        unsigned long t = millis();
+        while (servosMoving && millis() - t < 3000) {
+          updateServoPositions();
+          delay(1);
+        }
+      }
+#if SSCM_DEBUG
+      Serial.println("Servo demo complete (0°→90°→180°→0°)");
+#endif
+    } else if (cmd == "SERVO_STATUS") {
+      Serial.println("[Servo] Left: " + String(currentLeftPosition) +
+                     "° Right: " + String(currentRightPosition) +
+                     "° | Moving: " + String(servosMoving) +
+                     " | Target L: " + String(targetLeftPosition) +
+                     "° R: " + String(targetRightPosition) + "°");
+      Serial.println("[Servo] Attached L:" + String(servoLeft.attached()) +
+                     " R:" + String(servoRight.attached()));
+    } else if (cmd.startsWith("SERVO_DIRECT_")) {
+      // Bypass non-blocking system — write directly to servo hardware
+      String angleStr = cmd.substring(13);
+      int angle = constrain(angleStr.toInt(), 0, 180);
+      servoLeft.write(angle);
+      servoRight.write(180 - angle);
+      currentLeftPosition = angle;
+      currentRightPosition = 180 - angle;
+      targetLeftPosition = angle;
+      targetRightPosition = 180 - angle;
+      servosMoving = false;
+      Serial.println("[Servo] DIRECT write L:" + String(angle) +
+                     "° R:" + String(180 - angle) + "°");
+    } else if (cmd.startsWith("SERVO_")) {
+      // Parse SERVO_XXX where XXX is angle for LEFT servo (0-180)
+      // Right servo will mirror automatically
+      String angleStr = cmd.substring(6);
+      int angle = angleStr.toInt();
+
+      if (angle >= 0 && angle <= 180) {
+        setServoPositions(angle, true); // fast mode for manual commands
+      } else {
+#if SSCM_DEBUG
+        Serial.println("[ERROR] Angle 0-180 (use: SERVO_X)");
+#endif
+      }
+    } else if (cmd.startsWith("MOTOR_LEFT_")) {
+      // Left motor commands
+      String subCmd = cmd.substring(11); // Remove "MOTOR_LEFT_"
+
+      if (subCmd == "BRAKE") {
+        leftMotorBrake();
+      } else if (subCmd == "COAST" || subCmd == "STOP") {
+        leftMotorCoast();
+      } else {
+        int speed = subCmd.toInt();
+        if (speed >= -255 && speed <= 255) {
+          setLeftMotorSpeed(speed);
+        } else {
+#if SSCM_DEBUG
+          Serial.println("[ERROR] Invalid speed: " + subCmd);
+#endif
+        }
+      }
+    } else if (cmd.startsWith("MOTOR_RIGHT_")) {
+      // Right motor commands
+      String subCmd = cmd.substring(12); // Remove "MOTOR_RIGHT_"
+
+      if (subCmd == "BRAKE") {
+        rightMotorBrake();
+      } else if (subCmd == "COAST" || subCmd == "STOP") {
+        rightMotorCoast();
+      } else {
+        int speed = subCmd.toInt();
+        if (speed >= -255 && speed <= 255) {
+          setRightMotorSpeed(speed);
+        } else {
+#if SSCM_DEBUG
+          Serial.println("[ERROR] Invalid speed: " + subCmd);
+#endif
+        }
+      }
+    } else if (cmd.startsWith("MOTOR_")) {
+      // Both motors same speed commands
+      String subCmd = cmd.substring(6); // Remove "MOTOR_"
+
+      if (subCmd == "BRAKE") {
+        motorsBrake();
+      } else if (subCmd == "COAST" || subCmd == "STOP") {
+        motorsCoast();
+      } else {
+        int speed = subCmd.toInt();
+        if (speed >= -255 && speed <= 255) {
+          setMotorsSameSpeed(speed);
+        } else {
+#if SSCM_DEBUG
+          Serial.println("[ERROR] Speed -255 to 255 (use: MOTOR_X)");
+#endif
+        }
+      }
+    } else if (cmd.startsWith("STEPPER1_")) {
+      // Stepper motor 1 commands
+      String subCmd = cmd.substring(9); // Remove "STEPPER1_"
+
+      if (subCmd == "ENABLE" || subCmd == "DISABLE") {
+#if SSCM_DEBUG
+        Serial.println("[Stepper1] Always enabled (ENA+ hardwired)");
+#endif
+      } else if (subCmd == "TEST_MANUAL") {
+#if SSCM_DEBUG
+        Serial.println("[Stepper1] Testing 10 steps...");
+#endif
+        for (int i = 0; i < 10; i++) {
+          digitalWrite(STEPPER1_DIR_PIN, HIGH);
+          delayMicroseconds(5);
+          digitalWrite(STEPPER1_STEP_PIN, HIGH);
+          delayMicroseconds(20);
+          digitalWrite(STEPPER1_STEP_PIN, LOW);
+          delayMicroseconds(20);
+        }
+#if SSCM_DEBUG
+        Serial.println("[Stepper1] Test done");
+#endif
+      } else if (subCmd == "TEST_PINS") {
+        // Test if pins are actually outputting
+#if SSCM_DEBUG
+        Serial.println(
+            "[Top Linear] Pin Output Test (rapid pulses - non-blocking)");
+        Serial.println("[Top Linear] Blinking STEP pin (GPIO " +
+                       String(STEPPER1_STEP_PIN) + ") 10 times");
+        Serial.println(
+            "[Top Linear] Measure with oscilloscope or logic analyzer");
+#endif
+
+        for (int i = 0; i < 10; i++) {
+          digitalWrite(STEPPER1_STEP_PIN, HIGH);
+#if SSCM_DEBUG
+          Serial.println("[Top Linear] STEP pin HIGH (3.3V)");
+#endif
+          delayMicroseconds(100); // 100us pulse - visible on scope
+          digitalWrite(STEPPER1_STEP_PIN, LOW);
+#if SSCM_DEBUG
+          Serial.println("[Top Linear] STEP pin LOW (0V)");
+#endif
+          delayMicroseconds(100); // 100us gap
+        }
+
+#if SSCM_DEBUG
+        Serial.println("[Top Linear] Pin test complete (10 rapid pulses sent)");
+        Serial.println("[Top Linear] Use oscilloscope to verify - too fast for "
+                       "multimeter");
+#endif
+      } else if (subCmd == "TEST_PULSE") {
+        // Rapid pulse test - SHORT non-blocking version
+#if SSCM_DEBUG
+        Serial.println("[Top Linear] RAPID PULSE TEST (non-blocking)");
+        Serial.println(
+            "[Top Linear] Sending 100 rapid pulses at 1000 pulses/sec");
+        Serial.println("[Top Linear] TB6600 should click/buzz!");
+#endif
+
+        // Send 100 pulses rapidly (~100ms total - non-blocking)
+        int pulseCount = 100;
+        for (int i = 0; i < pulseCount; i++) {
+          digitalWrite(STEPPER1_STEP_PIN, HIGH);
+          delayMicroseconds(20);
+          digitalWrite(STEPPER1_STEP_PIN, LOW);
+          delayMicroseconds(980); // ~1000 pulses/sec
+        }
+
+#if SSCM_DEBUG
+        Serial.println("[Top Linear] Sent " + String(pulseCount) +
+                       " pulses in ~100ms");
+        Serial.println(
+            "[Top Linear] Did TB6600 make buzzing noise? Did motor vibrate?");
+#endif
+      } else if (subCmd == "STOP") {
+        stepper1Stop();
+      } else if (subCmd == "HOME") {
+        // Declare current physical position as zero (no movement)
+        stepper1Home();
+      } else if (subCmd == "RETURN") {
+        // Physically move back to position 0
+        wsLog("info", "S1 returning to zero (pos=" + String(currentStepper1Position) + ")");
+        stepper1MoveTo(0);
+      } else if (subCmd == "INFO") {
+        wsLog("info", "S1 pos=" + String(currentStepper1Position) + " spd=" + String(stepper1Speed) + (stepper1Moving ? " MOVING" : " IDLE"));
+#if SSCM_DEBUG
+        Serial.println("Pos: " + String(currentStepper1Position / 10.0) +
+                       "mm, Speed: " + String(stepper1Speed / 10) +
+                       "mm/s, Moving: " + String(stepper1Moving));
+#endif
+      } else if (subCmd.startsWith("SPEED_")) {
+        // STEPPER1_SPEED_XXX - set speed in steps per second
+        String speedStr = subCmd.substring(6);
+        int speed = speedStr.toInt();
+        if (speed > 0 && speed <= 800) {
+          setStepper1Speed(speed);
+        } else {
+#if SSCM_DEBUG
+          Serial.println("[ERROR] Invalid stepper speed: " + speedStr);
+          Serial.println("Valid range: 1-800 steps/second (motor max: 80mm/s)");
+#endif
+        }
+      } else if (subCmd.startsWith("MOVE_")) {
+        // STEPPER1_MOVE_XXX - move relative steps
+        String stepsStr = subCmd.substring(5);
+        long steps = stepsStr.toInt();
+        stepper1MoveRelative(steps);
+      } else if (subCmd.startsWith("GOTO_")) {
+        // STEPPER1_GOTO_XXX - move to absolute position
+        String posStr = subCmd.substring(5);
+        long position = posStr.toInt();
+        stepper1MoveTo(position);
+      } else if (subCmd.startsWith("MM_")) {
+        // STEPPER1_MM_XXX - move by millimeters (can be negative)
+        String mmStr = subCmd.substring(3);
+        float mm = mmStr.toFloat();
+        stepper1MoveByMM(mm);
+      } else {
+#if SSCM_DEBUG
+        Serial.println("[ERROR] Unknown stepper1 command");
+#endif
+      }
+    } else if (cmd.startsWith("STEPPER2_")) {
+      // Stepper motor 2 commands
+      String subCmd = cmd.substring(9); // Remove "STEPPER2_"
+
+      if (subCmd == "ENABLE" || subCmd == "DISABLE") {
+#if SSCM_DEBUG
+        Serial.println("[Stepper2] Always enabled (ENA+ hardwired)");
+#endif
+      } else if (subCmd == "STOP") {
+        stepper2Stop();
+      } else if (subCmd == "HOME") {
+        // Declare current physical position as zero (no movement)
+        stepper2Home();
+      } else if (subCmd == "RETURN") {
+        // Physically move back to position 0
+        wsLog("info", "S2 returning to zero (pos=" + String(currentStepper2Position) + ")");
+        stepper2MoveTo(0);
+      } else if (subCmd == "INFO") {
+        wsLog("info", "S2 pos=" + String(currentStepper2Position) + " spd=" + String(stepper2Speed) + (stepper2Moving ? " MOVING" : " IDLE"));
+      } else if (subCmd.startsWith("SPEED_")) {
+        // STEPPER2_SPEED_XXX - set speed in steps per second
+        String speedStr = subCmd.substring(6);
+        int speed = speedStr.toInt();
+        if (speed > 0 && speed <= STEPPER2_MAX_SPEED) {
+          setStepper2Speed(speed);
+        } else {
+#if SSCM_DEBUG
+          Serial.println("[ERROR] Invalid stepper2 speed: " + speedStr);
+          Serial.println("Valid range: 1-" + String(STEPPER2_MAX_SPEED) +
+                         " steps/second (motor max: 120mm/s)");
+#endif
+        }
+      } else if (subCmd.startsWith("MOVE_")) {
+        // STEPPER2_MOVE_XXX - move relative steps (can be negative)
+        String stepsStr = subCmd.substring(5);
+        long steps = stepsStr.toInt();
+        stepper2MoveRelative(steps);
+      } else if (subCmd.startsWith("GOTO_")) {
+        // STEPPER2_GOTO_XXX - move to absolute position
+        String posStr = subCmd.substring(5);
+        long position = posStr.toInt();
+        stepper2MoveTo(position);
+      } else if (subCmd.startsWith("MM_")) {
+        // STEPPER2_MM_XXX - move by millimeters (can be negative)
+        String mmStr = subCmd.substring(3);
+        float mm = mmStr.toFloat();
+        stepper2MoveByMM(mm);
+      } else {
+#if SSCM_DEBUG
+        Serial.println("[ERROR] Unknown stepper2 command");
+#endif
+      }
+    } else if (cmd.startsWith("RGB_")) {
+      // RGB LED Strip commands
+      String subCmd = cmd.substring(4); // Remove "RGB_"
+
+      if (subCmd == "WHITE") {
+        rgbWhite();
+      } else if (subCmd == "BLUE") {
+        rgbBlue();
+      } else if (subCmd == "GREEN") {
+        rgbGreen();
+      } else if (subCmd == "VIOLET") {
+        rgbViolet();
+      } else if (subCmd == "OFF") {
+        rgbOff();
+      } else if (subCmd.startsWith("CUSTOM_")) {
+        // RGB_CUSTOM_R_G_B - set custom color (e.g., RGB_CUSTOM_255_128_64)
+        String rgbStr = subCmd.substring(7); // Remove "CUSTOM_"
+
+        // Parse R_G_B values
+        int firstUnderscore = rgbStr.indexOf('_');
+        int secondUnderscore = rgbStr.indexOf('_', firstUnderscore + 1);
+
+        if (firstUnderscore > 0 && secondUnderscore > firstUnderscore) {
+          int red = rgbStr.substring(0, firstUnderscore).toInt();
+          int green =
+              rgbStr.substring(firstUnderscore + 1, secondUnderscore).toInt();
+          int blue = rgbStr.substring(secondUnderscore + 1).toInt();
+          setRGBColor(red, green, blue);
+        } else {
+#if SSCM_DEBUG
+          Serial.println("[ERROR] Use: RGB_CUSTOM_R_G_B");
+#endif
+        }
+      } else {
+#if SSCM_DEBUG
+        Serial.println("[ERROR] Unknown RGB command");
+#endif
+      }
+    } else if (cmd.startsWith("CAM_")) {
+      // ESP32-CAM commands (via WebSocket)
+      String subCmd = cmd.substring(4);
+
+      if (subCmd == "BROADCAST") {
+#if SSCM_DEBUG
+        Serial.println("[CAM] Broadcasting pairing via ESP-NOW...");
+#endif
+        sendPairingBroadcast();
+      } else if (subCmd == "CLASSIFY") {
+#if SSCM_DEBUG
+        Serial.println("[CAM] Requesting classification via ESP-NOW...");
+#endif
+        sendClassifyRequest();
+      } else {
+#if SSCM_DEBUG
+        Serial.println("[ERROR] Unknown CAM command");
+#endif
+      }
+    }
 }
 
 /* ===================== LOOP ===================== */
@@ -3196,391 +3666,7 @@ void loop() {
   // Serial commands
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
-    cmd.trim();
-
-    if (cmd == "RESET_WIFI") {
-      prefs.remove("ssid");
-      prefs.remove("pass");
-#if SSCM_DEBUG
-      Serial.println("WiFi reset, restarting...");
-#endif
-      delay(1000);
-      ESP.restart();
-    } else if (cmd == "RESET_PAIRING") {
-      prefs.putBool("paired", false);
-      isPaired = false;
-      pairingCode = generatePairingCode();
-#if SSCM_DEBUG
-      Serial.println("Pairing reset, code: " + pairingCode);
-#endif
-      delay(1000);
-      ESP.restart();
-    } else if (cmd == "RESET_MONEY") {
-      totalCoinPesos = 0;
-      totalBillPesos = 0;
-      totalPesos = 0;
-      currentCoinPulses = 0;
-      currentBillPulses = 0;
-      prefs.putUInt("totalCoinPesos", 0);
-      prefs.putUInt("totalBillPesos", 0);
-#if SSCM_DEBUG
-      Serial.println("Money counters reset");
-#endif
-    } else if (cmd == "FACTORY_RESET") {
-#if SSCM_DEBUG
-      Serial.println("[Serial] Factory reset command received!");
-#endif
-      factoryReset();
-    } else if (cmd == "STATUS") {
-#if SSCM_DEBUG
-      Serial.println("\nDevice: " + deviceId);
-      Serial.println("WiFi: " + String(wifiConnected ? WiFi.localIP().toString()
-                                                     : "Disconnected"));
-      Serial.println("WS: " + String(wsConnected ? "OK" : "Down"));
-      Serial.println("Paired: " + String(isPaired ? "Yes" : pairingCode));
-      Serial.println("Money: " + String(totalPesos) + " PHP");
-      Serial.println("Temp: " + String(currentTemperature) +
-                     "°C, Humidity: " + String(currentHumidity) + "%");
-      Serial.println("Stepper1: " + String(currentStepper1Position / 10.0) +
-                     "mm" + (stepper1Moving ? " (moving)" : ""));
-      Serial.println("Stepper2: " + String(currentStepper2Position / 10.0) +
-                     "mm" + (stepper2Moving ? " (moving)" : ""));
-#endif
-    } else if (cmd.startsWith("RELAY")) {
-      // Commands: RELAY_1_ON, RELAY_1_OFF, RELAY_ALL_OFF
-      if (cmd == "RELAY_ALL_OFF") {
-        allRelaysOff();
-      } else {
-        // Parse RELAY_X_ON or RELAY_X_OFF
-        int firstUnderscore = cmd.indexOf('_');
-        int secondUnderscore = cmd.indexOf('_', firstUnderscore + 1);
-
-        if (firstUnderscore != -1 && secondUnderscore != -1) {
-          String channelStr =
-              cmd.substring(firstUnderscore + 1, secondUnderscore);
-          String action = cmd.substring(secondUnderscore + 1);
-
-          int channel = channelStr.toInt();
-          if (channel >= 1 && channel <= 8) {
-            if (action == "ON") {
-              setRelay(channel, true);
-            } else if (action == "OFF") {
-              setRelay(channel, false);
-            } else {
-#if SSCM_DEBUG
-              Serial.println("[ERROR] Use: RELAY_X_ON/OFF or RELAY_ALL_OFF");
-#endif
-            }
-          } else {
-#if SSCM_DEBUG
-            Serial.println("[ERROR] Invalid channel (1-8)");
-#endif
-          }
-        } else {
-#if SSCM_DEBUG
-          Serial.println("[ERROR] Use: RELAY_X_ON/OFF or RELAY_ALL_OFF");
-#endif
-        }
-      }
-    } else if (cmd == "SERVO_DEMO") {
-      setServoPositions(0, true);
-      delay(2000);
-      setServoPositions(90, true);
-      delay(2000);
-      setServoPositions(180, true);
-      delay(2000);
-      setServoPositions(0, true);
-#if SSCM_DEBUG
-      Serial.println("Servo demo complete (0°→90°→180°→0°)");
-#endif
-    } else if (cmd.startsWith("SERVO_")) {
-      // Parse SERVO_XXX where XXX is angle for LEFT servo (0-180)
-      // Right servo will mirror automatically
-      String angleStr = cmd.substring(6);
-      int angle = angleStr.toInt();
-
-      if (angle >= 0 && angle <= 180) {
-        setServoPositions(angle);
-      } else {
-#if SSCM_DEBUG
-        Serial.println("[ERROR] Angle 0-180 (use: SERVO_X)");
-#endif
-      }
-    } else if (cmd.startsWith("MOTOR_LEFT_")) {
-      // Left motor commands
-      String subCmd = cmd.substring(11); // Remove "MOTOR_LEFT_"
-
-      if (subCmd == "BRAKE") {
-        leftMotorBrake();
-      } else if (subCmd == "COAST" || subCmd == "STOP") {
-        leftMotorCoast();
-      } else {
-        int speed = subCmd.toInt();
-        if (speed >= -255 && speed <= 255) {
-          setLeftMotorSpeed(speed);
-        } else {
-#if SSCM_DEBUG
-          Serial.println("[ERROR] Invalid speed: " + subCmd);
-#endif
-        }
-      }
-    } else if (cmd.startsWith("MOTOR_RIGHT_")) {
-      // Right motor commands
-      String subCmd = cmd.substring(12); // Remove "MOTOR_RIGHT_"
-
-      if (subCmd == "BRAKE") {
-        rightMotorBrake();
-      } else if (subCmd == "COAST" || subCmd == "STOP") {
-        rightMotorCoast();
-      } else {
-        int speed = subCmd.toInt();
-        if (speed >= -255 && speed <= 255) {
-          setRightMotorSpeed(speed);
-        } else {
-#if SSCM_DEBUG
-          Serial.println("[ERROR] Invalid speed: " + subCmd);
-#endif
-        }
-      }
-    } else if (cmd.startsWith("MOTOR_")) {
-      // Both motors same speed commands
-      String subCmd = cmd.substring(6); // Remove "MOTOR_"
-
-      if (subCmd == "BRAKE") {
-        motorsBrake();
-      } else if (subCmd == "COAST" || subCmd == "STOP") {
-        motorsCoast();
-      } else {
-        int speed = subCmd.toInt();
-        if (speed >= -255 && speed <= 255) {
-          setMotorsSameSpeed(speed);
-        } else {
-#if SSCM_DEBUG
-          Serial.println("[ERROR] Speed -255 to 255 (use: MOTOR_X)");
-#endif
-        }
-      }
-    } else if (cmd.startsWith("STEPPER1_")) {
-      // Stepper motor 1 commands
-      String subCmd = cmd.substring(9); // Remove "STEPPER1_"
-
-      if (subCmd == "ENABLE" || subCmd == "DISABLE") {
-#if SSCM_DEBUG
-        Serial.println("[Stepper1] Always enabled (ENA+ hardwired)");
-#endif
-      } else if (subCmd == "TEST_MANUAL") {
-#if SSCM_DEBUG
-        Serial.println("[Stepper1] Testing 10 steps...");
-#endif
-        for (int i = 0; i < 10; i++) {
-          digitalWrite(STEPPER1_DIR_PIN, HIGH);
-          delayMicroseconds(5);
-          digitalWrite(STEPPER1_STEP_PIN, HIGH);
-          delayMicroseconds(20);
-          digitalWrite(STEPPER1_STEP_PIN, LOW);
-          delayMicroseconds(20);
-        }
-#if SSCM_DEBUG
-        Serial.println("[Stepper1] Test done");
-#endif
-      } else if (subCmd == "TEST_PINS") {
-        // Test if pins are actually outputting
-#if SSCM_DEBUG
-        Serial.println(
-            "[Top Linear] Pin Output Test (rapid pulses - non-blocking)");
-        Serial.println("[Top Linear] Blinking STEP pin (GPIO " +
-                       String(STEPPER1_STEP_PIN) + ") 10 times");
-        Serial.println(
-            "[Top Linear] Measure with oscilloscope or logic analyzer");
-#endif
-
-        for (int i = 0; i < 10; i++) {
-          digitalWrite(STEPPER1_STEP_PIN, HIGH);
-#if SSCM_DEBUG
-          Serial.println("[Top Linear] STEP pin HIGH (3.3V)");
-#endif
-          delayMicroseconds(100); // 100us pulse - visible on scope
-          digitalWrite(STEPPER1_STEP_PIN, LOW);
-#if SSCM_DEBUG
-          Serial.println("[Top Linear] STEP pin LOW (0V)");
-#endif
-          delayMicroseconds(100); // 100us gap
-        }
-
-#if SSCM_DEBUG
-        Serial.println("[Top Linear] Pin test complete (10 rapid pulses sent)");
-        Serial.println("[Top Linear] Use oscilloscope to verify - too fast for "
-                       "multimeter");
-#endif
-      } else if (subCmd == "TEST_PULSE") {
-        // Rapid pulse test - SHORT non-blocking version
-#if SSCM_DEBUG
-        Serial.println("[Top Linear] RAPID PULSE TEST (non-blocking)");
-        Serial.println(
-            "[Top Linear] Sending 100 rapid pulses at 1000 pulses/sec");
-        Serial.println("[Top Linear] TB6600 should click/buzz!");
-#endif
-
-        // Send 100 pulses rapidly (~100ms total - non-blocking)
-        int pulseCount = 100;
-        for (int i = 0; i < pulseCount; i++) {
-          digitalWrite(STEPPER1_STEP_PIN, HIGH);
-          delayMicroseconds(20);
-          digitalWrite(STEPPER1_STEP_PIN, LOW);
-          delayMicroseconds(980); // ~1000 pulses/sec
-        }
-
-#if SSCM_DEBUG
-        Serial.println("[Top Linear] Sent " + String(pulseCount) +
-                       " pulses in ~100ms");
-        Serial.println(
-            "[Top Linear] Did TB6600 make buzzing noise? Did motor vibrate?");
-#endif
-      } else if (subCmd == "STOP") {
-        stepper1Stop();
-      } else if (subCmd == "HOME") {
-        stepper1Home();
-      } else if (subCmd == "INFO") {
-#if SSCM_DEBUG
-        Serial.println("Pos: " + String(currentStepper1Position / 10.0) +
-                       "mm, Speed: " + String(stepper1Speed / 10) +
-                       "mm/s, Moving: " + String(stepper1Moving));
-#endif
-      } else if (subCmd.startsWith("SPEED_")) {
-        // STEPPER1_SPEED_XXX - set speed in steps per second
-        String speedStr = subCmd.substring(6);
-        int speed = speedStr.toInt();
-        if (speed > 0 && speed <= 800) {
-          setStepper1Speed(speed);
-        } else {
-#if SSCM_DEBUG
-          Serial.println("[ERROR] Invalid stepper speed: " + speedStr);
-          Serial.println("Valid range: 1-800 steps/second (motor max: 80mm/s)");
-#endif
-        }
-      } else if (subCmd.startsWith("MOVE_")) {
-        // STEPPER1_MOVE_XXX - move relative steps
-        String stepsStr = subCmd.substring(5);
-        long steps = stepsStr.toInt();
-        stepper1MoveRelative(steps);
-      } else if (subCmd.startsWith("GOTO_")) {
-        // STEPPER1_GOTO_XXX - move to absolute position
-        String posStr = subCmd.substring(5);
-        long position = posStr.toInt();
-        stepper1MoveTo(position);
-      } else if (subCmd.startsWith("MM_")) {
-        // STEPPER1_MM_XXX - move by millimeters (can be negative)
-        String mmStr = subCmd.substring(3);
-        float mm = mmStr.toFloat();
-        stepper1MoveByMM(mm);
-      } else {
-#if SSCM_DEBUG
-        Serial.println("[ERROR] Unknown stepper1 command");
-#endif
-      }
-    } else if (cmd.startsWith("STEPPER2_")) {
-      // Stepper motor 2 commands
-      String subCmd = cmd.substring(9); // Remove "STEPPER2_"
-
-      if (subCmd == "ENABLE" || subCmd == "DISABLE") {
-#if SSCM_DEBUG
-        Serial.println("[Stepper2] Always enabled (ENA+ hardwired)");
-#endif
-      } else if (subCmd == "STOP") {
-        stepper2Stop();
-      } else if (subCmd == "HOME") {
-        stepper2Home();
-      } else if (subCmd.startsWith("SPEED_")) {
-        // STEPPER2_SPEED_XXX - set speed in steps per second
-        String speedStr = subCmd.substring(6);
-        int speed = speedStr.toInt();
-        if (speed > 0 && speed <= STEPPER2_MAX_SPEED) {
-          setStepper2Speed(speed);
-        } else {
-#if SSCM_DEBUG
-          Serial.println("[ERROR] Invalid stepper2 speed: " + speedStr);
-          Serial.println("Valid range: 1-" + String(STEPPER2_MAX_SPEED) +
-                         " steps/second (motor max: 120mm/s)");
-#endif
-        }
-      } else if (subCmd.startsWith("MOVE_")) {
-        // STEPPER2_MOVE_XXX - move relative steps (can be negative)
-        String stepsStr = subCmd.substring(5);
-        long steps = stepsStr.toInt();
-        stepper2MoveRelative(steps);
-      } else if (subCmd.startsWith("GOTO_")) {
-        // STEPPER2_GOTO_XXX - move to absolute position
-        String posStr = subCmd.substring(5);
-        long position = posStr.toInt();
-        stepper2MoveTo(position);
-      } else if (subCmd.startsWith("MM_")) {
-        // STEPPER2_MM_XXX - move by millimeters (can be negative)
-        String mmStr = subCmd.substring(3);
-        float mm = mmStr.toFloat();
-        stepper2MoveByMM(mm);
-      } else {
-#if SSCM_DEBUG
-        Serial.println("[ERROR] Unknown stepper2 command");
-#endif
-      }
-    } else if (cmd.startsWith("RGB_")) {
-      // RGB LED Strip commands
-      String subCmd = cmd.substring(4); // Remove "RGB_"
-
-      if (subCmd == "WHITE") {
-        rgbWhite();
-      } else if (subCmd == "BLUE") {
-        rgbBlue();
-      } else if (subCmd == "GREEN") {
-        rgbGreen();
-      } else if (subCmd == "VIOLET") {
-        rgbViolet();
-      } else if (subCmd == "OFF") {
-        rgbOff();
-      } else if (subCmd.startsWith("CUSTOM_")) {
-        // RGB_CUSTOM_R_G_B - set custom color (e.g., RGB_CUSTOM_255_128_64)
-        String rgbStr = subCmd.substring(7); // Remove "CUSTOM_"
-
-        // Parse R_G_B values
-        int firstUnderscore = rgbStr.indexOf('_');
-        int secondUnderscore = rgbStr.indexOf('_', firstUnderscore + 1);
-
-        if (firstUnderscore > 0 && secondUnderscore > firstUnderscore) {
-          int red = rgbStr.substring(0, firstUnderscore).toInt();
-          int green =
-              rgbStr.substring(firstUnderscore + 1, secondUnderscore).toInt();
-          int blue = rgbStr.substring(secondUnderscore + 1).toInt();
-          setRGBColor(red, green, blue);
-        } else {
-#if SSCM_DEBUG
-          Serial.println("[ERROR] Use: RGB_CUSTOM_R_G_B");
-#endif
-        }
-      } else {
-#if SSCM_DEBUG
-        Serial.println("[ERROR] Unknown RGB command");
-#endif
-      }
-    } else if (cmd.startsWith("CAM_")) {
-      // ESP32-CAM commands (via WebSocket)
-      String subCmd = cmd.substring(4);
-
-      if (subCmd == "BROADCAST") {
-#if SSCM_DEBUG
-        Serial.println("[CAM] Broadcasting pairing via ESP-NOW...");
-#endif
-        sendPairingBroadcast();
-      } else if (subCmd == "CLASSIFY") {
-#if SSCM_DEBUG
-        Serial.println("[CAM] Requesting classification via ESP-NOW...");
-#endif
-        sendClassifyRequest();
-      } else {
-#if SSCM_DEBUG
-        Serial.println("[ERROR] Unknown CAM command");
-#endif
-      }
-    }
+    handleSerialCommand(cmd);
   }
 
   // Handle WiFi portal

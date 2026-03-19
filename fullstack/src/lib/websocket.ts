@@ -453,6 +453,18 @@ export function createWebSocketServer(server: Server) {
           })
         }
 
+        // Handle serial-command from dashboard — forward raw command to device
+        else if (message.type === 'serial-command' && message.deviceId && message.command) {
+          const targetId = message.deviceId as string
+          const command = String(message.command).slice(0, 256) // length guard
+          console.log(`[WebSocket] Serial command → ${targetId}: ${command}`)
+          broadcastToDevice(targetId, {
+            type: 'serial-command',
+            deviceId: targetId,
+            command,
+          })
+        }
+
         // Forward firmware log messages to kiosk subscribers
         else if (message.type === 'firmware-log' && message.deviceId) {
           broadcastToDevice(message.deviceId as string, message)

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sidebar"
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeftRight, Cpu, LayoutDashboard, Settings } from "lucide-react";
+import { ArrowLeftRight, Cpu, LayoutDashboard, Settings, Terminal } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SideBarUser } from "@/components/dashboard/SideBarUser";
 import { motion } from "motion/react";
@@ -24,6 +24,7 @@ const menu = [
   { title: "Dashboard", url: "/client/dashboard", icon: LayoutDashboard },
   { title: "Transactions", url: "/client/dashboard/transactions", icon: ArrowLeftRight },
   { title: "Monitoring", url: "/client/dashboard/monitoring", icon: Cpu },
+  { title: "Commands", url: "/client/dashboard/commands", icon: Terminal },
   { title: "Settings", url: "/client/dashboard/settings", icon: Settings },
 ]
 

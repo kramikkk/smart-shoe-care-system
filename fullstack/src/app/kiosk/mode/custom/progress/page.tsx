@@ -36,7 +36,7 @@ const CustomProgress = () => {
     deviceIdRef.current    = deviceId
   }, [sendMessage, deviceId])
 
-  const progress = totalTime > 0 ? ((totalTime - timeRemaining) / totalTime) * 100 : 0
+  const progress = resolvedDuration !== null && totalTime > 0 ? ((totalTime - timeRemaining) / totalTime) * 100 : 0
 
   // Fetch configured duration from API
   useEffect(() => {
@@ -207,7 +207,7 @@ const CustomProgress = () => {
       <div className="mb-6">
         <p className="text-xl text-gray-500 text-center mb-1">Time Remaining</p>
         <p className="text-6xl font-bold text-center bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
-          {formatTime(timeRemaining)}
+          {resolvedDuration === null ? '--:--' : formatTime(timeRemaining)}
         </p>
       </div>
 
