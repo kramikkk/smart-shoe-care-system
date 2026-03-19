@@ -102,7 +102,9 @@ export async function POST(
     broadcastDeviceUpdate(deviceId, {
       paired: true,
       pairedAt: pairedDevice.pairedAt,
+      groupToken: pairedDevice.groupToken,
     })
+    console.log(`[Device] Paired: ${deviceId} by user ${session.user.id}`)
 
     return NextResponse.json({
       success: true,
@@ -158,6 +160,13 @@ export async function DELETE(
       )
     }
 
+    if (device.pairedBy !== session.user.id) {
+      return NextResponse.json(
+        { error: 'You do not have permission to unpair this device' },
+        { status: 403 }
+      )
+    }
+
     // Unpair the device and clear groupToken so stale tokens don't cause mismatch on re-pair
     const unpairedDevice = await prisma.device.update({
       where: { deviceId },
@@ -175,6 +184,7 @@ export async function DELETE(
       paired: false,
       pairedAt: null,
     })
+    console.log(`[Device] Unpaired: ${deviceId} by user ${session.user.id}`)
 
     return NextResponse.json({
       success: true,

@@ -33,8 +33,8 @@ type ServiceDurationCardProps = {
 // Firmware hardcoded defaults (Thesis_SSCM.ino)
 const FIRMWARE_DEFAULTS: Record<string, Record<string, number>> = {
   cleaning:    { gentle: 300, normal: 300, strong: 300 },
-  drying:      { gentle: 60,  normal: 120, strong: 180 },
-  sterilizing: { gentle: 60,  normal: 120, strong: 180 },
+  drying:      { gentle: 60,  normal: 180, strong: 300 },
+  sterilizing: { gentle: 60,  normal: 180, strong: 300 },
 }
 
 const SERVICE_CONFIG = [

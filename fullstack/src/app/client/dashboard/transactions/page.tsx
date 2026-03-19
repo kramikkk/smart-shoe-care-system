@@ -28,6 +28,7 @@ export default function TransactionsPage() {
   const [serviceFilter, setServiceFilter] = useState<string>("all")
   const [shoeTypeFilter, setShoeTypeFilter] = useState<string>("all")
   const [careTypeFilter, setCareTypeFilter] = useState<string>("all")
+  // statusFilter kept for UI but not sent to API (no status field on Transaction)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
@@ -42,7 +43,6 @@ export default function TransactionsPage() {
         params.set('deviceId', selectedDevice || '')
         params.set('limit', '500')
         if (paymentFilter !== 'all') params.set('paymentMethod', paymentFilter)
-        if (statusFilter !== 'all') params.set('status', statusFilter)
         if (dateFrom) params.set('startDate', dateFrom.toISOString())
         if (dateTo) {
           const end = new Date(dateTo)
@@ -68,29 +68,25 @@ export default function TransactionsPage() {
             }
           })
           setTransactions(formattedTransactions as any)
-        } else {
-          console.error('Failed to fetch transactions:', data.error)
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') return
-        console.error('Error fetching transactions:', error)
       }
     }
 
     fetchTransactions()
 
     return () => controller.abort()
-  }, [selectedDevice, paymentFilter, statusFilter, dateFrom, dateTo])
+  }, [selectedDevice, paymentFilter, dateFrom, dateTo])
 
   const filteredData = useMemo(() => {
     return transactions.filter((tx) => {
       const searchLower = search.toLowerCase()
       const matchesSearch =
         search === "" ||
-        tx.transactionId.toLowerCase().includes(searchLower) ||
+        tx.id.toLowerCase().includes(searchLower) ||
         tx.serviceType.toLowerCase().includes(searchLower) ||
         tx.paymentMethod.toLowerCase().includes(searchLower) ||
-        tx.status.toLowerCase().includes(searchLower) ||
         tx.dateTime.toLowerCase().includes(searchLower) ||
         tx.amount.toString().includes(searchLower)
 
@@ -110,16 +106,15 @@ export default function TransactionsPage() {
   const handleExport = () => {
     if (filteredData.length === 0) return
 
-    const headers = ["Transaction ID", "Service", "Shoe Type", "Care Type", "Amount", "Status", "Date"]
+    const headers = ["Transaction ID", "Service", "Shoe Type", "Care Type", "Amount", "Date"]
     const csvContent = [
       headers.join(","),
       ...filteredData.map(tx => [
-        tx.transactionId,
+        tx.id,
         `"${tx.serviceType}"`,
         `"${tx.shoeType}"`,
         `"${tx.careType}"`,
         tx.amount,
-        tx.status,
         `"${tx.dateTime}"`
       ].join(","))
     ].join("\n")

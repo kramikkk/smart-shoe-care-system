@@ -37,7 +37,7 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
 
   if (id === 'humidity' && sensorData.humidity > 0) {
     displayValue = `${sensorData.humidity.toFixed(1)}%`
-    displayPercentage = sensorData.humidity
+    displayPercentage = Math.min(100, sensorData.humidity)
     // Status: Low (<60%), Normal (60-70%), High (>70%)
     if (sensorData.humidity > 70) {
       displayStatus = 'High'

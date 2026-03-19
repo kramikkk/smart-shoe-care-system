@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Camera, Loader2, CheckCircle, AlertCircle, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useWebSocket } from '@/contexts/WebSocketContext'
+import { debug } from '@/lib/debug'
 import { StepIndicator } from '@/components/kiosk/StepIndicator'
 import { AUTO_STEPS } from '@/lib/kiosk-constants'
 
@@ -41,8 +42,6 @@ export default function ClassifyPage() {
       return
     }
 
-    const camDeviceId = deviceId.replace('SSCM-', 'SSCM-CAM-')
-
     if (!isConnected) {
       setState('connecting')
       return
@@ -50,39 +49,32 @@ export default function ClassifyPage() {
 
     if (!subscriptionsSetRef.current) {
       subscriptionsSetRef.current = true
-      console.log('[Classify] WebSocket connected, subscribing to devices')
       subscribe(deviceId)
-      subscribe(camDeviceId)
     }
 
+    debug.log(`[Classify] Sending enable-classification — device: ${deviceId}, camSynced: ${camSynced}`)
     sendMessage({ type: 'enable-classification', deviceId: deviceId })
-    console.log('[Classify] Classification LED enabled (white)')
 
     if (!hasReceivedSyncStatus) {
       setState('connecting')
-      console.log('[Classify] Waiting for initial CAM sync status...')
       return
     }
 
     if (!camSynced) {
       setState('syncing')
-      console.log('[Classify] CAM not synced yet, waiting...')
       return
     }
 
     if (classificationSentRef.current) {
-      console.log('[Classify] Classification already requested, skipping')
       return
     }
-
-    console.log('[Classify] CAM synced, starting classification')
 
     syncDelayRef.current = setTimeout(() => {
       if (isConnected && camSynced && !classificationSentRef.current) {
         classificationSentRef.current = true
         setState('classifying')
+        console.log('[Classify] Sending start-classification')
         sendMessage({ type: 'start-classification', deviceId: deviceId })
-        console.log('[Classify] Classification request sent')
 
         timeoutRef.current = setTimeout(() => {
           setState((currentState) => {
@@ -121,19 +113,18 @@ export default function ClassifyPage() {
     if (!isConnected || !deviceId) return
 
     const unsubscribe = onMessage((message) => {
-      console.log('[Classify] Received:', message)
-
       if (message.type === 'sensor-data' && message.camSynced !== undefined) {
-        console.log('[Classify] CAM sync status from sensor-data:', message.camSynced)
+        debug.log(`[Classify] sensor-data — camSynced: ${message.camSynced}`)
         setCamSynced(message.camSynced)
         setHasReceivedSyncStatus(true)
       }
       else if (message.type === 'cam-sync-status') {
-        console.log('[Classify] CAM sync status:', message.camSynced)
+        debug.log(`[Classify] cam-sync-status — camSynced: ${message.camSynced}`)
         setCamSynced(message.camSynced)
         setHasReceivedSyncStatus(true)
       }
       else if (message.type === 'classification-result') {
+        debug.log(`[Classify] Result — type: ${message.result}, confidence: ${(message.confidence * 100).toFixed(1)}%, condition: ${message.condition}`)
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
         }
@@ -147,18 +138,17 @@ export default function ClassifyPage() {
         setShowPicker(false)
         setState('success')
       }
-      else if (message.type === 'classification-started') {
-        console.log('[Classify] Classification started on CAM')
-      }
       else if (message.type === 'classification-error') {
         if (hasResultRef.current) return  // already have a result — ignore late error from main board
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
         }
+        debug.error(`[Classify] Error — ${message.error}`)
         setError(message.error || 'Classification failed')
         setState('error')
       }
       else if (message.type === 'classification-busy') {
+        debug.warn('[Classify] Classification system busy')
         setError('Classification system is busy. Please wait.')
         setState('error')
       }
@@ -171,12 +161,13 @@ export default function ClassifyPage() {
 
   useEffect(() => {
     return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      if (syncDelayRef.current) clearTimeout(syncDelayRef.current)
       if (isConnectedRef.current && deviceIdRef.current) {
         sendMessageRef.current({
           type: 'disable-classification',
           deviceId: deviceIdRef.current
         })
-        console.log('[Classify] Classification page exited, LED disabled')
       }
     }
   }, [])
@@ -208,7 +199,6 @@ export default function ClassifyPage() {
     if (isConnected && camSynced && !classificationSentRef.current) {
       classificationSentRef.current = true
       sendMessage({ type: 'start-classification', deviceId: deviceId })
-      console.log('[Classify] Classification request sent (retry)')
 
       timeoutRef.current = setTimeout(() => {
         setState((currentState) => {
@@ -223,6 +213,7 @@ export default function ClassifyPage() {
   }
 
   const handleManualSelect = (shoeType: 'mesh' | 'canvas' | 'rubber') => {
+    debug.log(`[Classify] Manual shoe type selected: ${shoeType}`)
     setResult({ shoeType, confidence: -1 })
     setShowPicker(false)
   }
@@ -382,9 +373,11 @@ export default function ClassifyPage() {
                     <p className="text-lg font-semibold text-gray-700 mb-1">{result.subCategory}</p>
                   )}
                   <p className="text-gray-500">This shoe type is not supported. Our machine cleans mesh, canvas, and rubber shoes only.</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Confidence: {(result.confidence * 100).toFixed(1)}%
-                  </p>
+                  {result.confidence > 0 && (
+                    <p className="text-sm text-gray-400 mt-1">
+                      Confidence: {(result.confidence * 100).toFixed(1)}%
+                    </p>
+                  )}
                 </>
               )}
             </>

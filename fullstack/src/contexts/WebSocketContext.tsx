@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
+import { debug } from '@/lib/debug'
 
 interface WebSocketMessage {
   type: string
@@ -50,7 +51,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     // Prevent duplicate connections
     if (connectionStateRef.current === ConnectionState.CONNECTING ||
         connectionStateRef.current === ConnectionState.CONNECTED) {
-      console.log('[WebSocket] Already connected or connecting, skipping')
+      debug.log('[WebSocket] Already connected or connecting, skipping')
       return
     }
 
@@ -68,13 +69,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = `${wsProtocol}//${window.location.host}/api/ws?deviceId=${encodeURIComponent(devId)}`
 
-    console.log(`[WebSocket] ${connectionStateRef.current === ConnectionState.RECONNECTING ? 'Reconnecting' : 'Connecting'} to ${wsUrl}`)
+    debug.log(`[WebSocket] ${connectionStateRef.current === ConnectionState.RECONNECTING ? 'Reconnecting' : 'Connecting'} to ${wsUrl}`)
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
-      console.log('[WebSocket] Connected successfully')
+      debug.log('[WebSocket] Connected successfully')
       connectionStateRef.current = ConnectionState.CONNECTED
       setIsConnected(true)
       reconnectAttemptsRef.current = 0
@@ -93,24 +94,30 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
         // Handle pairing-specific messages
         if (message.type === 'subscribed') {
-          console.log(`[WebSocket] Subscribed to device: ${message.deviceId}`)
+          debug.log(`[WebSocket] Subscribed to device: ${message.deviceId}`)
         } else if (message.type === 'device-update') {
-          console.log('[WebSocket] Received device update:', message.data)
+          debug.log('[WebSocket] Received device update:', message.data)
           setIsPaired(message.data.paired)
           setPairingCode(message.data.pairingCode || '')
-          // Store groupToken so subsequent connections carry 3-way binding credentials
           if (message.data.groupToken) {
             localStorage.setItem(GROUP_TOKEN_KEY, message.data.groupToken)
-            console.log('[WebSocket] Stored groupToken for 3-way binding')
+            debug.log('[WebSocket] Stored groupToken for 3-way binding')
           }
         } else if (message.type === 'device-online') {
-          console.log('[WebSocket] Device is online:', message.deviceId)
+          debug.log('[WebSocket] Device is online:', message.deviceId)
           setIsPaired(message.paired)
         } else if (message.type === 'error' && message.code === 'INVALID_GROUP_TOKEN') {
-          // Backend rejected our groupToken — clear it and reload
           console.warn('[WebSocket] GroupToken rejected — clearing and reloading')
           localStorage.removeItem(GROUP_TOKEN_KEY)
           window.location.reload()
+        } else if (message.type === 'firmware-log') {
+          // Always show firmware logs regardless of DEBUG flag
+          const prefix = `[FIRMWARE:${(message.level as string)?.toUpperCase() || 'INFO'}]`
+          if (message.level === 'error') console.error(prefix, message.message)
+          else if (message.level === 'warn') console.warn(prefix, message.message)
+          else console.log(prefix, message.message)
+        } else {
+          debug.log(`[WebSocket] Message received: ${message.type}`, message)
         }
 
         // Notify all registered message handlers
@@ -138,11 +145,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
       // Don't reconnect if close was intentional
       if (intentionalCloseRef.current) {
-        console.log('[WebSocket] Disconnected (intentional)')
+        debug.log('[WebSocket] Disconnected (intentional)')
         return
       }
 
-      console.log(`[WebSocket] Disconnected (code: ${event.code}, reason: ${event.reason || 'none'})`)
+      debug.log(`[WebSocket] Disconnected (code: ${event.code}, reason: ${event.reason || 'none'})`)
 
       // Attempt to reconnect with exponential backoff
       if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
@@ -154,7 +161,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           connectWebSocket(devId)
         }, delay)
       } else {
-        console.log('[WebSocket] Max reconnection attempts reached')
+        console.warn('[WebSocket] Max reconnection attempts reached')
       }
     }
   }, [])
@@ -176,6 +183,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
             setDeviceId(data.deviceId)
             setIsPaired(data.paired)
             setPairingCode(data.pairingCode || '')
+            if (data.groupToken) {
+              localStorage.setItem(GROUP_TOKEN_KEY, data.groupToken)
+            }
             connectWebSocket(data.deviceId)
           } else if (response.status === 404) {
             localStorage.removeItem(DEVICE_ID_KEY)
@@ -224,12 +234,15 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message))
     } else {
-      console.warn('[WebSocket] Cannot send message, not connected')
+      debug.warn('[WebSocket] Cannot send message, not connected')
     }
   }, [])
 
   const subscribe = useCallback((targetDeviceId: string) => {
-    sendMessage({ type: 'subscribe', deviceId: targetDeviceId })
+    const storedGroupToken = localStorage.getItem(GROUP_TOKEN_KEY)
+    const msg: WebSocketMessage = { type: 'subscribe', deviceId: targetDeviceId }
+    if (storedGroupToken) msg.groupToken = storedGroupToken
+    sendMessage(msg)
   }, [sendMessage])
 
   const onMessage = useCallback((handler: (message: WebSocketMessage) => void) => {

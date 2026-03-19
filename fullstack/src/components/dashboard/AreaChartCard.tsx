@@ -34,103 +34,6 @@ type ChartDataPoint = {
   transactions: number
 }
 
-const chartDataStatic = [
-  { date: "2024-04-01", revenue: 180, transactions: 6 },
-  { date: "2024-04-02", revenue: 126, transactions: 4 },
-  { date: "2024-04-03", revenue: 270, transactions: 9 },
-  { date: "2024-04-04", revenue: 100, transactions: 3 },
-  { date: "2024-04-05", revenue: 224, transactions: 7 },
-  { date: "2024-04-06", revenue: 288, transactions: 9 },
-  { date: "2024-04-07", revenue: 84,  transactions: 3 },
-  { date: "2024-04-08", revenue: 360, transactions: 10 },
-  { date: "2024-04-09", revenue: 144, transactions: 4 },
-  { date: "2024-04-10", revenue: 192, transactions: 6 },
-  { date: "2024-04-11", revenue: 310, transactions: 9 },
-  { date: "2024-04-12", revenue: 220, transactions: 7 },
-  { date: "2024-04-13", revenue: 295, transactions: 8 },
-  { date: "2024-04-14", revenue: 100, transactions: 3 },
-  { date: "2024-04-15", revenue: 80,  transactions: 2 },
-  { date: "2024-04-16", revenue: 210, transactions: 6 },
-  { date: "2024-04-17", revenue: 352, transactions: 10 },
-  { date: "2024-04-18", revenue: 280, transactions: 8 },
-  { date: "2024-04-19", revenue: 126, transactions: 4 },
-  { date: "2024-04-20", revenue: 160, transactions: 5 },
-  { date: "2024-04-21", revenue: 210, transactions: 6 },
-  { date: "2024-04-22", revenue: 168, transactions: 5 },
-  { date: "2024-04-23", revenue: 184, transactions: 6 },
-  { date: "2024-04-24", revenue: 280, transactions: 8 },
-  { date: "2024-04-25", revenue: 240, transactions: 7 },
-  { date: "2024-04-26", revenue: 75,  transactions: 2 },
-  { date: "2024-04-27", revenue: 400, transactions: 10 },
-  { date: "2024-04-28", revenue: 120, transactions: 3 },
-  { date: "2024-04-29", revenue: 210, transactions: 6 },
-  { date: "2024-04-30", revenue: 360, transactions: 9 },
-
-  { date: "2024-05-01", revenue: 220, transactions: 6 },
-  { date: "2024-05-02", revenue: 300, transactions: 9 },
-  { date: "2024-05-03", revenue: 168, transactions: 5 },
-  { date: "2024-05-04", revenue: 360, transactions: 9 },
-  { date: "2024-05-05", revenue: 400, transactions: 10 },
-  { date: "2024-05-06", revenue: 420, transactions: 10 },
-  { date: "2024-05-07", revenue: 280, transactions: 8 },
-  { date: "2024-05-08", revenue: 147, transactions: 4 },
-  { date: "2024-05-09", revenue: 180, transactions: 5 },
-  { date: "2024-05-10", revenue: 297, transactions: 8 },
-  { date: "2024-05-11", revenue: 240, transactions: 7 },
-  { date: "2024-05-12", revenue: 210, transactions: 6 },
-  { date: "2024-05-13", revenue: 140, transactions: 4 },
-  { date: "2024-05-14", revenue: 400, transactions: 10 },
-  { date: "2024-05-15", revenue: 342, transactions: 9 },
-  { date: "2024-05-16", revenue: 280, transactions: 8 },
-  { date: "2024-05-17", revenue: 390, transactions: 10 },
-  { date: "2024-05-18", revenue: 260, transactions: 7 },
-  { date: "2024-05-19", revenue: 160, transactions: 5 },
-  { date: "2024-05-20", revenue: 184, transactions: 5 },
-  { date: "2024-05-21", revenue: 120, transactions: 3 },
-  { date: "2024-05-22", revenue: 100, transactions: 3 },
-  { date: "2024-05-23", revenue: 270, transactions: 7 },
-  { date: "2024-05-24", revenue: 210, transactions: 6 },
-  { date: "2024-05-25", revenue: 240, transactions: 7 },
-  { date: "2024-05-26", revenue: 150, transactions: 4 },
-  { date: "2024-05-27", revenue: 380, transactions: 10 },
-  { date: "2024-05-28", revenue: 168, transactions: 5 },
-  { date: "2024-05-29", revenue: 96,  transactions: 3 },
-  { date: "2024-05-30", revenue: 240, transactions: 7 },
-  { date: "2024-05-31", revenue: 184, transactions: 5 },
-
-  { date: "2024-06-01", revenue: 210, transactions: 6 },
-  { date: "2024-06-02", revenue: 360, transactions: 9 },
-  { date: "2024-06-03", revenue: 126, transactions: 4 },
-  { date: "2024-06-04", revenue: 320, transactions: 9 },
-  { date: "2024-06-05", revenue: 112, transactions: 3 },
-  { date: "2024-06-06", revenue: 240, transactions: 7 },
-  { date: "2024-06-07", revenue: 280, transactions: 8 },
-  { date: "2024-06-08", revenue: 320, transactions: 9 },
-  { date: "2024-06-09", revenue: 400, transactions: 10 },
-  { date: "2024-06-10", revenue: 150, transactions: 4 },
-  { date: "2024-06-11", revenue: 105, transactions: 3 },
-  { date: "2024-06-12", revenue: 390, transactions: 10 },
-  { date: "2024-06-13", revenue: 120, transactions: 3 },
-  { date: "2024-06-14", revenue: 320, transactions: 9 },
-  { date: "2024-06-15", revenue: 260, transactions: 7 },
-  { date: "2024-06-16", revenue: 310, transactions: 8 },
-  { date: "2024-06-17", revenue: 420, transactions: 10 },
-  { date: "2024-06-18", revenue: 136, transactions: 4 },
-  { date: "2024-06-19", revenue: 280, transactions: 8 },
-  { date: "2024-06-20", revenue: 360, transactions: 9 },
-  { date: "2024-06-21", revenue: 168, transactions: 5 },
-  { date: "2024-06-22", revenue: 240, transactions: 7 },
-  { date: "2024-06-23", revenue: 400, transactions: 10 },
-  { date: "2024-06-24", revenue: 144, transactions: 4 },
-  { date: "2024-06-25", revenue: 150, transactions: 4 },
-  { date: "2024-06-26", revenue: 320, transactions: 9 },
-  { date: "2024-06-27", revenue: 390, transactions: 10 },
-  { date: "2024-06-28", revenue: 200, transactions: 5 },
-  { date: "2024-06-29", revenue: 140, transactions: 4 },
-  { date: "2024-06-30", revenue: 360, transactions: 9 },
-]
-
-
 const chartConfig = {
   visitors: {
     label: "Visitors",
@@ -152,31 +55,32 @@ export default function AreaChartCard() {
   const [chartData, setChartData] = React.useState<ChartDataPoint[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 
-  // Fetch chart data from API
   React.useEffect(() => {
+    const controller = new AbortController()
+    setIsLoading(true)
     const fetchChartData = async () => {
       try {
         let days = 90
         if (timeRange === "30d") days = 30
         else if (timeRange === "7d") days = 7
 
-        const response = await fetch(`/api/transaction/chart?days=${days}&deviceId=${selectedDevice}`)
+        const response = await fetch(`/api/transaction/chart?days=${days}&deviceId=${selectedDevice}`, { signal: controller.signal })
         if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         const data = await response.json()
 
         if (data.success) {
           setChartData(data.chartData)
-        } else {
-          console.error('Failed to fetch chart data:', data.error)
         }
-      } catch (error) {
-        console.error('Error fetching chart data:', error)
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
+        // leave chartData empty — "No data available" state handles it
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchChartData()
+    return () => controller.abort()
   }, [timeRange, selectedDevice])
 
   return (

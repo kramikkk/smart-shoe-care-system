@@ -6,9 +6,8 @@ import { z } from 'zod'
 // Query parameter validation schema
 const TransactionListQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).optional().default(10000),
+  limit: z.coerce.number().int().min(1).max(500).optional().default(50),
   paymentMethod: z.enum(['Cash', 'Online']).optional(),
-  status: z.enum(['Pending', 'Success', 'Failed']).optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
   deviceId: z.string().optional(),
@@ -44,17 +43,13 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const { page, limit, paymentMethod, status, startDate, endDate, deviceId } = validation.data
+    const { page, limit, paymentMethod, startDate, endDate, deviceId } = validation.data
 
     // Build filter conditions
     const where: any = {}
 
     if (paymentMethod) {
       where.paymentMethod = paymentMethod
-    }
-
-    if (status) {
-      where.status = status
     }
 
     // Enforce device ownership

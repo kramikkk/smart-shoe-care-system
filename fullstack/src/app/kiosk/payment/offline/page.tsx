@@ -1,12 +1,12 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { debug } from '@/lib/debug'
 import { Card, CardContent } from '@/components/ui/card'
 import { Item, ItemContent } from '@/components/ui/item'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle, Loader2, ArrowLeft } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { BackButton } from '@/components/kiosk/BackButton'
 import { DEFAULT_SERVICES, Service, ServiceType } from '@/lib/kiosk-constants'
 import { usePricing } from '@/hooks/usePricing'
 import { useWebSocket } from '@/contexts/WebSocketContext'
@@ -34,6 +34,8 @@ const Offline = () => {
   // Check if payment is complete (amount inserted >= amount due OR amount due is 0)
   const isPaymentComplete = amountDue === 0 || amountInserted >= amountDue
 
+  const [showExitWarning, setShowExitWarning] = useState(false)
+
   const { isConnected, sendMessage, onMessage } = useWebSocket()
 
   // Stable refs for cleanup
@@ -49,6 +51,7 @@ const Offline = () => {
     if (!isConnected) return
     const deviceId = localStorage.getItem('kiosk_device_id')
     if (!deviceId) return
+    debug.log(`[Offline] Payment system enabled — device: ${deviceId}`)
     sendMessage({ type: 'enable-payment', deviceId })
   }, [isConnected, sendMessage])
 
@@ -66,8 +69,10 @@ const Offline = () => {
   useEffect(() => {
     const unsubscribe = onMessage((message) => {
       if (message.type === 'coin-inserted') {
+        debug.log(`[Offline] Coin inserted: ₱${message.coinValue}`)
         setAmountInserted((prev) => prev + message.coinValue)
       } else if (message.type === 'bill-inserted') {
+        debug.log(`[Offline] Bill inserted: ₱${message.billValue}`)
         setAmountInserted((prev) => prev + message.billValue)
       }
     })
@@ -83,41 +88,95 @@ const Offline = () => {
 
     setIsSaving(true)
 
-    try {
-      // Save transaction to database
-      // Get device ID from localStorage (set by PairingWrapper)
-      const deviceId = localStorage.getItem('kiosk_device_id')
+    // Save transaction — non-fatal (machine already has the cash; always redirect after)
+    const deviceId = localStorage.getItem('kiosk_device_id')
+    const groupToken = localStorage.getItem('kiosk_group_token')
 
-      const response = await fetch('/api/transaction/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentMethod: 'Cash',
-          serviceType: service.charAt(0).toUpperCase() + service.slice(1), // Capitalize first letter
-          shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
-          careType: service === 'package' ? 'Auto' : care.charAt(0).toUpperCase() + care.slice(1),
-          status: 'Success', // Cash is confirmed at insertion time
-          deviceId, // Link transaction to this kiosk
-        }),
-      })
-
-      const data = await response.json()
-      if (!data.success) {
-        console.error('[Offline] Failed to save transaction:', data.error)
+    if (deviceId && groupToken) {
+      debug.log(`[Offline] Saving cash transaction — device: ${deviceId}, service: ${service}, shoe: ${shoe}`)
+      try {
+        const res = await fetch('/api/transaction/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Group-Token': groupToken,
+          },
+          body: JSON.stringify({
+            paymentMethod: 'Cash',
+            serviceType: service.charAt(0).toUpperCase() + service.slice(1),
+            shoeType: shoe.charAt(0).toUpperCase() + shoe.slice(1),
+            careType: service === 'package' ? 'Auto' : care.charAt(0).toUpperCase() + care.slice(1),
+            deviceId,
+          }),
+        })
+        const saveData = await res.json()
+        if (saveData.success) {
+          debug.log(`[Offline] Transaction saved — id: ${saveData.transaction?.id}`)
+        } else {
+          console.error(`[Offline] Transaction save failed (proceeding): ${saveData.error}`)
+        }
+      } catch (err) {
+        // Always log at console.error so operators see it even in production
+        console.error('[Offline] Transaction save error — no record created, proceeding anyway:', err)
       }
+    } else {
+      debug.warn(`[Offline] Skipping transaction save — missing deviceId or groupToken`)
+    }
 
-    } catch (err) {
-      console.error('[Offline] Transaction save network error:', err)
-    } finally {
-      setIsSaving(false)
-      // Redirect to success page
-      router.push(`/kiosk/success/payment?shoe=${shoe}&service=${service}&care=${care}`)
+    setIsSaving(false)
+    router.push(`/kiosk/success/payment?shoe=${shoe}&service=${service}&care=${care}`)
+  }
+
+  const handleBack = () => {
+    if (amountInserted > 0) {
+      setShowExitWarning(true)
+    } else {
+      router.back()
     }
   }
 
   return (
     <div className="px-8 py-4 relative">
-      <BackButton />
+      <Button
+        onClick={handleBack}
+        className="fixed top-8 left-8 z-50 gap-3 px-8 py-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 hover:from-blue-700 hover:via-cyan-700 hover:to-green-700 text-white rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95"
+      >
+        <ArrowLeft className="w-7 h-7" />
+        <span className="text-xl font-bold">Back</span>
+      </Button>
+
+      {/* Exit warning dialog */}
+      {showExitWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="w-10 h-10 text-red-600 flex-shrink-0" />
+              <h2 className="text-2xl font-bold text-red-700">Payment in Progress</h2>
+            </div>
+            <p className="text-gray-700 text-base mb-2">
+              You have already inserted <span className="font-bold text-green-600">₱{amountInserted.toFixed(2)}</span>.
+            </p>
+            <p className="text-gray-700 text-base mb-6">
+              Leaving this page will <span className="font-bold text-red-600">not refund</span> any cash already inserted into the machine. Only leave if you have spoken with an operator.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setShowExitWarning(false)}
+                className="flex-1 py-6 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full font-bold text-base border border-gray-300"
+                variant="ghost"
+              >
+                Stay
+              </Button>
+              <Button
+                onClick={() => router.back()}
+                className="flex-1 py-6 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold text-base"
+              >
+                Leave Anyway
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <h1 className="text-4xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-green-600 bg-clip-text text-transparent">
         Cash Payment

@@ -8,32 +8,40 @@ export async function GET(request: NextRequest) {
   const authResult = await requireAdminAuth(request)
   if (authResult instanceof NextResponse) return authResult
 
-  const clients = await prisma.user.findMany({
-    where: { role: 'client' },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  try {
+    const clients = await prisma.user.findMany({
+      where: { role: 'client' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
 
-  // Get device counts per client
-  const deviceCounts = await prisma.device.groupBy({
-    by: ['pairedBy'],
-    where: { pairedBy: { in: clients.map((c) => c.id) } },
-    _count: { id: true },
-  })
+    // Get device counts per client
+    const deviceCounts = await prisma.device.groupBy({
+      by: ['pairedBy'],
+      where: { pairedBy: { in: clients.map((c) => c.id) } },
+      _count: { id: true },
+    })
 
-  const countMap = new Map(deviceCounts.map((d) => [d.pairedBy, d._count.id]))
+    const countMap = new Map(deviceCounts.map((d) => {
+      const row = d as unknown as { pairedBy: string | null; _count: { id: number } }
+      return [row.pairedBy, row._count.id]
+    }))
 
-  const result = clients.map((c) => ({
-    ...c,
-    deviceCount: countMap.get(c.id) ?? 0,
-  }))
+    const result = clients.map((c) => ({
+      ...c,
+      deviceCount: countMap.get(c.id) ?? 0,
+    }))
 
-  return NextResponse.json(result)
+    return NextResponse.json(result)
+  } catch (err) {
+    console.error('[Admin] Get clients error:', err)
+    return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -72,6 +80,7 @@ export async function POST(request: NextRequest) {
     }
     const msg = err instanceof Error ? err.message : 'Failed to create client'
     const isDuplicate = msg.toLowerCase().includes('unique') || msg.toLowerCase().includes('email')
+    if (!isDuplicate) console.error('[Admin] Create client error:', err)
     return NextResponse.json(
       { error: isDuplicate ? 'A user with that email already exists' : msg },
       { status: isDuplicate ? 409 : 500 },

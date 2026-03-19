@@ -36,17 +36,18 @@ const CustomProgress = () => {
     deviceIdRef.current    = deviceId
   }, [sendMessage, deviceId])
 
-  const progress = ((totalTime - timeRemaining) / totalTime) * 100
+  const progress = totalTime > 0 ? ((totalTime - timeRemaining) / totalTime) * 100 : 0
 
   // Fetch configured duration from API
   useEffect(() => {
+    const controller = new AbortController()
     const fetchDuration = async () => {
       try {
         const storedDeviceId = localStorage.getItem('kiosk_device_id')
         const url = storedDeviceId
           ? `/api/duration?deviceId=${encodeURIComponent(storedDeviceId)}`
           : '/api/duration'
-        const res  = await fetch(url)
+        const res  = await fetch(url, { signal: controller.signal })
         const data = await res.json()
         if (data.success) {
           const entry = data.durations.find(
@@ -54,17 +55,22 @@ const CustomProgress = () => {
               d.serviceType === service.toLowerCase() && d.careType === care.toLowerCase()
           )
           const duration = entry?.duration ?? fallbackDuration
-          setTotalTime(duration)
-          setTimeRemaining(duration)
-          setResolvedDuration(duration)
+          if (duration > 0) {
+            setTotalTime(duration)
+            setTimeRemaining(duration)
+          }
+          setResolvedDuration(duration > 0 ? duration : fallbackDuration)
         } else {
           setResolvedDuration(fallbackDuration)
         }
-      } catch {
-        setResolvedDuration(fallbackDuration)
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          setResolvedDuration(fallbackDuration)
+        }
       }
     }
     fetchDuration()
+    return () => controller.abort()
   }, [service, care, fallbackDuration])
 
   // Send start-service once when connected and duration is resolved
@@ -79,7 +85,6 @@ const CustomProgress = () => {
       careType: care,
       duration: resolvedDuration,
     })
-    console.log(`[Progress] Service started: ${service} (${care}) ${resolvedDuration}s`)
   }, [isConnected, deviceId, resolvedDuration, shoe, service, care, sendMessage])
 
   // Drive countdown entirely from WS messages — firmware is the source of truth

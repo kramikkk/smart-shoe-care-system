@@ -1,10 +1,12 @@
 'use client'
 
 import { Droplets, ShieldCheck, Wind } from 'lucide-react'
+import { debug } from '@/lib/debug'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Progress } from "@/components/ui/progress"
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWebSocket } from '@/contexts/WebSocketContext'
+import { useDurations } from '@/hooks/useDurations'
 
 // Recommended care types for each shoe type and service
 // Optimized settings for the best care based on material properties
@@ -33,13 +35,6 @@ const DEFAULT_RECOMMENDATIONS: ShoeRecommendations = {
   sterilizing: 'normal'
 }
 
-// Duration in seconds for each care type
-const CARE_DURATIONS: Record<CareType, number> = {
-  gentle: 60,
-  normal: 120,
-  strong: 180
-}
-
 const Auto = () => {
   const searchParams = useSearchParams()
   const shoe = searchParams.get('shoe') || 'mesh'
@@ -51,13 +46,14 @@ const Auto = () => {
     return SHOE_CARE_RECOMMENDATIONS[shoeKey] || DEFAULT_RECOMMENDATIONS
   }, [shoe])
 
-  // Calculate stage durations based on shoe type recommendations
+  const { durations, isLoaded: isDurationsLoaded } = useDurations()
+
+  // Calculate stage durations based on shoe type recommendations and fetched durations
   const stageDurations = useMemo(() => ({
-    // Cleaning timer is always 5 minutes regardless of care type (care only affects machine pressure, not time)
-    cleaning: 300,
-    drying: CARE_DURATIONS[recommendations.drying],
-    sterilizing: CARE_DURATIONS[recommendations.sterilizing]
-  }), [recommendations])
+    cleaning:    durations.cleaning?.[recommendations.cleaning]    ?? 300,
+    drying:      durations.drying?.[recommendations.drying]        ?? 120,
+    sterilizing: durations.sterilizing?.[recommendations.sterilizing] ?? 60,
+  }), [durations, recommendations])
 
   // Calculate total time based on recommended care types for each service
   const totalTime = useMemo(() => {
@@ -67,6 +63,18 @@ const Auto = () => {
   const [timeRemaining, setTimeRemaining] = useState(totalTime)
   const [currentStage, setCurrentStage] = useState<ServiceType>('cleaning')
   const [serviceStarted, setServiceStarted] = useState(false)
+
+  // Tracks previous connection state for freeze/resume logging across effect re-runs
+  const prevConnectedRef = useRef(false)
+
+  // Re-initialize timer once durations have been fetched
+  const hasInitializedTimer = useRef(false)
+  useEffect(() => {
+    if (isDurationsLoaded && !hasInitializedTimer.current) {
+      hasInitializedTimer.current = true
+      setTimeRemaining(totalTime)
+    }
+  }, [isDurationsLoaded, totalTime])
 
   const progress = ((totalTime - timeRemaining) / totalTime) * 100
 
@@ -89,70 +97,61 @@ const Auto = () => {
 
   // Listen for ESP32 messages
   useEffect(() => {
-    const unsubscribe = onMessage((message) => {
-      if (message.type === 'service-status') {
-        console.log(`[Auto Mode] ESP32 status: ${message.serviceType} - ${message.progress}% (${message.timeRemaining}s remaining)`)
-      } else if (message.type === 'service-complete') {
-        console.log(`[Auto Mode] ESP32 completed: ${message.serviceType}`)
-      }
+    const unsubscribe = onMessage((_message) => {
+      // handled by firmware; no UI action needed here
     })
     return unsubscribe
   }, [onMessage])
 
   // Send initial cleaning command when connected
   useEffect(() => {
-    if (!isConnected || !deviceId || serviceStarted) return
+    if (!isConnected || !deviceId || serviceStarted || !isDurationsLoaded) return
 
     const cleaningCareType = recommendations.cleaning
-    const message = {
+    sendMessage({
       type: 'start-service',
       deviceId,
       shoeType: shoe,
       serviceType: 'cleaning',
       careType: cleaningCareType
-    }
-    console.log('[Auto Mode] Sending initial cleaning command:', message)
-    sendMessage(message)
+    })
+    debug.log(`[Auto] Service started — shoe: ${shoe}, stage: cleaning, care: ${cleaningCareType}`)
     lastSentStageRef.current = 'cleaning'
     setServiceStarted(true)
-    console.log(`[Auto Mode] Started cleaning stage with ${cleaningCareType} care`)
-  }, [isConnected, deviceId, serviceStarted, recommendations, shoe, sendMessage])
+  }, [isConnected, deviceId, serviceStarted, recommendations, shoe, sendMessage, isDurationsLoaded])
 
   // Send stage change command when stage updates
   useEffect(() => {
-    // Skip if service not started yet
-    if (!serviceStarted) return
+    if (!serviceStarted || !isConnected || currentStage === lastSentStageRef.current) return
 
-    // Skip if not connected
-    if (!isConnected) {
-      console.log(`[Auto Mode] Skipping stage send - not connected`)
-      return
-    }
-
-    // Skip if this stage was already sent
-    if (currentStage === lastSentStageRef.current) {
-      return
-    }
-
-    // Use the recommended care type for the current stage
     const stageCareType = recommendations[currentStage]
-    const message = {
+    sendMessage({
       type: 'start-service',
       deviceId,
       shoeType: shoe,
       serviceType: currentStage,
       careType: stageCareType
-    }
-
-    console.log(`[Auto Mode] Sending stage change command:`, message)
-    sendMessage(message)
+    })
+    debug.log(`[Auto] Stage change → ${currentStage} (care: ${stageCareType})`)
     lastSentStageRef.current = currentStage
-    console.log(`[Auto Mode] Stage command sent: ${currentStage} with ${stageCareType} care`)
   }, [currentStage, isConnected, serviceStarted, deviceId, shoe, recommendations, sendMessage])
 
-  // Timer only updates timeRemaining
+  // Timer — pauses when WebSocket disconnects
   useEffect(() => {
+    if (!isDurationsLoaded) return
+
     const timer = setInterval(() => {
+      if (!isConnected) {
+        if (prevConnectedRef.current) {
+          debug.log('[Auto] Timer frozen — WebSocket disconnected')
+          prevConnectedRef.current = false
+        }
+        return
+      }
+      if (!prevConnectedRef.current) {
+        debug.log('[Auto] Timer resumed — WebSocket reconnected')
+        prevConnectedRef.current = true
+      }
       setTimeRemaining((prev) => {
         if (prev <= 0) {
           clearInterval(timer)
@@ -163,10 +162,9 @@ const Auto = () => {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [])
+  }, [isDurationsLoaded, isConnected])
 
   // Separate effect to update stage based on timeRemaining
-  // This ensures stage changes trigger properly and WebSocket commands are sent
   useEffect(() => {
     const cleaningEnd = totalTime - stageDurations.cleaning
     const dryingEnd = cleaningEnd - stageDurations.drying
@@ -180,15 +178,14 @@ const Auto = () => {
       newStage = 'sterilizing'
     }
 
-    // Only update if stage actually changed
     if (newStage !== currentStage) {
-      console.log(`[Auto Mode] Stage transition: ${currentStage} -> ${newStage} (time: ${timeRemaining}s)`)
       setCurrentStage(newStage)
     }
   }, [timeRemaining, totalTime, stageDurations, currentStage])
 
   useEffect(() => {
     if (timeRemaining === 0) {
+      debug.log(`[Auto] All stages complete — redirecting to success (shoe: ${shoe})`)
       router.push(`/kiosk/success/service?shoe=${shoe}&service=package`)
     }
   }, [timeRemaining, router, shoe])
@@ -198,7 +195,6 @@ const Auto = () => {
     return () => {
       if (deviceIdRef.current) {
         sendMessageRef.current({ type: 'stop-service', deviceId: deviceIdRef.current })
-        console.log('[Auto Mode] stop-service sent on page exit')
       }
     }
   }, [])
@@ -211,12 +207,9 @@ const Auto = () => {
 
   const getStageName = () => {
     switch (currentStage) {
-      case 'cleaning':
-        return 'Cleaning'
-      case 'drying':
-        return 'Drying'
-      case 'sterilizing':
-        return 'Sterilizing'
+      case 'cleaning':    return 'Cleaning'
+      case 'drying':      return 'Drying'
+      case 'sterilizing': return 'Sterilizing'
     }
   }
 
@@ -297,7 +290,7 @@ const Auto = () => {
       <div className="flex items-center justify-center gap-2 mb-6">
         <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
         <p className="text-xs text-gray-600">
-          {isConnected ? 'Connected to device' : 'Connecting...'}
+          {isConnected ? 'Connected to device' : 'Reconnecting — timer paused'}
         </p>
       </div>
 

@@ -9,21 +9,19 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { ArrowRight, ArrowLeftRight, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useDeviceFilter } from "@/contexts/DeviceFilterContext"
 
 type Transaction = {
-  transactionId: string
+  id: string
   dateTime: string
   paymentMethod: string
   serviceType: string
   shoeType: string
   careType: string
   amount: number
-  status: string
 }
 
 const RecentTransactionTable = () => {
@@ -34,10 +32,12 @@ const RecentTransactionTable = () => {
 
   // Fetch recent transactions from API
   useEffect(() => {
+    const controller = new AbortController()
+    setIsLoading(true)
+    setError(null)
     const fetchTransactions = async () => {
-      setError(null)
       try {
-        const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}`)
+        const response = await fetch(`/api/transaction/list?deviceId=${selectedDevice}`, { signal: controller.signal })
         if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         const data = await response.json()
 
@@ -56,11 +56,10 @@ const RecentTransactionTable = () => {
           }))
           setRecentTransactions(recent)
         } else {
-          console.error('Failed to fetch transactions:', data.error)
           setError('Failed to load transactions')
         }
-      } catch (error) {
-        console.error('Error fetching transactions:', error)
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
         setError('Failed to load transactions')
       } finally {
         setIsLoading(false)
@@ -68,20 +67,8 @@ const RecentTransactionTable = () => {
     }
 
     fetchTransactions()
+    return () => controller.abort()
   }, [selectedDevice])
-
-  const getStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "success":
-        return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">Success</Badge>
-      case "pending":
-        return <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800">Pending</Badge>
-      case "failed":
-        return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">Failed</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
 
   return (
     <div className="flex flex-col h-full">
@@ -126,13 +113,12 @@ const RecentTransactionTable = () => {
                           <TableHead className="whitespace-nowrap hidden lg:table-cell">Shoe Type</TableHead>
                           <TableHead className="whitespace-nowrap hidden xl:table-cell">Care Type</TableHead>
                           <TableHead className="whitespace-nowrap">Amount</TableHead>
-                          <TableHead className="whitespace-nowrap">Status</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
                           {recentTransactions.map((transaction) => (
-                            <TableRow key={transaction.transactionId}>
-                              <TableCell className="font-medium whitespace-nowrap">{transaction.transactionId}</TableCell>
+                            <TableRow key={transaction.id}>
+                              <TableCell className="font-medium whitespace-nowrap">{transaction.id}</TableCell>
                               <TableCell className="whitespace-nowrap text-sm">{transaction.dateTime}</TableCell>
                               <TableCell className="whitespace-nowrap">{transaction.paymentMethod}</TableCell>
                               <TableCell className="whitespace-nowrap">{transaction.serviceType}</TableCell>
@@ -144,8 +130,6 @@ const RecentTransactionTable = () => {
                                   currency: "PHP",
                                 }).format(transaction.amount)}
                               </TableCell>
-                              <TableCell className="whitespace-nowrap">{getStatusBadge(transaction.status)}</TableCell>
-
                             </TableRow>
                           ))}
                       </TableBody>

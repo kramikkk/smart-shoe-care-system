@@ -16,7 +16,7 @@ export class PayMongoClient {
     console.log('Creating Payment Intent with QRPH')
 
     const attributes: any = {
-      amount: amount * 100, // Convert to cents (₱50 = 5000 cents)
+      amount: Math.round(amount * 100), // Convert to cents (₱50 = 5000 cents)
       payment_method_allowed: ['qrph'], // Enable QRPH
       currency: 'PHP',
       description: description,
@@ -72,11 +72,6 @@ export class PayMongoClient {
         data: {
           attributes: {
             type: 'qrph',
-            billing: {
-              name: 'SSCM Customer',
-              email: 'customer@sscm.com',
-              phone: '00000000000' // Optional
-            }
           }
         }
       })

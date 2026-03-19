@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       paired: device.paired,
       pairedAt: device.pairedAt,
       pairingCode: device.pairingCode,
+      groupToken: device.groupToken,
     })
 
     return NextResponse.json({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-middleware'
+import { requireAuth, requireAdminAuth } from '@/lib/auth-middleware'
 import { z } from 'zod'
 
 const PricingUpdateSchema = z.object({
@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
 
       await prisma.servicePricing.createMany({
         data: defaultPricing,
+        skipDuplicates: true,
       })
 
       globalPricing = await prisma.servicePricing.findMany({
@@ -100,6 +101,12 @@ export async function PUT(req: NextRequest) {
     const { serviceType, price, deviceId } = validation.data
     const targetDeviceId = deviceId || null
 
+    // Global pricing requires admin
+    if (!targetDeviceId) {
+      const adminResult = await requireAdminAuth(req)
+      if (adminResult instanceof NextResponse) return adminResult
+    }
+
     // Verify ownership: User can only edit pricing for devices they own
     if (targetDeviceId) {
       const device = await prisma.device.findUnique({
@@ -128,27 +135,24 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    // Find existing pricing entry
-    const existingPricing = await prisma.servicePricing.findFirst({
-      where: {
-        deviceId: targetDeviceId,
-        serviceType,
-      },
-    })
-
-    // Update or create device-specific pricing
-    const updatedPricing = existingPricing
-      ? await prisma.servicePricing.update({
-          where: { id: existingPricing.id },
-          data: { price },
-        })
-      : await prisma.servicePricing.create({
-          data: {
-            serviceType,
-            price,
-            deviceId: targetDeviceId,
-          },
-        })
+    let updatedPricing
+    if (targetDeviceId !== null) {
+      // Device-specific pricing — compound unique key is reliable
+      updatedPricing = await prisma.servicePricing.upsert({
+        where: { deviceId_serviceType: { deviceId: targetDeviceId, serviceType } },
+        update: { price },
+        create: { serviceType, price, deviceId: targetDeviceId },
+      })
+    } else {
+      // Global pricing (deviceId: null) — PostgreSQL NULLs are not equal in unique constraints,
+      // so we must find by id to avoid duplicates
+      const existing = await prisma.servicePricing.findFirst({
+        where: { deviceId: null, serviceType }
+      })
+      updatedPricing = existing
+        ? await prisma.servicePricing.update({ where: { id: existing.id }, data: { price } })
+        : await prisma.servicePricing.create({ data: { serviceType, price, deviceId: null } })
+    }
 
     return NextResponse.json({
       success: true,

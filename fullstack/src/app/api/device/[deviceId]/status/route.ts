@@ -30,8 +30,9 @@ export async function GET(
     }
 
     // Find device (don't auto-create to prevent ghost devices)
-    let device = await prisma.device.findUnique({
-      where: { deviceId }
+    const device = await prisma.device.findUnique({
+      where: { deviceId },
+      select: { deviceId: true, paired: true, pairedAt: true, pairingCode: true, groupToken: true },
     })
 
     if (!device) {
@@ -54,6 +55,7 @@ export async function GET(
       deviceId: device.deviceId,
       pairedAt: device.pairedAt,
       pairingCode: device.paired ? null : device.pairingCode,
+      groupToken: device.paired ? device.groupToken : null,
     })
   } catch (error) {
     console.error('Device status check error:', error)

@@ -20,6 +20,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid name' }, { status: 400 })
     }
 
+    if (name.trim().length > 64) {
+      return NextResponse.json({ error: 'Name must be 64 characters or fewer' }, { status: 400 })
+    }
+
     const device = await prisma.device.findUnique({ where: { deviceId } })
     if (!device || device.pairedBy !== session.user.id) {
       return NextResponse.json({ error: 'Device not found' }, { status: 404 })

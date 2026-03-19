@@ -81,16 +81,13 @@ model Transaction {
   shoeType      String
   careType      String
   amount        Float
-  status        String   @default("Success")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   deviceId      String?
-  transactionId String   @unique
-  device        Device?  @relation(fields: [deviceId], references: [deviceId])
+  device        Device?  @relation(fields: [deviceId], references: [deviceId], onDelete: SetNull)
 
   @@index([dateTime])
   @@index([paymentMethod])
-  @@index([status])
   @@index([deviceId])
   @@map("transaction")
 }
@@ -102,7 +99,7 @@ model ServicePricing {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   deviceId    String?
-  device      Device?  @relation(fields: [deviceId], references: [deviceId])
+  device      Device?  @relation(fields: [deviceId], references: [deviceId], onDelete: SetNull)
 
   @@unique([deviceId, serviceType])
   @@index([deviceId])
@@ -117,7 +114,7 @@ model ServiceDuration {
   deviceId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  device      Device?  @relation(fields: [deviceId], references: [deviceId])
+  device      Device?  @relation(fields: [deviceId], references: [deviceId], onDelete: SetNull)
 
   @@unique([deviceId, serviceType, careType])
   @@index([deviceId])

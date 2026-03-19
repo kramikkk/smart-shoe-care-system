@@ -4,9 +4,11 @@ import { useCallback, useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, CheckCircle2, XCircle, ArrowLeft, TestTube } from 'lucide-react'
-import { DEFAULT_SERVICES, Service, ServiceType } from '@/lib/kiosk-constants'
+import { Loader2, XCircle, ArrowLeft } from 'lucide-react'
+import { DEFAULT_SERVICES, ServiceType } from '@/lib/kiosk-constants'
 import { usePricing } from '@/hooks/usePricing'
+import { useWebSocket } from '@/contexts/WebSocketContext'
+import { debug, isDebug } from '@/lib/debug'
 
 const OnlinePayment = () => {
   const searchParams = useSearchParams()
@@ -17,8 +19,10 @@ const OnlinePayment = () => {
 
   // Ref to prevent multiple payment creations
   const isCreatingPayment = useRef(false)
+  const hasInitializedRef = useRef(false)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const hasRedirectedRef = useRef(false)
 
   const serviceDescriptions: Record<ServiceType, string> = {
     cleaning: 'Professional shoe cleaning',
@@ -28,6 +32,7 @@ const OnlinePayment = () => {
   }
 
   const { services, isLoaded: isPricingLoaded } = usePricing()
+  const { onMessage } = useWebSocket()
 
   // Get selected service data
   const selectedServiceData = useMemo(() => {
@@ -40,61 +45,58 @@ const OnlinePayment = () => {
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const saveTransaction = useCallback(async () => {
-    const deviceId = localStorage.getItem('kiosk_device_id')
-    try {
-      const res = await fetch('/api/transaction/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentMethod: 'Online',
-          serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1),
-          shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
-          careType: selectedService === 'package'
-            ? 'Auto'
-            : selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
-          deviceId,
-        }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        console.log('Transaction saved:', data.transaction.transactionId)
-      } else {
-        console.error('Failed to save transaction:', data.error)
+  const redirectToSuccess = useCallback(() => {
+    if (hasRedirectedRef.current) return
+    hasRedirectedRef.current = true
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    debug.log('[Payment] Redirecting to success page')
+    router.push(`/kiosk/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
+  }, [router, selectedShoe, selectedService, selectedCare])
+
+  // Listen for payment-success WebSocket event (webhook-driven)
+  useEffect(() => {
+    const unsubscribe = onMessage((message) => {
+      if (message.type === 'payment-success') {
+        debug.log('[Payment] WebSocket payment-success received:', message)
+        redirectToSuccess()
       }
-    } catch (err) {
-      console.error('Transaction save error:', err)
-    }
-  }, [selectedService, selectedShoe, selectedCare])
+    })
+    return unsubscribe
+  }, [onMessage, redirectToSuccess])
 
   const checkPaymentStatus = useCallback(async (intentId: string) => {
     try {
-      const response = await fetch(`/api/payment/status?paymentIntentId=${intentId}`)
+      const groupToken = localStorage.getItem('kiosk_group_token') || ''
+      const deviceId = localStorage.getItem('kiosk_device_id') || ''
+      const response = await fetch(
+        `/api/payment/status?paymentIntentId=${intentId}&deviceId=${encodeURIComponent(deviceId)}`,
+        { headers: { 'X-Group-Token': groupToken } }
+      )
       const data = await response.json()
+
+      debug.log(`[Payment] Poll status: ${data.status}`)
 
       if (data.success) {
         if (data.status === 'succeeded') {
-          // STEP 2A: Save transaction to database when payment succeeds
-          await saveTransaction()
-
-          // Redirect to success page
-          router.push(`/kiosk/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
+          debug.log('[Payment] Poll detected succeeded — redirecting')
+          redirectToSuccess()
           return true
         } else if (data.status === 'failed') {
+          debug.warn('[Payment] Poll detected failed')
           setPaymentState('failed')
           setError('Payment failed. Please try again.')
           return true
         }
       }
       return false
-    } catch (error) {
-      console.error('Status check error:', error)
+    } catch (err) {
+      debug.error('[Payment] Poll error:', err)
       return false
     }
-  }, [router, selectedService, selectedCare, selectedShoe, saveTransaction])
+  }, [redirectToSuccess])
 
   const startPolling = useCallback((intentId: string) => {
-    // Clear any existing intervals
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
 
@@ -104,7 +106,7 @@ const OnlinePayment = () => {
         clearInterval(pollInterval)
         pollIntervalRef.current = null
       }
-    }, 3000) // Check every 3 seconds
+    }, 3000)
 
     pollIntervalRef.current = pollInterval
 
@@ -114,35 +116,39 @@ const OnlinePayment = () => {
       pollIntervalRef.current = null
       setPaymentState('failed')
       setError('QR code expired. Please try again.')
-    }, 1800000) // 30 minutes
+    }, 1800000)
 
     timeoutRef.current = timeout
   }, [checkPaymentStatus])
 
   const handlePayment = useCallback(async () => {
-    // Prevent multiple payment creations
-    if (isCreatingPayment.current) {
-      console.log('Payment creation already in progress, skipping...')
-      return
-    }
+    if (isCreatingPayment.current) return
 
     try {
       isCreatingPayment.current = true
       setPaymentState('creating')
       setError(null)
 
-      // PayMongo requires minimum amount of ₱1.00
       if (selectedServiceData.price < 1) {
         throw new Error('Payment amount must be at least ₱1.00 for online payments. Please use offline payment for amounts less than ₱1.')
       }
 
-      // Call your API to create payment
+      const deviceId = localStorage.getItem('kiosk_device_id')
+      const groupToken = localStorage.getItem('kiosk_group_token') || ''
+      debug.log(`[Payment] Creating payment — device: ${deviceId}, service: ${selectedService}, shoe: ${selectedShoe}, care: ${selectedCare}, amount: ₱${selectedServiceData.price}`)
+
       const response = await fetch('/api/payment/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Group-Token': groupToken },
         body: JSON.stringify({
           amount: selectedServiceData.price,
           description: `Smart Shoe Care - ${selectedServiceData.name}`,
+          deviceId,
+          shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
+          careType: selectedService === 'package'
+            ? 'Auto'
+            : selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
+          serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1),
         }),
       })
 
@@ -152,28 +158,28 @@ const OnlinePayment = () => {
         throw new Error(data.error || 'Failed to create payment')
       }
 
-      // Save payment intent ID and QR image URL
+      debug.log(`[Payment] QR created — intentId: ${data.paymentIntentId}`)
       setPaymentIntentId(data.paymentIntentId)
       setQrImageUrl(data.qrImageUrl)
       setPaymentState('awaiting_payment')
 
-      // Start polling for payment status
       startPolling(data.paymentIntentId)
-
     } catch (err: any) {
-      console.error('Payment error:', err)
+      debug.error('[Payment] Creation failed:', err.message)
       setError(err.message)
       setPaymentState('failed')
       isCreatingPayment.current = false
     }
-  }, [selectedServiceData, startPolling])
+  }, [selectedServiceData, selectedShoe, selectedService, selectedCare, startPolling])
 
-  // Auto-generate QR on page load - only once, but wait for pricing to load
+  // Auto-generate QR on page load - exactly once, after pricing is loaded
   useEffect(() => {
-    if (selectedService && paymentState === 'idle' && !isCreatingPayment.current && isPricingLoaded) {
+    if (hasInitializedRef.current) return
+    if (selectedService && paymentState === 'idle' && isPricingLoaded) {
+      hasInitializedRef.current = true
       handlePayment()
     }
-  }, [selectedService, paymentState, handlePayment, isPricingLoaded, selectedServiceData.price])
+  }, [selectedService, paymentState, handlePayment, isPricingLoaded])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -181,68 +187,33 @@ const OnlinePayment = () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
       isCreatingPayment.current = false
+      hasInitializedRef.current = false
     }
   }, [])
 
   const handleCancel = async () => {
-    // Stop polling
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    
-    // Reset refs
     pollIntervalRef.current = null
     timeoutRef.current = null
     isCreatingPayment.current = false
-    
-    // Cancel the payment intent on PayMongo if it exists
+
     if (paymentIntentId) {
       try {
-        console.log('Cancelling payment intent:', paymentIntentId)
+        const groupToken = localStorage.getItem('kiosk_group_token') || ''
+        const deviceId = localStorage.getItem('kiosk_device_id') || ''
         await fetch('/api/payment/cancel', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentIntentId })
+          headers: { 'Content-Type': 'application/json', 'X-Group-Token': groupToken },
+          body: JSON.stringify({ paymentIntentId, deviceId })
         })
-        console.log('Payment intent cancelled successfully')
-      } catch (error) {
-        console.error('Failed to cancel payment intent:', error)
+      } catch {
         // Still navigate back even if cancellation fails
       }
     }
-    
-    // Navigate back to previous page
+
     router.back()
   }
-
-  // TEST ONLY: Simulate successful payment
-  const handleTestSuccess = useCallback(async () => {
-    console.log('🧪 TEST: Simulating payment success')
-    // Stop polling
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
-    if (timeoutRef.current) clearTimeout(timeoutRef.current)
-
-    // Cancel the payment intent to void the QR code
-    if (paymentIntentId) {
-      try {
-        console.log('🧪 TEST: Cancelling payment intent:', paymentIntentId)
-        await fetch('/api/payment/cancel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentIntentId })
-        })
-        console.log('🧪 TEST: Payment intent cancelled (QR code voided)')
-      } catch (error) {
-        console.error('Failed to cancel payment intent:', error)
-        // Continue to redirect anyway
-      }
-    }
-
-    // TEST: Save transaction to database (same as real payment)
-    await saveTransaction()
-
-    // Redirect immediately to success page with service and care
-    router.push(`/kiosk/success/payment?shoe=${selectedShoe}&service=${selectedService}&care=${selectedCare}`)
-  }, [paymentIntentId, saveTransaction, router, selectedShoe, selectedService, selectedCare])
 
   // Loading state - rendered without Card wrapper
   if (paymentState === 'idle' || paymentState === 'creating') {
@@ -250,18 +221,13 @@ const OnlinePayment = () => {
       <div className="container mx-auto px-4 h-screen flex flex-col justify-center items-center">
         <div className="bg-white/50 backdrop-blur-sm rounded-2xl border border-white/30 shadow-lg p-8">
           <div className="flex flex-col items-center space-y-4">
-            {/* Loader - no glowing effect */}
             <div className="bg-white rounded-full p-6 shadow-xl">
               <Loader2 className="w-16 h-16 animate-spin text-blue-600" />
             </div>
-
-            {/* Text Content */}
             <div className="space-y-2 text-center">
               <h3 className="text-2xl font-bold text-gray-800">Generating QR Code</h3>
               <p className="text-base text-gray-600">Please wait while we prepare your payment...</p>
             </div>
-
-            {/* Service Info Badge */}
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 px-6 py-3 rounded-full border border-blue-200">
               <p className="text-base font-semibold text-blue-800">
                 {selectedServiceData.name} - ₱{selectedServiceData.price}
@@ -290,8 +256,6 @@ const OnlinePayment = () => {
         </CardHeader>
 
         <CardContent className="px-4 py-4">
-          {/* Payment States */}
-
           {paymentState === 'awaiting_payment' && qrImageUrl && (
             <div className="grid grid-cols-2 gap-4">
               {/* Left Side - Service Details & Instructions */}
@@ -342,26 +306,14 @@ const OnlinePayment = () => {
                   <ArrowLeft className="w-5 h-5 mr-2 text-white-800" />
                   <p className="text-base font-bold">Cancel Payment</p>
                 </Button>
-
-                {/* TEST BUTTON - Only visible when enabled */}
-                {process.env.NEXT_PUBLIC_ENABLE_PAYMENT_TEST === 'true' && (
-                  <Button
-                    onClick={handleTestSuccess}
-                    variant="default"
-                    className="w-full py-3 bg-yellow-400 hover:bg-yellow-200 text-yellow-800 border-yellow-300 flex items-center justify-center gap-2"
-                  >
-                    <TestTube className="w-5 h-5" />
-                    <span className="text-base font-bold">Test Success</span>
-                  </Button>
-                )}
               </div>
 
               {/* Right Side - QR Code */}
               <div className="space-y-4 flex flex-col flex-1">
                 <div className="border border-white/40 rounded-xl p-6 bg-white/70 backdrop-blur-sm shadow-md flex flex-col justify-center items-center flex-grow overflow-hidden">
-                  <img 
-                    src={qrImageUrl} 
-                    alt="QRPH Payment QR Code" 
+                  <img
+                    src={qrImageUrl}
+                    alt="QRPH Payment QR Code"
                     className="w-full h-auto object-contain"
                     style={{ maxWidth: '280px', maxHeight: '280px' }}
                   />
@@ -382,6 +334,41 @@ const OnlinePayment = () => {
                     ⏱️ QR code expires in 30 minutes
                   </p>
                 </div>
+
+                {/* Test Button — only visible when NEXT_PUBLIC_DEBUG=true */}
+                {isDebug && (
+                  <Button
+                    onClick={async () => {
+                      debug.log('[Payment] Test button pressed — saving test transaction to DB')
+                      try {
+                        const groupToken = localStorage.getItem('kiosk_group_token') || ''
+                        const deviceId = localStorage.getItem('kiosk_device_id') || ''
+                        const res = await fetch('/api/transaction/create', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'X-Group-Token': groupToken },
+                          body: JSON.stringify({
+                            paymentMethod: 'Online',
+                            serviceType: selectedService.charAt(0).toUpperCase() + selectedService.slice(1),
+                            shoeType: selectedShoe.charAt(0).toUpperCase() + selectedShoe.slice(1),
+                            careType: selectedService === 'package'
+                              ? 'Auto'
+                              : selectedCare.charAt(0).toUpperCase() + selectedCare.slice(1),
+                            deviceId,
+                          }),
+                        })
+                        const data = await res.json()
+                        debug.log('[Payment] Test transaction saved:', data)
+                      } catch (err) {
+                        debug.error('[Payment] Test transaction failed:', err)
+                      }
+                      redirectToSuccess()
+                    }}
+                    variant="outline"
+                    className="w-full py-3 border-dashed border-yellow-500 !bg-yellow-400 !text-yellow-900 hover:!bg-yellow-300 text-xs font-semibold"
+                  >
+                    [TEST] Simulate Payment Success
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -403,20 +390,19 @@ const OnlinePayment = () => {
               </div>
               <Button
                 onClick={async () => {
-                  // Cancel old payment intent first
                   if (paymentIntentId) {
                     try {
+                      const groupToken = localStorage.getItem('kiosk_group_token') || ''
+                      const deviceId = localStorage.getItem('kiosk_device_id') || ''
                       await fetch('/api/payment/cancel', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ paymentIntentId })
+                        headers: { 'Content-Type': 'application/json', 'X-Group-Token': groupToken },
+                        body: JSON.stringify({ paymentIntentId, deviceId })
                       })
-                    } catch (err) {
-                      console.error('Failed to cancel old payment:', err)
+                    } catch {
+                      // ignore
                     }
                   }
-                  
-                  // Reset state and create new payment
                   setPaymentIntentId(null)
                   setQrImageUrl(null)
                   setPaymentState('idle')

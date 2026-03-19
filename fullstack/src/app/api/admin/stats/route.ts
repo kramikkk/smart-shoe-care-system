@@ -16,7 +16,6 @@ export async function GET(request: NextRequest) {
     }),
     prisma.transaction.aggregate({
       _sum: { amount: true },
-      where: { status: 'Success' },
     }),
   ])
 

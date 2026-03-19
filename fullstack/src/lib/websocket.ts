@@ -13,15 +13,11 @@ declare global {
 const deviceConnections: Map<string, Set<WebSocket>> =
   global._deviceConnections ?? (global._deviceConnections = new Map())
 
-// Token validation — checks against configured WS_AUTH_TOKEN or requires minimum length
+// Token validation — requires WS_AUTH_TOKEN (enforced at startup in server.ts)
 function validateWebSocketToken(token: string | null): boolean {
   if (!token) return false
   const wsToken = process.env.WS_AUTH_TOKEN
-  if (wsToken) {
-    return token === wsToken
-  }
-  // Fallback: require minimum length for tokens
-  return token.length >= 8
+  return token === wsToken
 }
 
 export function createWebSocketServer(server: Server) {
@@ -42,7 +38,7 @@ export function createWebSocketServer(server: Server) {
         'http://localhost:3000',
         'http://localhost:3001',
         'file://',
-        process.env.NEXT_PUBLIC_APP_URL,
+        process.env.APP_URL,
         // Extra origins from env (comma-separated)
         ...(process.env.WS_ALLOWED_ORIGINS ? process.env.WS_ALLOWED_ORIGINS.split(',').map(s => s.trim()) : []),
       ].filter(Boolean)
@@ -60,13 +56,12 @@ export function createWebSocketServer(server: Server) {
       // Extract token from query params or cookies
       const token = searchParams.get('token') || request.headers.cookie?.match(/auth-token=([^;]+)/)?.[1] || null
 
-      // For device connections (ESP32), allow if they provide deviceId
+      // For device connections (ESP32), allow if they provide a valid SSCM- deviceId
       const deviceId = searchParams.get('deviceId')
       const isDeviceConnection = deviceId && deviceId.startsWith('SSCM-')
-      const isAdminConnection = deviceId && deviceId.startsWith('admin-')
 
-      // Allow if: has valid token OR is device connection OR is admin connection
-      if (!validateWebSocketToken(token) && !isDeviceConnection && !isAdminConnection) {
+      // Allow if: has valid token (web clients) OR is ESP32 device connection
+      if (!validateWebSocketToken(token) && !isDeviceConnection) {
         console.log('[WebSocket] Unauthorized connection attempt')
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()
@@ -101,6 +96,12 @@ export function createWebSocketServer(server: Server) {
         if (message.type === 'subscribe' && message.deviceId) {
           const subscribeDeviceId = message.deviceId as string
 
+          // ESP32 devices may only subscribe to their own deviceId
+          if (deviceId && deviceId.startsWith('SSCM-') && deviceId !== subscribeDeviceId) {
+            console.warn(`[WebSocket] Device ${deviceId} attempted to subscribe to ${subscribeDeviceId} — rejected`)
+            return
+          }
+
           deviceId = subscribeDeviceId
           let connections = deviceConnections.get(subscribeDeviceId)
           if (!connections) {
@@ -120,7 +121,7 @@ export function createWebSocketServer(server: Server) {
           try {
             const device = await prisma.device.findUnique({
               where: { deviceId: subscribeDeviceId },
-              select: { paired: true, pairedAt: true, name: true, pairingCode: true }
+              select: { paired: true, pairedAt: true, name: true, pairingCode: true, groupToken: true }
             })
             if (device) {
               ws.send(JSON.stringify({
@@ -131,6 +132,7 @@ export function createWebSocketServer(server: Server) {
                   pairedAt: device.pairedAt,
                   deviceName: device.name,
                   pairingCode: device.paired ? null : device.pairingCode,
+                  groupToken: device.paired ? device.groupToken : null,
                 }
               }))
             }
@@ -143,6 +145,12 @@ export function createWebSocketServer(server: Server) {
         // Handle device status update from ESP32
         else if (message.type === 'status-update' && message.deviceId) {
           const updateDeviceId = message.deviceId as string
+
+          // Only the device itself may send status-update for its own deviceId
+          if (deviceId && deviceId.startsWith('SSCM-') && deviceId !== updateDeviceId) {
+            console.warn(`[WebSocket] Device ${deviceId} attempted status-update for ${updateDeviceId} — rejected`)
+            return
+          }
 
           console.log(`[WebSocket] Status update from device: ${updateDeviceId}`)
 
@@ -183,14 +191,24 @@ export function createWebSocketServer(server: Server) {
         // Handle coin insertion from ESP32
         else if (message.type === 'coin-inserted' && message.deviceId) {
           const coinDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Coin: ₱${message.coinValue} on ${coinDeviceId}`)
+          const coinValue = Number(message.coinValue)
+          if (!Number.isFinite(coinValue) || coinValue <= 0 || coinValue > 1000) {
+            console.warn(`[WebSocket] Invalid coinValue: ${message.coinValue} — rejected`)
+            return
+          }
+          console.log(`[WebSocket] Coin: ₱${coinValue} on ${coinDeviceId}`)
           broadcastToDevice(coinDeviceId, message)
         }
 
         // Handle bill insertion from ESP32
         else if (message.type === 'bill-inserted' && message.deviceId) {
           const billDeviceId = message.deviceId as string
-          console.log(`[WebSocket] Bill: ₱${message.billValue} on ${billDeviceId}`)
+          const billValue = Number(message.billValue)
+          if (!Number.isFinite(billValue) || billValue <= 0 || billValue > 1000) {
+            console.warn(`[WebSocket] Invalid billValue: ${message.billValue} — rejected`)
+            return
+          }
+          console.log(`[WebSocket] Bill: ₱${billValue} on ${billDeviceId}`)
           broadcastToDevice(billDeviceId, message)
         }
 
@@ -435,6 +453,11 @@ export function createWebSocketServer(server: Server) {
           })
         }
 
+        // Forward firmware log messages to kiosk subscribers
+        else if (message.type === 'firmware-log' && message.deviceId) {
+          broadcastToDevice(message.deviceId as string, message)
+        }
+
         // Unknown message type
         else {
           console.warn(`[WebSocket] Unknown message type: ${message.type} from ${deviceId || 'unknown'}`)
@@ -493,6 +516,7 @@ export function broadcastDeviceUpdate(deviceId: string, data: {
   pairedAt: Date | null
   deviceName?: string | null
   pairingCode?: string | null
+  groupToken?: string | null
 }) {
   broadcastToDevice(deviceId, {
     type: 'device-update',
@@ -502,6 +526,7 @@ export function broadcastDeviceUpdate(deviceId: string, data: {
       pairedAt: data.pairedAt,
       deviceName: data.deviceName,
       pairingCode: data.paired ? null : (data.pairingCode ?? null),
+      groupToken: data.paired ? (data.groupToken ?? null) : null,
     }
   })
 }
@@ -521,6 +546,16 @@ export function broadcastClassificationResult(
     confidence,
     subCategory,
     condition,
+  })
+}
+
+// Broadcast payment success to kiosk tablet — triggers navigation to success page
+export function broadcastPaymentSuccess(deviceId: string, transactionId: string, amount: number) {
+  broadcastToDevice(deviceId, {
+    type: 'payment-success',
+    deviceId,
+    transactionId,
+    amount,
   })
 }
 
