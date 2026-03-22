@@ -328,8 +328,8 @@ const unsigned long ULTRASONIC_READ_INTERVAL = 5000; // Read every 5 seconds
 
 /* ===================== SERVO MOTORS (MG995) - TWO SERVOS =====================
  */
-#define SERVO_LEFT_PIN 14  // GPIO 14 for left servo (0° → 180°)
-#define SERVO_RIGHT_PIN 19 // GPIO 19 for right servo (180° → 0°)
+#define SERVO_LEFT_PIN 19  // GPIO 19 for left servo (0° → 180°)
+#define SERVO_RIGHT_PIN 14 // GPIO 14 for right servo (180° → 0°)
 
 Servo servoLeft;  // Left servo: moves from 0° to 180°
 Servo servoRight; // Right servo: moves from 180° to 0° (mirrored)
@@ -885,14 +885,9 @@ void startSoftAP() {
 
   WiFi.disconnect(true);
   WiFi.mode(WIFI_AP_STA);
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  char apPassword[16];
-  snprintf(apPassword, sizeof(apPassword), "%02X%02X%02X%02X", mac[2], mac[3],
-           mac[4], mac[5]);
-  WiFi.softAP("Smart Shoe Care Machine Setup", apPassword);
+  WiFi.softAP("Smart Shoe Care Machine Setup");
 #if SSCM_DEBUG
-  Serial.println("[SoftAP] Password: " + String(apPassword));
+  Serial.println("[SoftAP] Open (no password)");
   Serial.println("=== SoftAP Started ===");
   Serial.print("SSID: Smart Shoe Care Machine Setup");
   Serial.print("\nIP: ");

@@ -121,7 +121,7 @@ export function createWebSocketServer(server: Server) {
           try {
             const device = await prisma.device.findUnique({
               where: { deviceId: subscribeDeviceId },
-              select: { paired: true, pairedAt: true, name: true, pairingCode: true, groupToken: true }
+              select: { paired: true, pairedAt: true, name: true, pairingCode: true, groupToken: true, lastSeen: true }
             })
             if (device) {
               ws.send(JSON.stringify({
@@ -135,6 +135,20 @@ export function createWebSocketServer(server: Server) {
                   groupToken: device.paired ? device.groupToken : null,
                 }
               }))
+
+              // If device was seen recently, it's already online — tell the client immediately
+              // so they don't have to wait up to 30s for the next status-update broadcast
+              const secondsSinceLastSeen = device.lastSeen
+                ? (Date.now() - new Date(device.lastSeen).getTime()) / 1000
+                : Infinity
+              if (secondsSinceLastSeen < 35) {
+                ws.send(JSON.stringify({
+                  type: 'device-online',
+                  deviceId: subscribeDeviceId,
+                  paired: device.paired,
+                  lastSeen: device.lastSeen?.toISOString()
+                }))
+              }
             }
           } catch (err) {
             // Non-critical — client will fall back to REST polling

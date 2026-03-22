@@ -51,6 +51,7 @@ export default function CommandsPage() {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<NodeJS.Timeout | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [isDeviceReady, setIsDeviceReady] = useState(false)
 
   // Log
   const [log, setLog] = useState<LogEntry[]>([])
@@ -116,7 +117,10 @@ export default function CommandsPage() {
         try {
           const msg = JSON.parse(event.data)
           if (msg.type === 'serial-command') return // filter echo-back
-          if (msg.type === 'firmware-log') {
+          if (msg.type === 'device-online') {
+            setIsDeviceReady(true)
+          } else if (msg.type === 'firmware-log') {
+            setIsDeviceReady(true)
             const text: string = msg.message || ''
             // Parse stepper position from INFO wsLog: "S1 pos=4800 spd=400 IDLE"
             const s1Steps = text.match(/\bS1\s+pos=(-?\d+)/)
@@ -136,9 +140,10 @@ export default function CommandsPage() {
         } catch { /* ignore */ }
       }
 
-      ws.onerror = () => setIsConnected(false)
+      ws.onerror = () => { setIsConnected(false); setIsDeviceReady(false) }
       ws.onclose = () => {
         setIsConnected(false)
+        setIsDeviceReady(false)
         reconnectRef.current = setTimeout(() => connect(), 5000)
       }
     }
@@ -147,6 +152,7 @@ export default function CommandsPage() {
     setS2Pos(null)
     setMotorSpeed({ left: 0, right: 0, both: 0 })
     setMotorDir({ left: 'fwd', right: 'fwd', both: 'fwd' })
+    setIsDeviceReady(false)
     connect()
     return () => {
       if (reconnectRef.current) clearTimeout(reconnectRef.current)
@@ -182,8 +188,8 @@ export default function CommandsPage() {
     send(`${prefix}${dir === 'fwd' ? pwm : -pwm}`)
   }, [send])
 
-  // ── Shorthand: disabled when not connected OR servo demo is running ───────
-  const disabled = !isConnected || servoBusy
+  // ── Shorthand: disabled when not connected, device not ready, OR servo demo is running ───────
+  const disabled = !isConnected || !isDeviceReady || servoBusy
 
   // ── Badge color ───────────────────────────────────────────────────────────
 
@@ -225,9 +231,11 @@ export default function CommandsPage() {
           <p className="text-muted-foreground text-sm">Send firmware commands directly to the device.</p>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          {isConnected
-            ? <><Wifi className="w-4 h-4 text-green-500" /><span className="text-green-500">Connected</span></>
-            : <><WifiOff className="w-4 h-4 text-red-500" /><span className="text-red-500">Disconnected</span></>
+          {!isConnected
+            ? <><WifiOff className="w-4 h-4 text-red-500" /><span className="text-red-500">Disconnected</span></>
+            : !isDeviceReady
+            ? <><Wifi className="w-4 h-4 text-yellow-500 animate-pulse" /><span className="text-yellow-500">Waiting for device…</span></>
+            : <><Wifi className="w-4 h-4 text-green-500" /><span className="text-green-500">Device ready</span></>
           }
         </div>
       </div>
