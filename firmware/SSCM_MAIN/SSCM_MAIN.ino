@@ -293,9 +293,9 @@ const unsigned long CLEANING_PUMP_DELAY_MS =
     3000; // 3s delay before top linear starts
 
 // Brushing cycle state
-const unsigned long BRUSH_DURATION_MS = 47500; // 47.5 seconds per direction
+const unsigned long BRUSH_DURATION_MS = 30000; // 30 seconds per direction (60s full CW+CCW cycle)
 const unsigned long BRUSH_COAST_MS = 500;  // Coast time between direction changes (prevents back-EMF spike)
-const int BRUSH_TOTAL_CYCLES = 3;      // 3 complete cycles (CW + CCW each)
+const int BRUSH_TOTAL_CYCLES = 10;     // Safety cap — time (serviceDuration) is the primary stopper
 const int BRUSH_MOTOR_SPEED = 255;     // Motor speed (0-255)
 int brushCurrentCycle = 0;             // Current brush cycle (1-3)
 unsigned long brushPhaseStartTime = 0; // When current brush phase started
@@ -347,10 +347,12 @@ const unsigned long SERVO_UPDATE_INTERVAL =
     15; // Update servos every 15ms for smooth movement
 
 // Servo speed control for cleaning brushing phases
-// Slow: 180° over entire 3 cycles (~285s) = 285000ms / 15ms / 180° ≈ 105
-// updates per degree Fast: 180° over ~2s = move 1° every update
+// Slow: dynamically calculated at brushing start — 180° sweep over the full
+// remaining service time (e.g. 285s → interval ≈ 105, 120s → interval ≈ 44).
+// SERVO_SLOW_STEP_INTERVAL is the fallback default (≈285s / 15ms / 180 ≈ 105).
+// Fast: 180° over ~2s = move 1° every update
 const int SERVO_SLOW_STEP_INTERVAL =
-    105; // Updates between each 1° step (slow over all 3 cycles)
+    105; // Fallback default (overridden dynamically at brushing start)
 const int SERVO_FAST_STEP_INTERVAL =
     1; // Updates between each 1° step (fast return)
 int servoStepInterval = SERVO_SLOW_STEP_INTERVAL; // Current step interval
@@ -1816,22 +1818,13 @@ void handleService() {
 
   unsigned long elapsed = millis() - serviceStartTime;
 
-  // Check if service duration is complete
-  // For cleaning: don't stop if brushing is still in progress (phases 3-4)
+  // Check if service duration is complete — stop immediately for all services
   if (elapsed >= serviceDuration) {
-    if (currentServiceType == "cleaning" && cleaningPhase >= 4) {
-      // Brushing in progress — allow up to 5s grace period past duration
-      if (elapsed >= serviceDuration + 5000) {
 #if SSCM_DEBUG
-        Serial.println("[Service] Cleaning hard cutoff reached — forcing stop");
+    Serial.println("[Service] Duration elapsed (" + String(elapsed / 1000) + "s) — stopping immediately");
 #endif
-        stopService();
-        return;
-      }
-    } else {
-      stopService();
-      return;
-    }
+    stopService();
+    return;
   }
 
   // Handle cleaning mode phases
@@ -1873,9 +1866,20 @@ void handleService() {
         brushCurrentCycle = 1;
         brushPhaseStartTime = millis();
         setMotorsSameSpeed(BRUSH_MOTOR_SPEED); // Start CW
-        setServoPositions(180, false);         // Slow servo movement
+
+        // Servo sweeps 0° → 180° over exactly the remaining service time
+        // so it arrives at 180° precisely when the timer hits 0
+        {
+          unsigned long remainingMs = (millis() - serviceStartTime < serviceDuration)
+              ? serviceDuration - (millis() - serviceStartTime)
+              : 1;
+          // ~15ms per loop iteration; spread 180° steps across remaining iterations
+          int dynInterval = max(1, (int)((remainingMs / 15UL) / 180UL));
+          setServoPositions(180, false);   // target: 180°
+          servoStepInterval = dynInterval; // override with time-synced speed
+        }
 #if SSCM_DEBUG
-        Serial.println("[Cleaning] Phase 4: Brush cycle 1/3 - CLOCKWISE");
+        Serial.println("[Cleaning] Phase 4: Brushing started - CLOCKWISE, servo sweeping to 180° over remaining time");
 #endif
       }
     }
@@ -1899,7 +1903,17 @@ void handleService() {
     else if (cleaningPhase == 5) {
       if (millis() - brushPhaseStartTime >= BRUSH_DURATION_MS) {
         brushCurrentCycle++;
-        if (brushCurrentCycle <= BRUSH_TOTAL_CYCLES) {
+        if (brushCurrentCycle > BRUSH_TOTAL_CYCLES) {
+          // Safety cap reached (time-based stop handled by watchdog above)
+          motorsCoast();
+          cleaningPhase = 0;
+          brushCurrentCycle = 0;
+#if SSCM_DEBUG
+          Serial.println("[Cleaning] Safety cap reached (" + String(BRUSH_TOTAL_CYCLES) + " cycles) - motors OFF");
+#endif
+          stopService();
+          return;
+        } else {
           // Coast first to prevent back-EMF spike on direction reversal
           motorsCoast();
           cleaningPhase = 6; // transition coast
@@ -1909,16 +1923,6 @@ void handleService() {
           Serial.println("[Cleaning] Phase 6: Coast before CW (cycle " +
                          String(brushCurrentCycle) + ")");
 #endif
-        } else {
-          // All cycles complete
-          motorsCoast();
-          cleaningPhase = 0;
-          brushCurrentCycle = 0;
-#if SSCM_DEBUG
-          Serial.println("[Cleaning] All 3 brush cycles complete - motors OFF");
-#endif
-          stopService();
-          return;
         }
       }
     }
@@ -1932,13 +1936,13 @@ void handleService() {
           setMotorsSameSpeed(-BRUSH_MOTOR_SPEED); // Start CCW
 #if SSCM_DEBUG
           Serial.println("[Cleaning] Phase 5: Brush cycle " +
-                         String(brushCurrentCycle) + "/3 - COUNTER-CLOCKWISE");
+                         String(brushCurrentCycle) + " - COUNTER-CLOCKWISE");
 #endif
         } else {
-          setMotorsSameSpeed(BRUSH_MOTOR_SPEED); // Back to CW
+          setMotorsSameSpeed(BRUSH_MOTOR_SPEED);  // Back to CW
 #if SSCM_DEBUG
           Serial.println("[Cleaning] Phase 4: Brush cycle " +
-                         String(brushCurrentCycle) + "/3 - CLOCKWISE");
+                         String(brushCurrentCycle) + " - CLOCKWISE");
 #endif
         }
       }

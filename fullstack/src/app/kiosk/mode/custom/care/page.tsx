@@ -52,7 +52,7 @@ function CareContent() {
 
   const getBadge = (careId: string) => {
     if (service === 'cleaning') {
-      return { gentle: '0 MM', normal: '5 MM', strong: '10 MM' }[careId] ?? '—'
+      return { gentle: '10 MM', normal: '5 MM', strong: '0 MM' }[careId] ?? '—'
     }
     return { gentle: '1 min', normal: '3 min', strong: '5 min' }[careId] ?? '—'
   }
