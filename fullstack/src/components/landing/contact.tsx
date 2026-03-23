@@ -57,9 +57,9 @@ export default function Contact() {
     }
 
     return (
-        <section ref={sectionRef} id="contact" className="bg-background py-32 relative overflow-hidden border-t border-white/5">
+        <section ref={sectionRef} id="contact" className="bg-background py-16 sm:py-24 md:py-32 relative overflow-hidden border-t border-white/5">
             <div className="container mx-auto px-6 relative z-10">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16 items-start">
                     <div className="contact-content max-w-xl">
                         <motion.span
                             initial={{ opacity: 0, y: 10 }}
@@ -68,45 +68,45 @@ export default function Contact() {
                         >
                             Contact
                         </motion.span>
-                        <h2 className="text-4xl md:text-6xl font-bold tracking-tighter mb-8 leading-[1.1]">
+                        <h2 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tighter mb-6 md:mb-8 leading-[1.1]">
                             Ready to Elevate Your Shoe Care?
                         </h2>
-                        <p className="text-xl text-muted-foreground mb-12 leading-relaxed">
+                        <p className="text-base sm:text-xl text-muted-foreground mb-8 md:mb-12 leading-relaxed">
                             Interested in purchasing a Smart Shoe Care Machine? Reach out to us and we'll get back to you with pricing, availability, and technical details.
                         </p>
 
                         <div className="space-y-8">
                             <div className="flex items-center gap-6 group">
-                                <div className="w-14 h-14 rounded-2xl bg-white/[0.02] flex items-center justify-center border border-white/5 group-hover:border-primary/50 transition-colors">
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-2xl bg-white/[0.02] flex items-center justify-center border border-white/5 group-hover:border-primary/50 transition-colors">
                                     <Mail className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase tracking-widest mb-1">Email</p>
-                                    <p className="text-lg font-medium">sscm.contact@gmail.com</p>
+                                    <p className="text-base sm:text-lg font-medium">sscm.contact@gmail.com</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-6 group">
-                                <div className="w-14 h-14 rounded-2xl bg-white/[0.02] flex items-center justify-center border border-white/5 group-hover:border-primary/50 transition-colors">
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-2xl bg-white/[0.02] flex items-center justify-center border border-white/5 group-hover:border-primary/50 transition-colors">
                                     <Phone className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase tracking-widest mb-1">Phone</p>
-                                    <p className="text-lg font-medium">+639608319790</p>
+                                    <p className="text-base sm:text-lg font-medium">+639608319790</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-6 group">
-                                <div className="w-14 h-14 rounded-2xl bg-white/[0.02] flex items-center justify-center border border-white/5 group-hover:border-primary/50 transition-colors">
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-2xl bg-white/[0.02] flex items-center justify-center border border-white/5 group-hover:border-primary/50 transition-colors">
                                     <MapPin className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase tracking-widest mb-1">Location</p>
-                                    <p className="text-lg font-medium">Laguna, PH</p>
+                                    <p className="text-base sm:text-lg font-medium">Laguna, PH</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="contact-form bg-white/[0.02] border border-white/5 p-8 md:p-12 rounded-[2rem] backdrop-blur-xl relative group">
+                    <div className="contact-form bg-white/[0.02] border border-white/5 p-5 sm:p-8 md:p-12 rounded-[2rem] backdrop-blur-xl relative group">
                         <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 rounded-[2rem] pointer-events-none" />
 
                         <form className="relative z-10 space-y-6" onSubmit={handleSubmit}>
@@ -174,7 +174,7 @@ export default function Contact() {
                             <Button
                                 type="submit"
                                 disabled={status === 'loading' || status === 'success'}
-                                className="w-full h-14 rounded-xl text-lg font-bold group overflow-hidden relative disabled:opacity-70"
+                                className="w-full h-12 sm:h-14 rounded-xl text-base sm:text-lg font-bold group overflow-hidden relative disabled:opacity-70"
                             >
                                 <span className="relative z-10 flex items-center justify-center gap-2">
                                     {status === 'loading' ? (

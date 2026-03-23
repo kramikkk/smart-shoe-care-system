@@ -19,24 +19,33 @@ export const HeroHeader = () => {
     const lastScrollY = React.useRef(0)
 
     React.useEffect(() => {
-        // Hero is pinned for 250% of viewport height (matches GSAP end: '+=250%')
-        const heroEndScroll = window.innerHeight * 2.5
+        const heroEndScroll = window.innerHeight * (window.innerWidth < 768 ? 1.8 : 2.5)
+        let rafId: number
 
         const handleScroll = () => {
-            const currentScrollY = window.scrollY
-            if (currentScrollY < heroEndScroll) {
-                // Inside hero section — always show
-                setIsVisible(true)
-            } else {
-                // Past hero — hide on scroll down, reveal on scroll up
-                setIsVisible(currentScrollY < lastScrollY.current)
-            }
+            cancelAnimationFrame(rafId)
+            rafId = requestAnimationFrame(() => {
+                const currentScrollY = window.scrollY
+                const delta = currentScrollY - lastScrollY.current
 
-            lastScrollY.current = currentScrollY
+                // Ignore micro-scrolls (inertia bounce, momentum ticks)
+                if (Math.abs(delta) < 5) return
+
+                if (currentScrollY < heroEndScroll) {
+                    setIsVisible(true)
+                } else {
+                    setIsVisible(delta < 0)
+                }
+
+                lastScrollY.current = currentScrollY
+            })
         }
 
         window.addEventListener('scroll', handleScroll, { passive: true })
-        return () => window.removeEventListener('scroll', handleScroll)
+        return () => {
+            window.removeEventListener('scroll', handleScroll)
+            cancelAnimationFrame(rafId)
+        }
     }, [])
 
     return (
@@ -111,7 +120,7 @@ export const HeroHeader = () => {
                                 key={index}
                                 href={item.href}
                                 onClick={() => setMenuState(false)}
-                                className="text-3xl font-bold tracking-tighter hover:text-primary transition-colors"
+                                className="text-2xl sm:text-3xl font-bold tracking-tighter hover:text-primary transition-colors"
                             >
                                 {item.name}
                             </Link>

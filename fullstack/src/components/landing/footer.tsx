@@ -40,11 +40,11 @@ export default function Footer() {
     }, [])
 
     return (
-        <footer ref={footerRef} className="bg-background py-20 border-t border-white/5 relative overflow-hidden">
+        <footer ref={footerRef} className="bg-background py-12 sm:py-16 border-t border-white/5 relative overflow-hidden">
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-primary/[0.03] blur-[120px] rounded-full pointer-events-none" />
 
             <div className="container mx-auto px-6 relative z-10">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 mb-12 sm:mb-16">
                     <div className="col-span-1">
                         <Link href="/" className="inline-block mb-6">
                             <Logo />

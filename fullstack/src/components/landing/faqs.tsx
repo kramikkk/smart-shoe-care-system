@@ -61,13 +61,13 @@ export default function FAQs() {
     }, [])
 
     return (
-        <section ref={sectionRef} id="faqs" className="bg-background py-32 relative overflow-hidden">
+        <section ref={sectionRef} id="faqs" className="bg-background py-16 sm:py-24 md:py-32 relative overflow-hidden">
              {/* Decorative background */}
              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-primary/[0.02] blur-[150px] rounded-full pointer-events-none" />
 
             <div className="container mx-auto px-6 relative z-10">
                 <div className="faq-container max-w-3xl mx-auto">
-                    <div className="text-center mb-16">
+                    <div className="text-center mb-10 sm:mb-16">
                         <motion.div 
                             initial={{ scale: 0.8, opacity: 0 }}
                             whileInView={{ scale: 1, opacity: 1 }}
@@ -75,8 +75,8 @@ export default function FAQs() {
                         >
                             <HelpCircle className="w-6 h-6 text-primary" />
                         </motion.div>
-                        <h2 className="text-4xl md:text-5xl font-bold tracking-tighter mb-4">Frequently Asked Questions</h2>
-                        <p className="text-muted-foreground text-lg">Everything you need to know about the Smart Shoe Care Machine.</p>
+                        <h2 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tighter mb-4">Frequently Asked Questions</h2>
+                        <p className="text-muted-foreground text-base sm:text-lg">Everything you need to know about the Smart Shoe Care Machine.</p>
                     </div>
 
                     <Accordion type="single" collapsible className="space-y-4">
@@ -84,12 +84,12 @@ export default function FAQs() {
                             <AccordionItem 
                                 key={item.id} 
                                 value={item.id}
-                                className="border border-white/5 bg-white/[0.02] rounded-2xl px-6 transition-colors hover:border-white/10 overflow-hidden"
+                                className="border border-white/5 bg-white/[0.02] rounded-2xl px-4 sm:px-6 transition-colors hover:border-white/10 overflow-hidden"
                             >
-                                <AccordionTrigger className="text-left py-6 text-lg hover:no-underline group">
+                                <AccordionTrigger className="text-left py-5 sm:py-6 text-base sm:text-lg hover:no-underline group">
                                     <span className="group-hover:text-primary transition-colors">{item.question}</span>
                                 </AccordionTrigger>
-                                <AccordionContent className="pb-6 text-muted-foreground leading-relaxed text-base">
+                                <AccordionContent className="pb-5 sm:pb-6 text-muted-foreground leading-relaxed text-sm sm:text-base">
                                     {item.answer}
                                 </AccordionContent>
                             </AccordionItem>

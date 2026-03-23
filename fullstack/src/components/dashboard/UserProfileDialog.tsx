@@ -286,7 +286,7 @@ export function UserProfileDialog({
               <Button
                 variant="destructive"
                 onClick={handleSignOut}
-                className="w-full h-11 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 transition-all flex items-center justify-center gap-3 font-bold"
+                className="w-full h-11 bg-red-500/10 hover:bg-red-500/20 text-white border border-red-500/20 transition-all flex items-center justify-center gap-3 font-bold"
               >
                 <LogOut className="h-4 w-4" />
                 Sign Out

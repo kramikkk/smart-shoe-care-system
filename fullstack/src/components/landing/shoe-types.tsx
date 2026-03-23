@@ -29,27 +29,27 @@ const shoeTypes = [
   }
 ]
 
-// How much each back card peeks above the front card (px)
-const STACK_OFFSET = 64
 // How much each back card scales down
 const STACK_SCALE_STEP = 0.07
 
 export default function ShoeTypes() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollRange, setScrollRange] = useState([0, 1])
+  const [stackOffset, setStackOffset] = useState(64)
   const { scrollY } = useScroll()
 
   useEffect(() => {
-    const updateRange = () => {
+    const update = () => {
+      setStackOffset(window.innerWidth < 768 ? 32 : 64)
       const el = containerRef.current
       if (!el) return
       const top = el.getBoundingClientRect().top + window.scrollY
       const height = el.offsetHeight
       setScrollRange([top, top + height - window.innerHeight])
     }
-    updateRange()
-    window.addEventListener('resize', updateRange)
-    return () => window.removeEventListener('resize', updateRange)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
   }, [])
 
   const scrollYProgress = useTransform(scrollY, scrollRange, [0, 1], { clamp: true })
@@ -64,7 +64,7 @@ export default function ShoeTypes() {
       {/* Sticky viewport — stays fixed while the section scrolls */}
       <div className="sticky top-0 h-screen flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="relative container mx-auto px-6 max-w-6xl pt-16 pb-6 flex-shrink-0 text-center">
+        <div className="relative container mx-auto px-6 max-w-6xl pt-8 pb-3 md:pt-16 md:pb-6 flex-shrink-0 text-center">
           <motion.span
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -79,7 +79,7 @@ export default function ShoeTypes() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter"
+            className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter"
           >
             Tailored Care for Every Pair
           </motion.h2>
@@ -94,6 +94,7 @@ export default function ShoeTypes() {
               index={index}
               total={shoeTypes.length}
               progress={scrollYProgress}
+              stackOffset={stackOffset}
             />
           ))}
         </div>
@@ -107,11 +108,13 @@ function ShoeCard({
   index,
   total,
   progress,
+  stackOffset,
 }: {
   shoe: (typeof shoeTypes)[number]
   index: number
   total: number
   progress: MotionValue<number>
+  stackOffset: number
 }) {
   const isFirst = index === 0
 
@@ -122,7 +125,7 @@ function ShoeCard({
 
   // Final resting state for this card in the stack
   // The front card (last index) sits at y=0; back cards peek above it
-  const finalY     = -(total - 1 - index) * STACK_OFFSET
+  const finalY     = -(total - 1 - index) * stackOffset
   const finalScale = 1 - (total - 1 - index) * STACK_SCALE_STEP
 
   // y: slide in from below then settle into stack position
@@ -152,7 +155,7 @@ function ShoeCard({
       className="absolute inset-0 flex items-center"
       style={{ y, scale, zIndex: index + 1 }}
     >
-      <div className="w-full h-[58vh] min-h-[400px] max-h-[520px] rounded-[2.5rem] overflow-hidden border border-white/10 flex flex-col md:flex-row relative bg-zinc-950 shadow-2xl items-center">
+      <div className="w-full h-[60vh] min-h-[360px] max-h-[520px] rounded-[2rem] md:rounded-[2.5rem] overflow-hidden border border-white/10 flex flex-col md:flex-row relative bg-zinc-950 shadow-2xl items-center">
         {/* Background gradient */}
         <div className={`absolute inset-0 bg-gradient-to-br opacity-50 ${shoe.color}`} />
 
@@ -161,20 +164,20 @@ function ShoeCard({
         <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full pointer-events-none" />
 
         {/* Text side */}
-        <div className="md:w-1/2 p-10 md:p-16 z-10 flex flex-col justify-center h-full gap-6">
-          <div className="flex items-center gap-2 text-primary font-mono text-xs md:text-sm uppercase tracking-wider backdrop-blur-md bg-white/5 w-fit px-4 py-2 rounded-full border border-white/10 shadow-inner">
-            <Info className="w-4 h-4" /> Material Type
+        <div className="md:w-1/2 p-5 md:p-16 z-10 flex flex-col justify-center flex-shrink-0 md:h-full gap-2 md:gap-6">
+          <div className="flex items-center gap-2 text-primary font-mono text-xs sm:text-sm md:text-base uppercase tracking-wider backdrop-blur-md bg-white/5 w-fit px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-white/10 shadow-inner">
+            <Info className="w-3 h-3 md:w-4 md:h-4 lg:w-5 lg:h-5" /> Material Type
           </div>
-          <h3 className="text-4xl md:text-5xl font-bold text-white tracking-tight drop-shadow-sm">
+          <h3 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight drop-shadow-sm">
             {shoe.title}
           </h3>
-          <p className="text-lg md:text-xl text-white/70 leading-relaxed max-w-md font-light">
+          <p className="text-base sm:text-lg md:text-xl text-white/70 leading-relaxed max-w-md font-light line-clamp-2 md:line-clamp-none">
             {shoe.description}
           </p>
         </div>
 
         {/* Image side */}
-        <div className="md:w-1/2 relative h-full w-full flex items-center justify-center p-8 z-10 overflow-hidden group">
+        <div className="md:w-1/2 relative flex-1 md:h-full w-full flex items-center justify-center p-4 md:p-8 z-10 overflow-hidden group min-h-0">
           <div className="absolute inset-0 m-auto w-3/4 h-3/4 bg-white/5 rounded-full blur-[80px] group-hover:scale-110 transition-transform duration-700" />
           <div className="relative w-full aspect-square max-h-[90%] md:max-h-[80%] flex items-center justify-center">
             <Image
