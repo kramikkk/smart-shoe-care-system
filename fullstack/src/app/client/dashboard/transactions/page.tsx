@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { motion } from "motion/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CalendarIcon, FileClock, X, Search, Download, FileJson, FileText, ChevronDown } from "lucide-react"
+import { CalendarIcon, X, Search, Download, FileJson, FileText, ChevronDown } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -162,57 +162,44 @@ export default function TransactionsPage() {
       transition={{ duration: 0.6 }}
       className="w-full pb-8"
     >
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Transaction <span className="text-primary">History</span></h1>
-        <p className="text-muted-foreground">View and export your device transaction records.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Transaction <span className="text-primary">History</span></h1>
+          <p className="text-muted-foreground">Showing {filteredData.length} records.</p>
+        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={filteredData.length === 0}
+              className="h-9 border-white/10 bg-white/5 hover:bg-primary/10 hover:text-primary transition-all gap-2"
+            >
+              <Download className="size-4" />
+              <span className="hidden sm:inline">Export</span>
+              <ChevronDown className="size-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-card/98 border-white/10 backdrop-blur-2xl">
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/50">
+              {filteredData.length} records
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-white/5" />
+            <DropdownMenuItem onClick={handleExportCSV} className="gap-2 cursor-pointer">
+              <FileText className="size-4 text-green-400" />
+              Export as CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportJSON} className="gap-2 cursor-pointer">
+              <FileJson className="size-4 text-blue-400" />
+              Export as JSON
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Card className="glass-card border-none overflow-hidden gap-0 py-2">
-        <CardHeader className="px-4 sm:px-6 py-4 pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <FileClock className="size-4 sm:size-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg sm:text-xl">History <span className="text-primary">Log</span></CardTitle>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                  Showing {filteredData.length} records
-                </p>
-              </div>
-            </div>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={filteredData.length === 0}
-                  className="h-9 border-white/10 bg-white/5 hover:bg-primary/10 hover:text-primary transition-all gap-2"
-                >
-                  <Download className="size-4" />
-                  <span className="hidden sm:inline">Export</span>
-                  <ChevronDown className="size-3 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-card/98 border-white/10 backdrop-blur-2xl">
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/50">
-                  {filteredData.length} records
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-white/5" />
-                <DropdownMenuItem onClick={handleExportCSV} className="gap-2 cursor-pointer">
-                  <FileText className="size-4 text-green-400" />
-                  Export as CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportJSON} className="gap-2 cursor-pointer">
-                  <FileJson className="size-4 text-blue-400" />
-                  Export as JSON
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardHeader>
-        <CardContent className="px-4 sm:px-6 pt-2 pb-6 border-none">
+        <CardContent className="px-4 sm:px-6 pt-4 pb-6 border-none">
           <div className="flex flex-col gap-5">
             {/* Premium Search & Filter Toolbar */}
             <motion.div
@@ -222,19 +209,20 @@ export default function TransactionsPage() {
               className="flex flex-col gap-6 p-4 rounded-2xl bg-white/[0.02] border border-white/5"
             >
               {/* Primary Row: Search & Range */}
-              <div className="flex flex-col xl:flex-row gap-4">
+              <div className="flex flex-col lg:flex-row gap-3">
                 {/* Unified Search Input */}
                 <div className="relative flex-1 group">
                   <div className="absolute inset-0 bg-primary/10 rounded-xl blur-lg opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none" />
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 group-focus-within:text-primary group-focus-within:scale-110 transition-all z-20" />
                   <Input
-                    placeholder="Search transaction ID, service, or amount..."
-                    className="relative z-10 pl-11 pr-11 h-12 border-white/10 bg-white/5 text-sm rounded-xl focus-visible:ring-primary/20 focus-visible:bg-white/[0.08] focus-visible:border-primary/30 transition-all shadow-2xl"
+                    placeholder="Search ID, service, or amount..."
+                    className="relative z-10 pl-11 pr-11 h-10 border-white/10 bg-white/5 text-sm rounded-xl focus-visible:ring-primary/20 focus-visible:bg-white/[0.08] focus-visible:border-primary/30 transition-all"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
                   {search && (
                     <button
+                      type="button"
                       onClick={() => setSearch("")}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-red-400 transition-colors z-20"
                     >
@@ -244,32 +232,32 @@ export default function TransactionsPage() {
                 </div>
 
                 {/* Date Controls */}
-                <div className="grid grid-cols-2 xl:flex bg-white/5 p-1 rounded-xl border border-white/10 h-12 shadow-inner">
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 h-10 shadow-inner">
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="ghost"
-                        className={`h-full px-2 sm:px-5 flex-1 justify-center xl:justify-start text-[10px] sm:text-[11px] font-semibold tracking-wide hover:bg-white/5 rounded-lg transition-colors ${!dateFrom && "text-muted-foreground/60"}`}
+                        className={`h-full px-3 flex-1 justify-start text-xs font-semibold tracking-wide hover:bg-white/5 rounded-lg transition-colors min-w-[110px] ${!dateFrom && "text-muted-foreground/60"}`}
                       >
-                        <CalendarIcon className="mr-2 h-3.5 w-3.5 text-primary/70 shrink-0" />
-                        <span className="truncate">{dateFrom ? format(dateFrom, "MMM dd, yyyy") : "Start Date"}</span>
+                        <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-primary/70 shrink-0" />
+                        <span className="truncate">{dateFrom ? format(dateFrom, "MMM dd, yy") : "Start"}</span>
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-card/98 border-white/10 backdrop-blur-2xl shadow-2xl" align="end">
+                    <PopoverContent className="w-auto p-0 bg-card/98 border-white/10 backdrop-blur-2xl shadow-2xl" align="start">
                       <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus />
                     </PopoverContent>
                   </Popover>
 
-                  <div className="w-[1px] h-3.5 bg-white/10 self-center mx-1 hidden xl:block" />
+                  <div className="w-[1px] h-3.5 bg-white/10 self-center mx-1" />
 
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="ghost"
-                        className={`h-full px-2 sm:px-5 flex-1 justify-center xl:justify-start text-[10px] sm:text-[11px] font-semibold tracking-wide hover:bg-white/5 rounded-lg transition-colors ${!dateTo && "text-muted-foreground/60"}`}
+                        className={`h-full px-3 flex-1 justify-start text-xs font-semibold tracking-wide hover:bg-white/5 rounded-lg transition-colors min-w-[110px] ${!dateTo && "text-muted-foreground/60"}`}
                       >
-                        <CalendarIcon className="mr-2 h-3.5 w-3.5 text-primary/70 shrink-0" />
-                        <span className="truncate">{dateTo ? format(dateTo, "MMM dd, yyyy") : "End Date"}</span>
+                        <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-primary/70 shrink-0" />
+                        <span className="truncate">{dateTo ? format(dateTo, "MMM dd, yy") : "End"}</span>
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0 bg-card/98 border-white/10 backdrop-blur-2xl shadow-2xl" align="end">
@@ -280,9 +268,9 @@ export default function TransactionsPage() {
               </div>
 
               {/* Secondary Row: Category Filters */}
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <div className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 px-1">Filter by</div>
+              <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 px-1 shrink-0">Filter by</div>
 
                   {[
                     { label: "Payment", value: paymentFilter, setter: setPaymentFilter, options: ["Cash", "Online"], placeholder: "Any Payment" },
@@ -292,7 +280,7 @@ export default function TransactionsPage() {
                     { label: "Care", value: careTypeFilter, setter: setCareTypeFilter, options: ["Gentle", "Normal", "Strong", "Auto"], placeholder: "Any Care" }
                   ].map((filter) => (
                     <Select key={filter.label} value={filter.value} onValueChange={filter.setter}>
-                      <SelectTrigger className="h-9 w-[135px] border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-[11px] font-medium rounded-lg transition-all">
+                      <SelectTrigger className="h-8 w-[120px] sm:w-[130px] border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-[11px] font-medium rounded-lg transition-all">
                         <SelectValue placeholder={filter.label} />
                       </SelectTrigger>
                       <SelectContent className="bg-card/98 border-white/10 backdrop-blur-2xl">
@@ -310,10 +298,10 @@ export default function TransactionsPage() {
                     setCareTypeFilter("all"); setStatusFilter("all"); setDateFrom(undefined); setDateTo(undefined); setSearch("");
                   }}
                   disabled={paymentFilter === "all" && serviceFilter === "all" && shoeTypeFilter === "all" && careTypeFilter === "all" && statusFilter === "all" && !dateFrom && !dateTo && !search}
-                  className="h-9 px-5 hover:bg-red-500/10 border-white/5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 hover:text-red-400 transition-all rounded-lg group"
+                  className="h-8 px-4 hover:bg-red-500/10 border-white/5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 hover:text-red-400 transition-all rounded-lg group"
                 >
-                  <X className="size-3 mr-2 group-hover:rotate-90 transition-transform duration-300" />
-                  <span>Reset All</span>
+                  <X className="size-3 mr-1.5 group-hover:rotate-90 transition-transform duration-300" />
+                  <span>Reset</span>
                 </Button>
               </div>
             </motion.div>

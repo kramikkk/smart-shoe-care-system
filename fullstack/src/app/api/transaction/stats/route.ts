@@ -46,10 +46,8 @@ export async function GET(req: NextRequest) {
       where: whereClause
     })
 
-    // Calculate total revenue
+    // Calculate total revenue and transactions (all-time)
     const totalRevenue = allTransactions.reduce((sum, tx) => sum + tx.amount, 0)
-
-    // Calculate total transactions
     const totalTransactions = allTransactions.length
 
     // Get today's transactions
@@ -69,14 +67,20 @@ export async function GET(req: NextRequest) {
     )
     const yesterdayCount = yesterdayTransactions.length
 
-    // Calculate trends
+    // Calculate trends (today's value as % of all historical before today)
+    const historicalRevenue = totalRevenue - todayRevenue
+    const historicalCount = totalTransactions - todayCount
+
+    const revenueTrend = historicalRevenue > 0
+      ? ((todayRevenue / historicalRevenue) * 100).toFixed(1)
+      : todayRevenue > 0 ? '100' : '0'
+    const transactionTrend = historicalCount > 0
+      ? ((todayCount / historicalCount) * 100).toFixed(1)
+      : todayCount > 0 ? '100' : '0'
+
+    // isPositive: today vs yesterday for directional signal
     const revenueDiff = todayRevenue - yesterdayRevenue
     const transactionDiff = todayCount - yesterdayCount
-
-    const revenueTrend =
-      yesterdayRevenue > 0 ? ((revenueDiff / yesterdayRevenue) * 100).toFixed(1) : '0'
-    const transactionTrend =
-      yesterdayCount > 0 ? ((transactionDiff / yesterdayCount) * 100).toFixed(1) : '0'
 
     return NextResponse.json({
       success: true,
@@ -89,25 +93,21 @@ export async function GET(req: NextRequest) {
           }).format(totalRevenue),
           trend: parseFloat(revenueTrend),
           isPositive: revenueDiff >= 0,
-          diff: revenueDiff,
+          diff: todayRevenue,
           diffFormatted: new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'PHP',
-          }).format(Math.abs(revenueDiff)),
+          }).format(todayRevenue),
         },
         totalTransactions: {
           value: totalTransactions,
           trend: parseFloat(transactionTrend),
           isPositive: transactionDiff >= 0,
-          diff: transactionDiff,
+          diff: todayCount,
         },
         todayStats: {
           revenue: todayRevenue,
           count: todayCount,
-        },
-        yesterdayStats: {
-          revenue: yesterdayRevenue,
-          count: yesterdayCount,
         },
       },
     })

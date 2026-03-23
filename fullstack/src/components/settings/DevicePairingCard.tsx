@@ -1,6 +1,6 @@
 'use client'
 
-import { Smartphone, Wifi, WifiOff, Check, X, Pencil, Loader2, RotateCcw } from "lucide-react"
+import { Smartphone, Wifi, WifiOff, Check, X, Pencil, Loader2, RotateCcw, Camera, Clock, CalendarDays, User } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -117,7 +117,7 @@ export function DevicePairingCard({
                 <Smartphone className="h-5 w-5 text-muted-foreground" />
                 <CardTitle className="text-lg">Device Pairing</CardTitle>
               </div>
-              <CardDescription>
+              <CardDescription className="mt-1">
                 Manage connected shoe care machines. Pair devices using device ID and pairing code from kiosk.
               </CardDescription>
             </div>
@@ -185,173 +185,164 @@ export function DevicePairingCard({
             </Dialog>
           </div>
         </CardHeader>
+
         <CardContent>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {devices.length === 0 ? (
-              <div className="text-center py-8 border-2 border-dashed rounded-lg">
-                <Smartphone className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                <p className="text-muted-foreground">No devices paired yet</p>
-                <p className="text-sm text-muted-foreground">Click "Pair New Device" to get started</p>
+              <div className="text-center py-12 border-2 border-dashed rounded-xl">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-muted mb-3">
+                  <Smartphone className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <p className="font-medium text-muted-foreground">No devices paired yet</p>
+                <p className="text-sm text-muted-foreground mt-1">Click &quot;Pair New Device&quot; to get started</p>
               </div>
             ) : (
               devices.map((device) => {
-                const statusColor = device.status === 'connected' ? '#22c55e' : device.status === 'pairing' ? '#f59e0b' : '#6b7280'
+                const isConnected = device.status === 'connected'
+                const isPairing = device.status === 'pairing'
+                const accentColor = isConnected ? 'border-l-green-500' : isPairing ? 'border-l-amber-500' : 'border-l-gray-500'
+                const iconBg = isConnected ? 'bg-green-500/10 text-green-500' : isPairing ? 'bg-amber-500/10 text-amber-500' : 'bg-gray-500/10 text-gray-500'
+                const badgeClass = isConnected
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                  : isPairing
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+
                 return (
                   <div
                     key={device.id}
-                    className="border rounded-lg p-4 transition-colors"
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = statusColor
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = ''
-                    }}
+                    className={`rounded-xl border border-white/5 border-l-2 ${accentColor} bg-white/[0.02] p-4 transition-all hover:bg-white/[0.04]`}
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                      <div className="flex items-start gap-4 flex-1 min-w-0">
-                        <div
-                          className={`p-3 rounded-lg shrink-0 ${
-                            device.status === 'connected'
-                              ? 'bg-green-500/10 text-green-500'
-                              : device.status === 'pairing'
-                              ? 'bg-amber-500/10 text-amber-500'
-                              : 'bg-gray-500/10 text-gray-500'
-                          }`}
-                        >
-                          {device.status === 'connected' ? (
-                            <Wifi className="h-6 w-6" />
-                          ) : (
-                            <WifiOff className="h-6 w-6" />
+                    {/* Top row: icon + name/status | actions icon-only on mobile, labeled on sm+ */}
+                    <div className="flex items-start gap-2 mb-3">
+                      <div className={`p-2.5 rounded-lg shrink-0 ${iconBg}`}>
+                        {isConnected ? <Wifi className="h-5 w-5" /> : <WifiOff className="h-5 w-5" />}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        {editingDeviceId === device.deviceId ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Input
+                              value={editingDeviceName}
+                              onChange={(e) => onEditingDeviceNameChange(e.target.value)}
+                              className="h-7 w-full max-w-[200px] text-sm"
+                              autoFocus
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter') await onSaveDeviceName(device.deviceId, editingDeviceName)
+                                else if (e.key === 'Escape') onEditingDeviceIdChange(null)
+                              }}
+                            />
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => onSaveDeviceName(device.deviceId, editingDeviceName)}>
+                              <Check className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => onEditingDeviceIdChange(null)}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-semibold text-sm leading-tight break-words">
+                              {device.name || 'Smart Shoe Care Machine'}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-5 w-5 shrink-0 opacity-40 hover:opacity-100"
+                              onClick={() => {
+                                onEditingDeviceIdChange(device.deviceId)
+                                onEditingDeviceNameChange(device.name || 'Smart Shoe Care Machine')
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {isConnected && (
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
+                            </span>
                           )}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center flex-wrap gap-2 mb-1">
-                            {editingDeviceId === device.deviceId ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  value={editingDeviceName}
-                                  onChange={(e) => onEditingDeviceNameChange(e.target.value)}
-                                  className="h-8 w-48"
-                                  autoFocus
-                                  onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                      await onSaveDeviceName(device.deviceId, editingDeviceName)
-                                    } else if (e.key === 'Escape') {
-                                      onEditingDeviceIdChange(null)
-                                    }
-                                  }}
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8"
-                                  onClick={() => onSaveDeviceName(device.deviceId, editingDeviceName)}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8"
-                                  onClick={() => onEditingDeviceIdChange(null)}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold truncate">
-                                  {device.name || 'Smart Shoe Care Machine'}
-                                </h3>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-6 w-6"
-                                  onClick={() => {
-                                    onEditingDeviceIdChange(device.deviceId)
-                                    onEditingDeviceNameChange(device.name || 'Smart Shoe Care Machine')
-                                  }}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            )}
-                            <Badge
-                              variant="outline"
-                              className={
-                                device.status === 'connected'
-                                  ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
-                                  : device.status === 'pairing'
-                                  ? 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800'
-                                  : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800'
-                              }
-                            >
-                              {device.status === 'connected' && <Check className="h-3 w-3 mr-1" />}
-                              {device.status === 'connected' ? 'Online' : device.status === 'disconnected' ? 'Offline' : 'Pairing'}
-                            </Badge>
-                          </div>
-
-                          <p className="text-sm text-muted-foreground mb-1 break-all">
-                            Device ID: <span className="font-mono">{device.deviceId}</span>
-                          </p>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                            <span>Camera ID: <span className="font-mono">{device.camDeviceId || 'Not paired'}</span></span>
-                            <Badge
-                              variant="outline"
-                              className={
-                                device.camSynced
-                                  ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800 text-xs h-5'
-                                  : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800 text-xs h-5'
-                              }
-                            >
-                              {device.camSynced ? 'Synced' : 'Not Synced'}
-                            </Badge>
-                          </div>
-
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                            <div>
-                              Last seen: <span className="text-foreground">{formatLastSeen(device.lastSeen)}</span>
-                            </div>
-                            {device.pairedAt && (
-                              <div>
-                                Paired: <span className="text-foreground">{new Date(device.pairedAt).toLocaleDateString()}</span>
-                              </div>
-                            )}
-                            {device.pairedByUser && (
-                              <div>
-                                Paired by: <span className="text-foreground">{device.pairedByUser.name}</span>
-                              </div>
-                            )}
-                          </div>
+                          <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ${badgeClass}`}>
+                            {isConnected ? 'Online' : isPairing ? 'Pairing' : 'Offline'}
+                          </Badge>
                         </div>
                       </div>
 
+                      {/* Actions: icon-only on mobile, labeled on sm+ */}
                       {device.paired && (
-                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <div className="flex items-center gap-1 shrink-0">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onRestartDevice(device.deviceId)}
                             disabled={restartingDeviceId === device.deviceId}
-                            className="text-amber-600 hover:text-amber-600 hover:bg-amber-500/10 sm:shrink-0 w-full sm:w-auto"
+                            className="h-7 w-7 sm:w-auto sm:px-2.5 text-xs text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 gap-1"
                           >
                             {restartingDeviceId === device.deviceId ? (
-                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
-                              <RotateCcw className="h-4 w-4 mr-1" />
+                              <RotateCcw className="h-3 w-3" />
                             )}
-                            Restart
+                            <span className="hidden sm:inline">Restart</span>
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onUnpairConfirmIdChange(device.deviceId)}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10 sm:shrink-0 w-full sm:w-auto"
+                            className="h-7 w-7 sm:w-auto sm:px-2.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 gap-1"
                           >
-                            <X className="h-4 w-4 mr-1" />
-                            Unpair
+                            <X className="h-3 w-3" />
+                            <span className="hidden sm:inline">Unpair</span>
                           </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Metadata grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mt-1 pl-0 sm:pl-[52px]">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+                        <Smartphone className="h-3 w-3 shrink-0 opacity-60" />
+                        <span className="opacity-60 shrink-0">Device ID</span>
+                        <span className="font-mono text-foreground/80 truncate">{device.deviceId}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+                        <Camera className="h-3 w-3 shrink-0 opacity-60" />
+                        <span className="opacity-60 shrink-0">Camera</span>
+                        <span className="font-mono text-foreground/80 truncate flex-1">{device.camDeviceId || '—'}</span>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] h-4 px-1.5 shrink-0 ${
+                            device.camSynced
+                              ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                              : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+                          }`}
+                        >
+                          {device.camSynced ? 'Synced' : 'Not Synced'}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3 shrink-0 opacity-60" />
+                        <span className="opacity-60 shrink-0">Last seen</span>
+                        <span className="text-foreground/80">{formatLastSeen(device.lastSeen)}</span>
+                      </div>
+
+                      {device.pairedAt && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                          <CalendarDays className="h-3 w-3 shrink-0 opacity-60" />
+                          <span className="opacity-60 shrink-0">Paired</span>
+                          <span className="text-foreground/80">{new Date(device.pairedAt).toLocaleDateString()}</span>
+                          {device.pairedByUser && (
+                            <>
+                              <User className="h-3 w-3 shrink-0 opacity-60" />
+                              <span className="opacity-60 shrink-0">by</span>
+                              <span className="text-foreground/80">{device.pairedByUser.name}</span>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

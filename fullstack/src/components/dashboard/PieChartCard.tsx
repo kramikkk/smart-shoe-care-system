@@ -193,7 +193,7 @@ export function PieChartCard() {
   }
 
   return (
-    <Card data-chart={id} className="flex flex-col min-h-[400px] glass-card border-none">
+    <Card data-chart={id} className="flex flex-col h-full min-h-[400px] glass-card border-none">
       <ChartStyle id={id} config={chartConfig} />
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
         <CardTitle className="text-sm sm:text-base lg:text-lg">{getTitle()}</CardTitle>

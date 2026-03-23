@@ -32,15 +32,15 @@ export default function SystemPage() {
         className="flex flex-col space-y-6 h-full pb-8"
       >
         <motion.div variants={itemVariants}>
-          <h1 className="text-3xl font-bold tracking-tight">System <span className="text-primary">Monitoring</span></h1>
-          <p className="text-muted-foreground">Real-time status of all device sensors and alerts.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">System <span className="text-primary">Monitoring</span></h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Real-time status of all device sensors and alerts.</p>
         </motion.div>
 
         <motion.div variants={itemVariants}>
           <SensCard id="systemStatus"/>
         </motion.div>
         
-        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-6">
+        <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
           <SensCard id="temperature"/>
           <SensCard id="humidity"/>
           <SensCard id="foamLevel"/>

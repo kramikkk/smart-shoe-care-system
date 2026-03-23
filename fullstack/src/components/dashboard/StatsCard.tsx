@@ -78,14 +78,14 @@ const StatsCard = ({ id }: { id: StatsType }) => {
       icon: Coins,
       iconColor: 'text-yellow-500',
       value: stats.totalRevenue.formatted,
-      footerDescription: `${isPositive ? '+' : ''}${stats.totalRevenue.diffFormatted} from yesterday`,
+      footerDescription: `+${stats.totalRevenue.diffFormatted} added today`,
     },
     totalTransactions: {
       title: 'Total Transactions',
       icon: ShoppingCart,
       iconColor: 'text-blue-500',
       value: stats.totalTransactions.value.toString(),
-      footerDescription: `${isPositive ? '+' : ''}${Math.abs(stats.totalTransactions.diff)} from yesterday`,
+      footerDescription: `+${stats.totalTransactions.diff} added today`,
     },
   }
 

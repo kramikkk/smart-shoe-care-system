@@ -85,67 +85,53 @@ export default function AreaChartCard() {
 
   return (
     <Card className="pt-0 h-full flex flex-col glass-card border-none overflow-hidden">
-      <CardHeader className="flex items-center gap-2 space-y-0 py-5 sm:flex-row shrink-0">
+      <CardHeader className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:gap-2 sm:space-y-0 shrink-0">
         <div className="grid flex-1 gap-1">
           <CardTitle>Transaction + Revenue Chart</CardTitle>
-          <CardDescription>
-            Daily trends
-          </CardDescription>
+          <CardDescription>Daily trends</CardDescription>
         </div>
         <div className="flex gap-2">
           <Select value={timeRange} onValueChange={setTimeRange}>
             <SelectTrigger
-              className="w-[130px] rounded-lg"
+              className="w-[120px] rounded-lg text-xs sm:text-sm sm:w-[130px]"
               aria-label="Select time range"
             >
               <SelectValue placeholder="Last 7 days" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
-              <SelectItem value="7d" className="rounded-lg">
-                Last 7 days
-              </SelectItem>
-              <SelectItem value="30d" className="rounded-lg">
-                Last 30 days
-              </SelectItem>
-              <SelectItem value="90d" className="rounded-lg">
-                Last 90 days
-              </SelectItem>
+              <SelectItem value="7d" className="rounded-lg">Last 7 days</SelectItem>
+              <SelectItem value="30d" className="rounded-lg">Last 30 days</SelectItem>
+              <SelectItem value="90d" className="rounded-lg">Last 90 days</SelectItem>
             </SelectContent>
           </Select>
           <Select value={dataView} onValueChange={setDataView}>
             <SelectTrigger
-              className="w-[130px] rounded-lg"
+              className="w-[100px] rounded-lg text-xs sm:text-sm sm:w-[130px]"
               aria-label="Select data view"
             >
               <SelectValue placeholder="Show all" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
-              <SelectItem value="all" className="rounded-lg">
-                All
-              </SelectItem>
-              <SelectItem value="revenue" className="rounded-lg">
-                Revenue
-              </SelectItem>
-              <SelectItem value="transactions" className="rounded-lg">
-                Transactions
-              </SelectItem>
+              <SelectItem value="all" className="rounded-lg">All</SelectItem>
+              <SelectItem value="revenue" className="rounded-lg">Revenue</SelectItem>
+              <SelectItem value="transactions" className="rounded-lg">Transactions</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </CardHeader>
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6 flex-1 flex items-center">
+      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6 pb-4">
         {isLoading ? (
-          <div className="flex items-center justify-center w-full">
+          <div className="flex items-center justify-center h-[280px] sm:h-[320px] xl:h-[420px] w-full">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : chartData.length === 0 ? (
-          <div className="flex items-center justify-center w-full">
+          <div className="flex items-center justify-center h-[280px] sm:h-[320px] xl:h-[420px] w-full">
             <div className="text-muted-foreground">No data available</div>
           </div>
         ) : (
         <ChartContainer
           config={chartConfig}
-          className="aspect-auto h-full w-full"
+          className="aspect-auto h-[280px] sm:h-[320px] xl:h-[420px] w-full"
         >
           <AreaChart data={chartData}>
             <defs>

@@ -42,10 +42,10 @@ export default function DashboardPage() {
         >
             {/* Header / Welcome Area (Optional, but adds premium feel) */}
             <motion.div variants={itemVariants} className="mb-2">
-                <h1 className="text-3xl font-bold tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                     Welcome Back, <span className="text-primary">{userName}!</span>
                 </h1>
-                <p className="text-muted-foreground">Monitor your shoe care systems in real-time.</p>
+                <p className="text-sm sm:text-base text-muted-foreground">Monitor your shoe care systems in real-time.</p>
             </motion.div>
 
             {/* Stats and Sensor Cards */}
@@ -58,21 +58,21 @@ export default function DashboardPage() {
             </motion.div>
             
             {/* Charts Section */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <div className="xl:col-span-2">
+            <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
+                <div className="lg:col-span-1 xl:col-span-2 h-full">
                     <AreaChartCard/>
                 </div>
-                <div className="xl:col-span-1">
+                <div className="lg:col-span-1 xl:col-span-1 h-full">
                     <PieChartCard/>
                 </div>
             </motion.div>
-            
+
             {/* Transactions and Alerts Section */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
-                <div className="xl:col-span-2 h-full">
+            <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
+                <div className="lg:col-span-1 xl:col-span-2 h-full">
                     <RecentTransactionTable />
                 </div>
-                <div className="xl:col-span-1 h-full">
+                <div className="lg:col-span-1 xl:col-span-1 h-full">
                     <SystemAlertCard className="flex flex-col h-full" />
                 </div>
             </motion.div>

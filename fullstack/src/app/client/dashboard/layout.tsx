@@ -26,7 +26,7 @@ export default async function AdminLayout({
                         
                         <main className="relative z-10 w-full flex flex-col flex-1 overflow-hidden">
                             <NavBar/>
-                            <div className="px-4 pb-4 flex-1 flex flex-col overflow-y-auto">
+                            <div className="px-4 sm:px-6 pb-4 flex-1 flex flex-col overflow-y-auto">
                                 <ThemeProvider
                                     attribute="class"
                                     defaultTheme="dark"

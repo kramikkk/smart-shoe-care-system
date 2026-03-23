@@ -106,9 +106,9 @@ const RecentTransactionTable = () => {
                   <Table>
                       <TableHeader>
                           <TableRow>
-                          <TableHead className="whitespace-nowrap">Transaction ID</TableHead>
-                          <TableHead className="whitespace-nowrap">Date & Time</TableHead>
-                          <TableHead className="whitespace-nowrap">Method</TableHead>
+                          <TableHead className="whitespace-nowrap">ID</TableHead>
+                          <TableHead className="whitespace-nowrap hidden sm:table-cell">Date & Time</TableHead>
+                          <TableHead className="whitespace-nowrap hidden md:table-cell">Method</TableHead>
                           <TableHead className="whitespace-nowrap">Service</TableHead>
                           <TableHead className="whitespace-nowrap hidden lg:table-cell">Shoe Type</TableHead>
                           <TableHead className="whitespace-nowrap hidden xl:table-cell">Care Type</TableHead>
@@ -118,9 +118,9 @@ const RecentTransactionTable = () => {
                       <TableBody>
                           {recentTransactions.map((transaction) => (
                             <TableRow key={transaction.id}>
-                              <TableCell className="font-medium whitespace-nowrap">{transaction.id}</TableCell>
-                              <TableCell className="whitespace-nowrap text-sm">{transaction.dateTime}</TableCell>
-                              <TableCell className="whitespace-nowrap">{transaction.paymentMethod}</TableCell>
+                              <TableCell className="font-medium font-mono text-xs max-w-[80px] sm:max-w-[120px] truncate">{transaction.id}</TableCell>
+                              <TableCell className="whitespace-nowrap text-sm hidden sm:table-cell">{transaction.dateTime}</TableCell>
+                              <TableCell className="whitespace-nowrap hidden md:table-cell">{transaction.paymentMethod}</TableCell>
                               <TableCell className="whitespace-nowrap">{transaction.serviceType}</TableCell>
                               <TableCell className="whitespace-nowrap hidden lg:table-cell">{transaction.shoeType}</TableCell>
                               <TableCell className="whitespace-nowrap hidden xl:table-cell">{transaction.careType}</TableCell>

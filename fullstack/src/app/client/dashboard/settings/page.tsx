@@ -52,7 +52,7 @@ export default function SettingsPage() {
     >
       <motion.div variants={itemVariants} className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">Client <span className="text-primary">Settings</span></h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Client <span className="text-primary">Settings</span></h1>
         </div>
         <p className="text-muted-foreground">Manage your devices, pricing, and service durations.</p>
       </motion.div>

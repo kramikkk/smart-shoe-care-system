@@ -1580,9 +1580,9 @@ void startService(String shoeType, String serviceType, String careType,
     Serial.println("RGB Light: GREEN");
 #endif
   } else if (serviceType == "sterilizing") {
-    rgbViolet(); // Dark violet for sterilizing
+    rgbPink(); // Pink for sterilizing
 #if SSCM_DEBUG
-    Serial.println("RGB Light: VIOLET");
+    Serial.println("RGB Light: PINK");
 #endif
   }
 
@@ -2704,6 +2704,13 @@ void rgbViolet() {
   setRGBColor(238, 130, 238); // Violet color
 #if SSCM_DEBUG
   Serial.println("[WS2812B] VIOLET");
+#endif
+}
+
+void rgbPink() {
+  setRGBColor(255, 20, 147); // Deep pink
+#if SSCM_DEBUG
+  Serial.println("[WS2812B] PINK");
 #endif
 }
 
