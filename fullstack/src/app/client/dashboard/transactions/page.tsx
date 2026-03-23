@@ -11,7 +11,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CalendarIcon, FileClock, X, Search, Download } from "lucide-react"
+import { CalendarIcon, FileClock, X, Search, Download, FileJson, FileText, ChevronDown } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { TransactionDataTable } from "@/components/transactions/TransactionDataTable"
 import { columns, Transaction } from "@/components/transactions/TransactionColumns"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -103,31 +111,48 @@ export default function TransactionsPage() {
     })
   }, [transactions, search, serviceFilter, shoeTypeFilter, careTypeFilter])
 
-  const handleExport = () => {
-    if (filteredData.length === 0) return
+  const filename = `SSCM_Transactions_${format(new Date(), "yyyy-MM-dd")}`
 
-    const headers = ["Transaction ID", "Service", "Shoe Type", "Care Type", "Amount", "Date"]
-    const csvContent = [
-      headers.join(","),
-      ...filteredData.map(tx => [
-        tx.id,
-        `"${tx.serviceType}"`,
-        `"${tx.shoeType}"`,
-        `"${tx.careType}"`,
-        tx.amount,
-        `"${tx.dateTime}"`
-      ].join(","))
-    ].join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+  const triggerDownload = (content: string, name: string, mime: string) => {
+    const blob = new Blob([content], { type: mime })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `SSCM_Transactions_${format(new Date(), "yyyy-MM-dd")}.csv`)
+    link.href = url
+    link.download = name
     link.style.visibility = "hidden"
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportCSV = () => {
+    if (filteredData.length === 0) return
+    const headers = ["Transaction ID", "Date & Time", "Payment Method", "Service Type", "Shoe Type", "Care Type", "Amount (PHP)"]
+    const rows = filteredData.map(tx => [
+      `"${tx.id}"`,
+      `"${tx.dateTime}"`,
+      `"${tx.paymentMethod}"`,
+      `"${tx.serviceType}"`,
+      `"${tx.shoeType}"`,
+      `"${tx.careType}"`,
+      tx.amount,
+    ].join(","))
+    triggerDownload([headers.join(","), ...rows].join("\n"), `${filename}.csv`, "text/csv;charset=utf-8;")
+  }
+
+  const handleExportJSON = () => {
+    if (filteredData.length === 0) return
+    const data = filteredData.map(tx => ({
+      id: tx.id,
+      dateTime: tx.dateTime,
+      paymentMethod: tx.paymentMethod,
+      serviceType: tx.serviceType,
+      shoeType: tx.shoeType,
+      careType: tx.careType,
+      amount: tx.amount,
+    }))
+    triggerDownload(JSON.stringify(data, null, 2), `${filename}.json`, "application/json")
   }
 
   return (
@@ -157,16 +182,34 @@ export default function TransactionsPage() {
               </div>
             </div>
             
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={filteredData.length === 0}
-              className="h-9 border-white/10 bg-white/5 hover:bg-primary/10 hover:text-primary transition-all gap-2"
-            >
-              <Download className="size-4" />
-              <span className="hidden sm:inline">Export CSV</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={filteredData.length === 0}
+                  className="h-9 border-white/10 bg-white/5 hover:bg-primary/10 hover:text-primary transition-all gap-2"
+                >
+                  <Download className="size-4" />
+                  <span className="hidden sm:inline">Export</span>
+                  <ChevronDown className="size-3 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-card/98 border-white/10 backdrop-blur-2xl">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/50">
+                  {filteredData.length} records
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-white/5" />
+                <DropdownMenuItem onClick={handleExportCSV} className="gap-2 cursor-pointer">
+                  <FileText className="size-4 text-green-400" />
+                  Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportJSON} className="gap-2 cursor-pointer">
+                  <FileJson className="size-4 text-blue-400" />
+                  Export as JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardHeader>
         <CardContent className="px-4 sm:px-6 pt-2 pb-6 border-none">

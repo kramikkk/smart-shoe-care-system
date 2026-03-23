@@ -3,6 +3,7 @@
 import { useRef, useEffect } from 'react'
 import { gsap } from '@/lib/gsap'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Logo } from '@/components/landing/logo'
 
 const links = [
@@ -10,6 +11,13 @@ const links = [
     { label: 'Features', href: '#features' },
     { label: 'FAQs', href: '#faqs' },
     { label: 'Contact', href: '#contact' },
+]
+
+const team = [
+    { name: 'Mark Jeric B. Exconde', github: 'kramikkk' },
+    { name: 'Jasmine Q. Macalintal', github: 'Mimineeeee' },
+    { name: 'Zyra Mae G. Flores', github: 'ZyraFlores' },
+    { name: 'John Raymon D. Guran', github: 'Raymon0527' },
 ]
 
 export default function Footer() {
@@ -36,7 +44,7 @@ export default function Footer() {
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-primary/[0.03] blur-[120px] rounded-full pointer-events-none" />
 
             <div className="container mx-auto px-6 relative z-10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-16">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
                     <div className="col-span-1">
                         <Link href="/" className="inline-block mb-6">
                             <Logo />
@@ -58,12 +66,30 @@ export default function Footer() {
                             ))}
                         </ul>
                     </div>
+
+                    <div className="col-span-1">
+                        <h4 className="uppercase tracking-widest text-xs mb-6">The Team</h4>
+                        <ul className="space-y-3">
+                            {team.map(({ name, github }) => (
+                                <li key={name} className="flex items-center gap-3">
+                                    <Image
+                                        src={`https://avatars.githubusercontent.com/${github}`}
+                                        alt={name}
+                                        width={32}
+                                        height={32}
+                                        className="rounded-full border border-primary/20 shrink-0"
+                                    />
+                                    <span className="text-muted-foreground text-sm leading-snug">{name}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
 
                 <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
                     <p>&copy; {new Date().getFullYear()} Smart Shoe Care Machine. All rights reserved.</p>
                     <p className="flex items-center gap-2">
-                        Designed for <span className="text-foreground font-bold tracking-tighter">ACADEMIC PURPOSES</span>
+                        Designed for <span className="text-foreground font-bold tracking-tighter">THESIS</span>
                     </p>
                 </div>
             </div>
