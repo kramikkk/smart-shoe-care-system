@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { motion, useScroll, useTransform, type MotionValue } from 'motion/react'
 import Image from 'next/image'
 import { Info } from 'lucide-react'
@@ -36,10 +36,23 @@ const STACK_SCALE_STEP = 0.07
 
 export default function ShoeTypes() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ['start start', 'end end'],
-  })
+  const [scrollRange, setScrollRange] = useState([0, 1])
+  const { scrollY } = useScroll()
+
+  useEffect(() => {
+    const updateRange = () => {
+      const el = containerRef.current
+      if (!el) return
+      const top = el.getBoundingClientRect().top + window.scrollY
+      const height = el.offsetHeight
+      setScrollRange([top, top + height - window.innerHeight])
+    }
+    updateRange()
+    window.addEventListener('resize', updateRange)
+    return () => window.removeEventListener('resize', updateRange)
+  }, [])
+
+  const scrollYProgress = useTransform(scrollY, scrollRange, [0, 1], { clamp: true })
 
   return (
     <section
@@ -51,7 +64,7 @@ export default function ShoeTypes() {
       {/* Sticky viewport — stays fixed while the section scrolls */}
       <div className="sticky top-0 h-screen flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="container mx-auto px-6 max-w-6xl pt-16 pb-6 flex-shrink-0 text-center">
+        <div className="relative container mx-auto px-6 max-w-6xl pt-16 pb-6 flex-shrink-0 text-center">
           <motion.span
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -168,6 +181,7 @@ function ShoeCard({
               src={shoe.image}
               alt={shoe.title}
               fill
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="object-contain drop-shadow-2xl group-hover:scale-105 group-hover:rotate-[-2deg] transition-all duration-700 ease-out"
             />
           </div>

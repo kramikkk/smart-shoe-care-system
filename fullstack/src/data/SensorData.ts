@@ -21,7 +21,7 @@ export const SensorData = {
     percentage: 0,
     icon: Droplets,
     color: "text-blue-600",
-    range: "0-8L",
+    range: "0-5.3L",
     status: "Normal"
   },
   atomizerLevel: {
@@ -30,7 +30,7 @@ export const SensorData = {
     percentage: 0,
     icon: Gauge,
     color: "text-cyan-600",
-    range: "0-8L",
+    range: "0-5.3L",
     status: "Normal"
   },
   humidity: {

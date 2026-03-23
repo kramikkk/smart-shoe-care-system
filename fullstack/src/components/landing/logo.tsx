@@ -10,6 +10,7 @@ export const Logo = () => {
         width={32}
         height={32}
         className="object-contain"
+        loading="eager"
       />
       <span className="font-semibold text-base">SSCM</span>
     </div>
