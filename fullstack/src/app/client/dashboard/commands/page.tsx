@@ -20,7 +20,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { Terminal, Wifi, WifiOff, AlertTriangle, ArrowUp, ArrowDown, RotateCw, Zap, Power, Activity, DollarSign, Unlink, RotateCcw } from 'lucide-react'
+import { Terminal, Wifi, WifiOff, AlertTriangle, ArrowUp, ArrowDown, RotateCw, Zap, Power, Activity, DollarSign, Unlink, RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Square, RotateCcw as Home, MapPin, RefreshCw } from 'lucide-react'
 import { motion } from 'motion/react'
 
 type LogEntry = {
@@ -70,8 +70,8 @@ export default function CommandsPage() {
   const [relayStates, setRelayStates] = useState<boolean[]>(Array(8).fill(false))
 
   // Servo
-  const [servoAngle, setServoAngle] = useState(90)   // last sent / confirmed angle
-  const [sliderAngle, setSliderAngle] = useState(90) // live slider position
+  const [servoAngle, setServoAngle] = useState(0)   // last sent / confirmed angle
+  const [sliderAngle, setSliderAngle] = useState(0) // live slider position
   const [servoBusy, setServoBusy] = useState(false)
 
   // Stepper 1
@@ -322,54 +322,73 @@ export default function CommandsPage() {
                   }
                   const needle = toXY(servoAngle)
                   const sliderNeedle = toXY(sliderAngle)
-                  const totalArc = Math.PI * r
-                  const dashLen = (sliderAngle / 180) * totalArc
+
+                  // Tapered pointer polygon from pivot toward arc
+                  const pointerTip = toXY(sliderAngle)
+                  const dx = pointerTip.x - cx, dy = pointerTip.y - cy
+                  const len = Math.sqrt(dx * dx + dy * dy) || 1
+                  const ux = dx / len, uy = dy / len   // unit vec toward arc
+                  const px = -uy * 4, py = ux * 4      // perpendicular, half-base width
+                  const tipX = (cx + ux * (r - 2)).toFixed(2)
+                  const tipY = (cy + uy * (r - 2)).toFixed(2)
+                  const pointerPts = `${(cx + px).toFixed(1)},${(cy + py).toFixed(1)} ${(cx - px).toFixed(1)},${(cy - py).toFixed(1)} ${tipX},${tipY}`
+
+                  // Same for confirmed needle (solid)
+                  const cdx = needle.x - cx, cdy = needle.y - cy
+                  const clen = Math.sqrt(cdx * cdx + cdy * cdy) || 1
+                  const cux = cdx / clen, cuy = cdy / clen
+                  const cpx = -cuy * 3, cpy = cux * 3
+                  const ctipX = (cx + cux * (r - 2)).toFixed(2)
+                  const ctipY = (cy + cuy * (r - 2)).toFixed(2)
+                  const confirmedPts = `${(cx + cpx).toFixed(1)},${(cy + cpy).toFixed(1)} ${(cx - cpx).toFixed(1)},${(cy - cpy).toFixed(1)} ${ctipX},${ctipY}`
+
+                  // Full arc length for dasharray
+                  const fullArc = Math.PI * r
+                  const sliderDash = (sliderAngle / 180) * fullArc
+                  const confirmedDash = (servoAngle / 180) * fullArc
+                  const fullArcPath = `M ${cx - r},${cy} A ${r},${r} 0 0,1 ${cx + r},${cy}`
+
+                  const primary = 'hsl(var(--primary))'
+                  const bg = 'hsl(var(--background))'
+
                   return (
-                    <svg viewBox="0 0 220 120" className="w-full max-w-xs">
+                    <svg viewBox="0 0 220 125" className="w-full max-w-xs">
                       {/* Background arc */}
-                      <path d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${cx + r},${cy}`}
-                        stroke="currentColor" strokeOpacity="0.1" strokeWidth="10"
-                        fill="none" strokeLinecap="round" />
-                      {/* Active arc (slider) */}
-                      <path d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${cx + r},${cy}`}
-                        stroke="hsl(var(--primary))" strokeOpacity="0.25" strokeWidth="10"
-                        fill="none" strokeLinecap="round"
-                        strokeDasharray={`${dashLen.toFixed(1)} 1000`} />
-                      {/* Confirmed arc */}
-                      {arcPath(servoAngle) && (
-                        <path d={arcPath(servoAngle)}
-                          stroke="hsl(var(--primary))" strokeWidth="10"
-                          fill="none" strokeLinecap="round" />
-                      )}
-                      {/* Slider needle (ghost) */}
+                      <path d={fullArcPath} fill="none" strokeLinecap="round"
+                        style={{ stroke: 'currentColor', strokeOpacity: 0.12, strokeWidth: 10 }} />
+                      {/* Slider arc — real-time preview (always rendered, dasharray fills up to slider pos) */}
+                      <path d={fullArcPath} fill="none" strokeLinecap="round"
+                        strokeDasharray={`${sliderDash.toFixed(1)} 1000`}
+                        style={{ stroke: primary, strokeOpacity: 0.3, strokeWidth: 10 }} />
+                      {/* Confirmed arc — full opacity, overlaid */}
+                      <path d={fullArcPath} fill="none" strokeLinecap="round"
+                        strokeDasharray={`${confirmedDash.toFixed(1)} 1000`}
+                        style={{ stroke: primary, strokeWidth: 10 }} />
+                      {/* Ghost pointer (dragging) */}
                       {sliderAngle !== servoAngle && (
-                        <line x1={cx} y1={cy} x2={sliderNeedle.x.toFixed(2)} y2={sliderNeedle.y.toFixed(2)}
-                          stroke="hsl(var(--primary))" strokeOpacity="0.3" strokeWidth="2"
-                          strokeDasharray="4 3" strokeLinecap="round" />
+                        <polygon points={pointerPts} style={{ fill: primary, fillOpacity: 0.35 }} />
                       )}
-                      {/* Confirmed needle */}
-                      <line x1={cx} y1={cy} x2={needle.x.toFixed(2)} y2={needle.y.toFixed(2)}
-                        stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" />
-                      {/* Center pivot */}
-                      <circle cx={cx} cy={cy} r="6" fill="hsl(var(--primary))" />
-                      <circle cx={cx} cy={cy} r="3" fill="hsl(var(--background))" />
+                      {/* Confirmed tapered pointer */}
+                      <polygon points={confirmedPts} style={{ fill: primary }} />
+                      {/* Center pivot ring */}
+                      <circle cx={cx} cy={cy} r="7" style={{ fill: primary }} />
+                      <circle cx={cx} cy={cy} r="4" style={{ fill: bg }} />
                       {/* Angle labels */}
-                      <text x={cx - r - 6} y={cy + 16} fontSize="11" textAnchor="middle" fill="currentColor" fillOpacity="0.5">0°</text>
-                      <text x={cx} y={cy - r - 8} fontSize="11" textAnchor="middle" fill="currentColor" fillOpacity="0.5">90°</text>
-                      <text x={cx + r + 6} y={cy + 16} fontSize="11" textAnchor="middle" fill="currentColor" fillOpacity="0.5">180°</text>
-                      {/* Angle value */}
-                      <text x={cx} y={cy + 2} fontSize="22" fontWeight="700" textAnchor="middle"
-                        fill="hsl(var(--foreground))" dominantBaseline="middle">
-                        {sliderAngle}°
-                      </text>
+                      <text x={cx - r + 4} y={cy + 19} fontSize="11" textAnchor="middle" fill="currentColor" fillOpacity="0.7">0°</text>
+                      <text x={cx} y={cy - r - 8} fontSize="11" textAnchor="middle" fill="currentColor" fillOpacity="0.7">90°</text>
+                      <text x={cx + r - 4} y={cy + 19} fontSize="11" textAnchor="middle" fill="currentColor" fillOpacity="0.7">180°</text>
                     </svg>
                   )
                 })()}
-                <p className="text-xs text-muted-foreground">
-                  {sliderAngle !== servoAngle
-                    ? `Drag to adjust · release to send (last sent: ${servoAngle}°)`
-                    : `Position confirmed at ${servoAngle}°`}
-                </p>
+                {/* Angle value + status outside SVG so it never clips */}
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-3xl font-bold tabular-nums">{sliderAngle}°</span>
+                  <p className="text-xs text-muted-foreground">
+                    {sliderAngle !== servoAngle
+                      ? `Drag to adjust · last sent: ${servoAngle}°`
+                      : `Position confirmed at ${servoAngle}°`}
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
@@ -481,13 +500,14 @@ export default function CommandsPage() {
                             : 'bg-orange-500/10 shadow-[0_0_16px_rgba(249,115,22,0.25)]'
                           : 'bg-muted/20'
                       }`}>
-                        <RotateCw className={`w-7 h-7 transition-colors duration-300 ${
-                          running
-                            ? dir === 'fwd' ? 'text-blue-400' : 'text-orange-400'
-                            : 'text-muted-foreground/30'
-                        } ${running ? 'animate-spin' : ''}`}
-                          style={{ animationDuration: spd === 100 ? '0.6s' : '1.2s' }}
-                        />
+                        {dir === 'fwd'
+                          ? <RotateCw className={`w-7 h-7 transition-colors duration-300 ${running ? 'text-blue-400' : 'text-muted-foreground/30'} ${running ? 'animate-spin' : ''}`}
+                              style={{ animationDuration: spd === 100 ? '0.6s' : '1.2s' }}
+                            />
+                          : <RotateCcw className={`w-7 h-7 transition-colors duration-300 ${running ? 'text-orange-400' : 'text-muted-foreground/30'} ${running ? 'animate-spin' : ''}`}
+                              style={{ animationDuration: spd === 100 ? '0.6s' : '1.2s', animationDirection: 'reverse' }}
+                            />
+                        }
                       </div>
                       <div className="text-center">
                         <p className="font-semibold text-sm">{label}</p>
@@ -566,156 +586,141 @@ export default function CommandsPage() {
 
         </TabsContent>
 
-        {/* ── LINEAR ACTUATORS (combined) ── */}
-        <TabsContent value="steppers" className="space-y-3">
-
-          {/* Stop both + refresh both row */}
-          <div className="flex gap-2">
-            <button disabled={disabled}
-              onClick={() => { send('STEPPER1_STOP'); send('STEPPER2_STOP') }}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-              Stop Both Actuators
-            </button>
-            <button disabled={disabled}
-              onClick={() => { send('STEPPER1_INFO'); send('STEPPER2_INFO') }}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold border border-border text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-              Refresh Both
-            </button>
-          </div>
-
-          {/* Two actuator panels side by side */}
-          <div className="grid grid-cols-2 gap-4">
+        {/* ── LINEAR ACTUATORS ── */}
+        <TabsContent value="steppers" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {([
               {
                 n: 1, label: 'Top Actuator', sub: '480 mm stroke',
                 maxMm: 480, stepsPerMm: 10, precision: 1,
                 pos: s1Pos, targetMm: s1TargetMm, setTargetMm: setS1TargetMm,
                 speedLevel: s1SpeedLevel, setSpeedLevel: setS1SpeedLevel,
-                speeds: { slow: 200, normal: 400, fast: 800 } as Record<string,number>,
-                jog: [[-50,'−50mm'],[-10,'−10mm'],[10,'+10mm'],[50,'+50mm']] as [number,string][],
-                midLabel: '240 mm', step: 1,
-                onReturn: () => send('STEPPER1_RETURN'),
-                onZero:   () => { send('STEPPER1_HOME'); setS1Pos(0); setS1TargetMm(0) },
-                onMove:   (delta: number) => send(`STEPPER1_MM_${delta}`),
-                onSpeed:  (lvl: string) => send(`STEPPER1_SPEED_${[200,400,800][['slow','normal','fast'].indexOf(lvl)]}`),
-                onTest:   () => send('STEPPER1_TEST_MANUAL'),
+                jog: [-50, -10, 10, 50] as number[], step: 1,
+                onRefresh: () => send('STEPPER1_INFO'),
+                onReturn:  () => send('STEPPER1_RETURN'),
+                onZero:    () => { send('STEPPER1_HOME'); setS1Pos(0); setS1TargetMm(0) },
+                onStop:    () => send('STEPPER1_STOP'),
+                onMove:    (delta: number) => send(`STEPPER1_MM_${delta}`),
+                onSpeed:   (lvl: string) => send(`STEPPER1_SPEED_${[200,400,800][['slow','normal','fast'].indexOf(lvl)]}`),
               },
               {
                 n: 2, label: 'Side Actuator', sub: '100 mm stroke',
                 maxMm: 100, stepsPerMm: 200, precision: 2,
                 pos: s2Pos, targetMm: s2TargetMm, setTargetMm: setS2TargetMm,
                 speedLevel: s2SpeedLevel, setSpeedLevel: setS2SpeedLevel,
-                speeds: { slow: 3000, normal: 12000, fast: 24000 } as Record<string,number>,
-                jog: [[-20,'−20mm'],[-5,'−5mm'],[5,'+5mm'],[20,'+20mm']] as [number,string][],
-                midLabel: '50 mm', step: 0.5,
-                onReturn: () => send('STEPPER2_RETURN'),
-                onZero:   () => { send('STEPPER2_HOME'); setS2Pos(0); setS2TargetMm(0) },
-                onMove:   (delta: number) => send(`STEPPER2_MM_${delta}`),
-                onSpeed:  (lvl: string) => send(`STEPPER2_SPEED_${[3000,12000,24000][['slow','normal','fast'].indexOf(lvl)]}`),
-                onTest:   null,
+                jog: [-20, -5, 5, 20] as number[], step: 0.5,
+                onRefresh: () => send('STEPPER2_INFO'),
+                onReturn:  () => send('STEPPER2_RETURN'),
+                onZero:    () => { send('STEPPER2_HOME'); setS2Pos(0); setS2TargetMm(0) },
+                onStop:    () => send('STEPPER2_STOP'),
+                onMove:    (delta: number) => send(`STEPPER2_MM_${delta}`),
+                onSpeed:   (lvl: string) => send(`STEPPER2_SPEED_${[3000,12000,24000][['slow','normal','fast'].indexOf(lvl)]}`),
               },
             ]).map(({ n, label, sub, maxMm, stepsPerMm, precision, pos, targetMm, setTargetMm,
-                       speedLevel, setSpeedLevel, jog, midLabel, step,
-                       onReturn, onZero, onMove, onSpeed, onTest }) => {
-              const posMm = pos !== null ? pos / stepsPerMm : null
-              const pct = posMm !== null ? Math.min(100, Math.max(0, (posMm / maxMm) * 100)) : null
-              const targetPct = Math.min(100, Math.max(0, (targetMm / maxMm) * 100))
-              const btnBase = 'py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
-              const jogBtn = `${btnBase} border border-border bg-muted/10 hover:bg-muted/30 hover:text-foreground text-muted-foreground`
+                      speedLevel, setSpeedLevel, jog, step,
+                      onRefresh, onReturn, onZero, onStop, onMove, onSpeed }) => {
+              const posMm  = pos !== null ? pos / stepsPerMm : null
+              const pct    = posMm !== null ? Math.min(100, Math.max(0, (posMm / maxMm) * 100)) : 0
+              const tgtPct = Math.min(100, Math.max(0, (targetMm / maxMm) * 100))
+              const btn    = 'rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
               return (
                 <Card key={n} className="glass-card border-none">
-                  <CardContent className="pt-4 pb-4 space-y-4">
+                  <CardContent className="pt-5 pb-5 space-y-5">
 
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-2">
+                    {/* ── Header: title + position + refresh ── */}
+                    <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-sm">{label}</p>
+                        <p className="font-semibold">{label}</p>
                         <p className="text-xs text-muted-foreground">{sub}</p>
                       </div>
-                      {/* Live position badge */}
-                      <div className={`px-2.5 py-1 rounded-full text-xs font-mono font-semibold border transition-all duration-500 ${
-                        posMm !== null ? 'border-primary/30 bg-primary/5 text-primary' : 'border-border text-muted-foreground/50'
-                      }`}>
-                        {posMm !== null ? `${posMm.toFixed(precision)} mm` : '— mm'}
+                      <div className="flex items-center gap-2">
+                        <div className={`px-3 py-1.5 rounded-xl text-sm font-mono font-bold border transition-all duration-500 ${
+                          posMm !== null ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border text-muted-foreground/40'
+                        }`}>
+                          {posMm !== null ? `${posMm.toFixed(precision)} mm` : '— mm'}
+                        </div>
+                        <button disabled={disabled} onClick={onRefresh}
+                          className={`${btn} p-2 border border-border text-muted-foreground hover:text-foreground hover:bg-muted/20`}>
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
 
-                    {/* Position track */}
-                    <div className="space-y-1.5">
-                      <div className="relative h-6 rounded-full bg-muted/20 overflow-hidden">
-                        <div className="absolute inset-y-0 left-0 rounded-full bg-primary/10 transition-all duration-100"
-                          style={{ width: `${targetPct}%` }} />
-                        {pct !== null && (
-                          <div className="absolute inset-y-0 left-0 rounded-full bg-primary/25 transition-all duration-500"
-                            style={{ width: `${pct}%` }} />
-                        )}
-                      </div>
-                      {/* Markers below the track */}
-                      <div className="relative h-4">
-                        {/* Target marker */}
-                        <div className="absolute -translate-x-1/2 top-0 flex flex-col items-center transition-all duration-100"
-                          style={{ left: `${targetPct}%` }}>
-                          <div className="w-0.5 h-2 bg-primary/40" />
-                        </div>
-                        {/* Confirmed marker */}
-                        {pct !== null && (
-                          <div className="absolute -translate-x-1/2 top-0 flex flex-col items-center transition-all duration-500"
-                            style={{ left: `${pct}%` }}>
-                            <div className="w-0.5 h-2 bg-primary" />
-                            <div className="w-2 h-2 rounded-full bg-primary mt-0.5" />
-                          </div>
-                        )}
+                    {/* ── Position bar ── */}
+                    <div className="space-y-2">
+                      <div className="relative h-3 rounded-full bg-muted/20 overflow-hidden">
+                        {/* Target fill */}
+                        <div className="absolute inset-y-0 left-0 rounded-full bg-primary/20 transition-all duration-150"
+                          style={{ width: `${tgtPct}%` }} />
+                        {/* Confirmed fill */}
+                        <div className="absolute inset-y-0 left-0 rounded-full bg-primary/60 transition-all duration-500"
+                          style={{ width: `${pct}%` }} />
                       </div>
                       <div className="flex justify-between text-[10px] text-muted-foreground/50">
-                        <span>0</span><span>{midLabel}</span><span>{maxMm} mm</span>
+                        <span>0 mm</span><span>{maxMm / 2} mm</span><span>{maxMm} mm</span>
                       </div>
-                      {pct === null && (
-                        <p className="text-[10px] text-muted-foreground/40 text-center">
-                          Hit "Refresh Both" to read position
-                        </p>
-                      )}
                     </div>
 
-                    {/* Jog row */}
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">Jog</p>
-                      <div className="grid grid-cols-5 gap-1.5">
-                        <button disabled={disabled} onClick={() => onMove(jog[0][0] as number)} className={jogBtn}>{jog[0][1]}</button>
-                        <button disabled={disabled} onClick={() => onMove(jog[1][0] as number)} className={jogBtn}>{jog[1][1]}</button>
-                        <button disabled={disabled} onClick={() => send(`STEPPER${n}_STOP`)}
-                          className={`${btnBase} bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30`}>
-                          STOP
+                    {/* ── Jog controls ── */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Jog</p>
+                      <div className="grid grid-cols-5 gap-2">
+                        <button disabled={disabled} onClick={() => onMove(jog[0])}
+                          className={`${btn} py-3 flex flex-col items-center gap-1 border border-border bg-muted/10 hover:bg-muted/30 text-muted-foreground hover:text-foreground`}>
+                          <ChevronsLeft className="w-4 h-4" />
+                          <span className="text-[10px]">{Math.abs(jog[0])}</span>
                         </button>
-                        <button disabled={disabled} onClick={() => onMove(jog[2][0] as number)} className={jogBtn}>{jog[2][1]}</button>
-                        <button disabled={disabled} onClick={() => onMove(jog[3][0] as number)} className={jogBtn}>{jog[3][1]}</button>
+                        <button disabled={disabled} onClick={() => onMove(jog[1])}
+                          className={`${btn} py-3 flex flex-col items-center gap-1 border border-border bg-muted/10 hover:bg-muted/30 text-muted-foreground hover:text-foreground`}>
+                          <ChevronLeft className="w-4 h-4" />
+                          <span className="text-[10px]">{Math.abs(jog[1])}</span>
+                        </button>
+                        <button disabled={disabled} onClick={onStop}
+                          className={`${btn} py-3 flex flex-col items-center gap-1 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30`}>
+                          <Square className="w-4 h-4 fill-current" />
+                          <span className="text-[10px] font-bold">Stop</span>
+                        </button>
+                        <button disabled={disabled} onClick={() => onMove(jog[2])}
+                          className={`${btn} py-3 flex flex-col items-center gap-1 border border-border bg-muted/10 hover:bg-muted/30 text-muted-foreground hover:text-foreground`}>
+                          <ChevronRight className="w-4 h-4" />
+                          <span className="text-[10px]">{Math.abs(jog[2])}</span>
+                        </button>
+                        <button disabled={disabled} onClick={() => onMove(jog[3])}
+                          className={`${btn} py-3 flex flex-col items-center gap-1 border border-border bg-muted/10 hover:bg-muted/30 text-muted-foreground hover:text-foreground`}>
+                          <ChevronsRight className="w-4 h-4" />
+                          <span className="text-[10px]">{Math.abs(jog[3])}</span>
+                        </button>
                       </div>
                     </div>
 
-                    {/* Go to position */}
-                    <div className="space-y-1.5">
+                    {/* ── Go to position ── */}
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">Go to Position</p>
-                        <span className="text-xs font-mono font-semibold text-primary">{targetMm} mm</span>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Go to Position</p>
+                        <span className="text-xs font-mono font-bold text-primary">{targetMm} mm</span>
                       </div>
                       <input type="range" min={0} max={maxMm} step={step} value={targetMm} disabled={disabled}
                         onChange={e => setTargetMm(Number(e.target.value))}
                         className="w-full accent-primary disabled:opacity-40" />
                       <button disabled={disabled}
                         onClick={() => onMove(targetMm - (posMm ?? 0))}
-                        className={`${btnBase} w-full bg-primary text-primary-foreground hover:bg-primary/90`}>
+                        className={`${btn} w-full py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-2`}>
+                        <MapPin className="w-4 h-4" />
                         Move to {targetMm} mm
                       </button>
                     </div>
 
-                    {/* Speed */}
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">Speed</p>
-                      <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-muted/20 p-1">
+                    {/* ── Speed ── */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Speed</p>
+                      <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-muted/20">
                         {(['slow','normal','fast'] as const).map(lvl => (
                           <button key={lvl} disabled={disabled}
                             onClick={() => { setSpeedLevel(lvl); onSpeed(lvl) }}
-                            className={`rounded-lg py-1 text-xs font-semibold capitalize transition-all duration-150 ${
-                              speedLevel === lvl ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
+                            className={`rounded-lg py-1.5 text-xs font-semibold capitalize transition-all duration-150 ${
+                              speedLevel === lvl
+                                ? 'bg-background shadow text-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
                             } disabled:opacity-40 disabled:cursor-not-allowed`}>
                             {lvl}
                           </button>
@@ -723,22 +728,16 @@ export default function CommandsPage() {
                       </div>
                     </div>
 
-                    {/* Calibration */}
-                    <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border/40">
+                    {/* ── Utilities ── */}
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/30">
                       <button disabled={disabled} onClick={onReturn}
-                        className={`${btnBase} border border-border hover:bg-muted/20 text-muted-foreground hover:text-foreground`}>
-                        ↩ Return to 0
+                        className={`${btn} py-2 flex items-center justify-center gap-1.5 border border-border text-muted-foreground hover:text-foreground hover:bg-muted/20`}>
+                        <Home className="w-3.5 h-3.5" /> Return to 0
                       </button>
                       <button disabled={disabled} onClick={onZero}
-                        className={`${btnBase} border border-border hover:bg-muted/20 text-muted-foreground hover:text-foreground`}>
-                        ◎ Zero Here
+                        className={`${btn} py-2 flex items-center justify-center gap-1.5 border border-border text-muted-foreground hover:text-foreground hover:bg-muted/20`}>
+                        <MapPin className="w-3.5 h-3.5" /> Zero Here
                       </button>
-                      {onTest && (
-                        <button disabled={disabled} onClick={onTest}
-                          className={`col-span-2 ${btnBase} border border-border hover:bg-muted/20 text-muted-foreground hover:text-foreground`}>
-                          Run Test Pulse
-                        </button>
-                      )}
                     </div>
 
                   </CardContent>
@@ -746,6 +745,13 @@ export default function CommandsPage() {
               )
             })}
           </div>
+
+          {/* Stop both — bottom, less prominent */}
+          <button disabled={disabled}
+            onClick={() => { send('STEPPER1_STOP'); send('STEPPER2_STOP') }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+            <Square className="w-4 h-4 fill-current" /> Stop Both Actuators
+          </button>
         </TabsContent>
 
         {/* ── RGB LED ── */}

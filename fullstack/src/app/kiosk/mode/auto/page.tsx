@@ -113,7 +113,8 @@ const Auto = () => {
       deviceId,
       shoeType: shoe,
       serviceType: 'cleaning',
-      careType: cleaningCareType
+      careType: cleaningCareType,
+      duration: durations['cleaning']?.[cleaningCareType],
     })
     debug.log(`[Auto] Service started — shoe: ${shoe}, stage: cleaning, care: ${cleaningCareType}`)
     lastSentStageRef.current = 'cleaning'
@@ -130,11 +131,12 @@ const Auto = () => {
       deviceId,
       shoeType: shoe,
       serviceType: currentStage,
-      careType: stageCareType
+      careType: stageCareType,
+      duration: durations[currentStage]?.[stageCareType],
     })
     debug.log(`[Auto] Stage change → ${currentStage} (care: ${stageCareType})`)
     lastSentStageRef.current = currentStage
-  }, [currentStage, isConnected, serviceStarted, deviceId, shoe, recommendations, sendMessage])
+  }, [currentStage, isConnected, serviceStarted, deviceId, shoe, recommendations, sendMessage, durations])
 
   // Timer — pauses when WebSocket disconnects
   useEffect(() => {

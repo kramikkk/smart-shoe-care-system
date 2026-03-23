@@ -8,18 +8,6 @@ import { Label } from "@/components/ui/label"
 
 type DurationMap = Record<string, Record<string, number>>
 
-const serviceIcons = {
-  cleaning: { icon: <Sparkles className="h-5 w-5" />, color: 'var(--chart-1)' },
-  drying: { icon: <Wind className="h-5 w-5" />, color: 'var(--chart-2)' },
-  sterilizing: { icon: <ShieldCheck className="h-5 w-5" />, color: 'var(--chart-3)' },
-}
-
-const serviceNames = {
-  cleaning: 'Cleaning',
-  drying: 'Drying',
-  sterilizing: 'Sterilizing',
-}
-
 type ServiceDurationCardProps = {
   durations: DurationMap
   editedDurations: DurationMap
@@ -38,9 +26,9 @@ const FIRMWARE_DEFAULTS: Record<string, Record<string, number>> = {
 }
 
 const SERVICE_CONFIG = [
-  { key: 'cleaning', label: 'Cleaning', icon: <Sparkles className="h-5 w-5" />, color: 'var(--chart-1)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: true },
-  { key: 'drying', label: 'Drying', icon: <Wind className="h-5 w-5" />, color: 'var(--chart-2)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: false },
-  { key: 'sterilizing', label: 'Sterilizing', icon: <ShieldCheck className="h-5 w-5" />, color: 'var(--chart-3)', careTypes: ['gentle', 'normal', 'strong'] as const, singleDuration: false },
+  { key: 'cleaning',    label: 'Cleaning',    icon: <Sparkles className="h-5 w-5" />, color: 'var(--chart-1)', careTypes: ['gentle', 'normal', 'strong'] as const },
+  { key: 'drying',      label: 'Drying',      icon: <Wind     className="h-5 w-5" />, color: 'var(--chart-2)', careTypes: ['gentle', 'normal', 'strong'] as const },
+  { key: 'sterilizing', label: 'Sterilizing', icon: <ShieldCheck className="h-5 w-5" />, color: 'var(--chart-3)', careTypes: ['gentle', 'normal', 'strong'] as const },
 ]
 
 export function ServiceDurationCard({
@@ -65,7 +53,7 @@ export function ServiceDurationCard({
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 gap-6">
-          {SERVICE_CONFIG.map(({ key, label, icon, color, careTypes, singleDuration }) => (
+          {SERVICE_CONFIG.map(({ key, label, icon, color, careTypes }) => (
             <div
               key={key}
               className="border rounded-lg p-4 space-y-4 transition-colors"
@@ -82,52 +70,36 @@ export function ServiceDurationCard({
                 >
                   {icon}
                 </div>
-                <div>
-                  <h3 className="font-semibold">{label}</h3>
-                  {singleDuration && (
-                    <p className="text-xs text-muted-foreground">Applies to all care types</p>
-                  )}
-                </div>
+                <h3 className="font-semibold">{label}</h3>
               </div>
 
-              <div className={`grid gap-3 ${singleDuration ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}>
-                {(singleDuration ? ['normal'] : careTypes).map((careType) => {
-                  const current = durations[key]?.[careType] ?? 0
-                  const edited = editedDurations[key]?.[careType] ?? 0
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+                {careTypes.map((careType) => {
+                  const edited  = editedDurations[key]?.[careType] ?? 0
                   const changed = hasDurationChanges(key, careType)
                   return (
                     <div key={careType} className="space-y-1.5">
-                      {!singleDuration && (
-                        <Label className="text-xs capitalize text-muted-foreground">{careType}</Label>
-                      )}
+                      <Label className="text-xs capitalize text-muted-foreground">{careType}</Label>
                       <div className="flex gap-2">
                         <div className="relative flex-1">
                           <Input
                             type="number"
                             min="1"
                             value={edited || ''}
-                            onChange={(e) => {
-                              if (singleDuration) {
-                                careTypes.forEach(ct => onDurationChange(key, ct, e.target.value))
-                              } else {
-                                onDurationChange(key, careType, e.target.value)
-                              }
-                            }}
+                            onChange={(e) => onDurationChange(key, careType, e.target.value)}
                             className="pr-7"
                             disabled={isSavingDuration}
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">s</span>
                         </div>
-                        {!singleDuration && (
-                          <Button
-                            size="icon"
-                            className="shrink-0"
-                            disabled={!changed || isSavingDuration}
-                            onClick={() => onSaveDuration(key, careType)}
-                          >
-                            {isSavingDuration ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                          </Button>
-                        )}
+                        <Button
+                          size="icon"
+                          className="shrink-0"
+                          disabled={!changed || isSavingDuration}
+                          onClick={() => onSaveDuration(key, careType)}
+                        >
+                          {isSavingDuration ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         Default: {FIRMWARE_DEFAULTS[key]?.[careType] ?? '—'}s
@@ -137,18 +109,6 @@ export function ServiceDurationCard({
                   )
                 })}
               </div>
-
-              {singleDuration && (
-                <Button
-                  size="sm"
-                  className="w-full"
-                  disabled={!hasDurationChanges(key, 'normal') || isSavingDuration}
-                  onClick={async () => { await Promise.all(careTypes.map(ct => onSaveDuration(key, ct))) }}
-                >
-                  {isSavingDuration ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save
-                </Button>
-              )}
             </div>
           ))}
         </div>

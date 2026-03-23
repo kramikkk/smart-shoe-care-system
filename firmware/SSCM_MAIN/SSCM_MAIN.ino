@@ -294,10 +294,12 @@ const unsigned long CLEANING_PUMP_DELAY_MS =
 
 // Brushing cycle state
 const unsigned long BRUSH_DURATION_MS = 47500; // 47.5 seconds per direction
+const unsigned long BRUSH_COAST_MS = 500;  // Coast time between direction changes (prevents back-EMF spike)
 const int BRUSH_TOTAL_CYCLES = 3;      // 3 complete cycles (CW + CCW each)
 const int BRUSH_MOTOR_SPEED = 255;     // Motor speed (0-255)
 int brushCurrentCycle = 0;             // Current brush cycle (1-3)
 unsigned long brushPhaseStartTime = 0; // When current brush phase started
+int brushNextPhase = 0;                // Phase to enter after coast transition (phase 6)
 
 /* ===================== DHT22 TEMPERATURE & HUMIDITY SENSOR
  * ===================== */
@@ -1881,12 +1883,14 @@ void handleService() {
     // Phase 4: Brushing clockwise
     else if (cleaningPhase == 4) {
       if (millis() - brushPhaseStartTime >= BRUSH_DURATION_MS) {
-        cleaningPhase = 5;
+        // Coast first to prevent back-EMF spike on direction reversal
+        motorsCoast();
+        cleaningPhase = 6; // transition coast
+        brushNextPhase = 5;
         brushPhaseStartTime = millis();
-        setMotorsSameSpeed(-BRUSH_MOTOR_SPEED); // Start CCW
 #if SSCM_DEBUG
-        Serial.println("[Cleaning] Phase 5: Brush cycle " +
-                       String(brushCurrentCycle) + "/3 - COUNTER-CLOCKWISE");
+        Serial.println("[Cleaning] Phase 6: Coast before CCW (cycle " +
+                       String(brushCurrentCycle) + ")");
 #endif
       }
     }
@@ -1896,12 +1900,14 @@ void handleService() {
       if (millis() - brushPhaseStartTime >= BRUSH_DURATION_MS) {
         brushCurrentCycle++;
         if (brushCurrentCycle <= BRUSH_TOTAL_CYCLES) {
-          cleaningPhase = 4;
+          // Coast first to prevent back-EMF spike on direction reversal
+          motorsCoast();
+          cleaningPhase = 6; // transition coast
+          brushNextPhase = 4;
           brushPhaseStartTime = millis();
-          setMotorsSameSpeed(BRUSH_MOTOR_SPEED); // Back to CW
 #if SSCM_DEBUG
-          Serial.println("[Cleaning] Phase 4: Brush cycle " +
-                         String(brushCurrentCycle) + "/3 - CLOCKWISE");
+          Serial.println("[Cleaning] Phase 6: Coast before CW (cycle " +
+                         String(brushCurrentCycle) + ")");
 #endif
         } else {
           // All cycles complete
@@ -1913,6 +1919,27 @@ void handleService() {
 #endif
           stopService();
           return;
+        }
+      }
+    }
+
+    // Phase 6: Coast transition between direction changes
+    else if (cleaningPhase == 6) {
+      if (millis() - brushPhaseStartTime >= BRUSH_COAST_MS) {
+        cleaningPhase = brushNextPhase;
+        brushPhaseStartTime = millis();
+        if (brushNextPhase == 5) {
+          setMotorsSameSpeed(-BRUSH_MOTOR_SPEED); // Start CCW
+#if SSCM_DEBUG
+          Serial.println("[Cleaning] Phase 5: Brush cycle " +
+                         String(brushCurrentCycle) + "/3 - COUNTER-CLOCKWISE");
+#endif
+        } else {
+          setMotorsSameSpeed(BRUSH_MOTOR_SPEED); // Back to CW
+#if SSCM_DEBUG
+          Serial.println("[Cleaning] Phase 4: Brush cycle " +
+                         String(brushCurrentCycle) + "/3 - CLOCKWISE");
+#endif
         }
       }
     }

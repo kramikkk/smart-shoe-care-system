@@ -5,6 +5,7 @@ import HeroSection from '@/components/landing/hero-section'
 import LogoCloud from '@/components/landing/logo-cloud'
 import Features from '@/components/landing/features'
 import FAQs from '@/components/landing/faqs'
+import ShoeTypes from '@/components/landing/shoe-types'
 import Contact from '@/components/landing/contact'
 import Footer from '@/components/landing/footer'
 
@@ -18,6 +19,7 @@ export default function AnimatedSections() {
       <HeroSection />
       <LogoCloud />
       <Features />
+      <ShoeTypes />
       <FAQs />
       <Contact />
       <Footer />

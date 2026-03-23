@@ -43,6 +43,7 @@
     "react-day-picker": "^9.11.0",
     "react-dom": "^19.2.0",
     "recharts": "^2.15.4",
+    "resend": "^6.9.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tsx": "^4.21.0",
