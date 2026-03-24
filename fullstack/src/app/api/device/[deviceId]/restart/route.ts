@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
+import { broadcastRestartDevice } from '@/lib/websocket'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,13 +55,12 @@ export async function POST(
       )
     }
 
-    // The actual restart command is sent via WebSocket from the client
-    // This endpoint just validates the request and returns success
-    // The frontend will send the WebSocket message directly
+    // Broadcast restart command to the device via WebSocket
+    broadcastRestartDevice(deviceId)
 
     return NextResponse.json({
       success: true,
-      message: `Restart command acknowledged for device ${deviceId}`,
+      message: `Restart command sent to device ${deviceId}`,
       deviceId
     })
   } catch (error) {

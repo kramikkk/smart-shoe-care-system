@@ -16,7 +16,7 @@ export type DeviceWithStatus = Device & { status: 'connected' | 'disconnected' |
 function withStatus(devices: Device[]): DeviceWithStatus[] {
   return devices.filter(d => d.paired).map(d => ({
     ...d,
-    status: (Date.now() - new Date(d.lastSeen).getTime()) / 60000 < 5 ? 'connected' : 'disconnected',
+    status: d.lastSeen && (Date.now() - new Date(d.lastSeen).getTime()) / 1000 < 60 ? 'connected' : 'disconnected',
   }))
 }
 
@@ -92,15 +92,12 @@ export function useDevicePairing() {
   const handleRestartDevice = async (deviceId: string) => {
     setRestartingDeviceId(deviceId)
     try {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const ws = new WebSocket(`${wsProtocol}//${window.location.host}/api/ws?deviceId=admin-${Date.now()}`)
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'restart-device', deviceId }))
-        setTimeout(() => { ws.close(); toast.success('Restart command sent'); setRestartingDeviceId(null) }, 500)
-      }
-      ws.onerror = () => { toast.error('Failed to send restart command'); setRestartingDeviceId(null) }
-      setTimeout(() => { if (ws.readyState !== WebSocket.CLOSED) ws.close(); setRestartingDeviceId(null) }, 5000)
-    } catch (error) { console.error('[DevicePairing] Restart failed:', error); toast.error('Failed to restart device'); setRestartingDeviceId(null) }
+      const res = await fetch(`/api/device/${deviceId}/restart`, { method: 'POST' })
+      const data = await res.json()
+      if (data.success) toast.success('Restart command sent')
+      else toast.error(data.error || 'Failed to send restart command')
+    } catch (error) { console.error('[DevicePairing] Restart failed:', error); toast.error('Failed to restart device') }
+    finally { setRestartingDeviceId(null) }
   }
 
   const handleSaveDeviceName = async (deviceId: string, name: string) => {

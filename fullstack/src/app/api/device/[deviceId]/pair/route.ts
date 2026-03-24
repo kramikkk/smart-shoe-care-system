@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
-import { broadcastDeviceUpdate } from '@/lib/websocket'
+import { broadcastDeviceUpdate, broadcastRestartDevice } from '@/lib/websocket'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -184,6 +184,8 @@ export async function DELETE(
       paired: false,
       pairedAt: null,
     })
+    // Restart the device so it clears its paired state and generates a new pairing code
+    broadcastRestartDevice(deviceId)
     console.log(`[Device] Unpaired: ${deviceId} by user ${session.user.id}`)
 
     return NextResponse.json({

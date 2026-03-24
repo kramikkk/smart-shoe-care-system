@@ -47,9 +47,9 @@ unsigned long lastWiFiRetry = 0;
 /* ===================== WEBSOCKET ===================== */
 WebSocketsClient webSocket;
 bool wsConnected = false;
-unsigned long lastWsReconnect = 0;
+bool wsInitialized = false; // begin() must be called exactly once
 const unsigned long WS_RECONNECT_INTERVAL =
-    5000; // Try to reconnect every 5 seconds
+    5000; // Library setReconnectInterval value
 
 /* ===================== STATUS UPDATE ===================== */
 unsigned long lastStatusUpdate = 0;
@@ -1055,7 +1055,6 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
     Serial.println("[WebSocket] Disconnected");
 #endif
     wsConnected = false;
-    lastWsReconnect = 0; // Force immediate reconnect attempt
     break;
   }
 
@@ -1335,14 +1334,20 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
     Serial.println("[WebSocket] Error");
 #endif
     wsConnected = false;
-    lastWsReconnect = 0; // Force immediate reconnect attempt
     break;
   }
   }
 }
 
 void connectWebSocket() {
-  if (!wifiConnected || wsConnected)
+  if (!wifiConnected)
+    return;
+
+  // begin() must only be called once — the library's setReconnectInterval
+  // handles all subsequent reconnects internally. Calling begin() again resets
+  // the library state and conflicts with its built-in reconnect logic, causing
+  // the first-boot connection failure.
+  if (wsInitialized)
     return;
 
   String wsPath = "/api/ws?deviceId=" + deviceId;
@@ -1356,8 +1361,8 @@ void connectWebSocket() {
 #endif
   webSocket.begin(BACKEND_HOST, BACKEND_PORT, wsPath);
   webSocket.onEvent(webSocketEvent);
-  webSocket.setReconnectInterval(5000);
-  lastWsReconnect = millis(); // Prevent reconnect timer from firing immediately
+  webSocket.setReconnectInterval(WS_RECONNECT_INTERVAL);
+  wsInitialized = true;
 }
 
 void connectWiFi() {
@@ -3816,15 +3821,6 @@ void loop() {
   // Stop here if WiFi not ready
   if (!wifiConnected) {
     return;
-  }
-
-  /* ================= WEBSOCKET RECONNECTION ================= */
-  if (!wsConnected && millis() - lastWsReconnect >= WS_RECONNECT_INTERVAL) {
-    lastWsReconnect = millis();
-#if SSCM_DEBUG
-    Serial.println("[WebSocket] Attempting to reconnect...");
-#endif
-    connectWebSocket();
   }
 
   /* ================= STATUS UPDATE (KEEP ALIVE) ================= */

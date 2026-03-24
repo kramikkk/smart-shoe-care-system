@@ -136,12 +136,13 @@ export function createWebSocketServer(server: Server) {
                 }
               }))
 
-              // If device was seen recently, it's already online — tell the client immediately
-              // so they don't have to wait up to 30s for the next status-update broadcast
+              // If device was seen recently, it's already online — tell the client immediately.
+              // Use 60s (2× the 30s heartbeat interval) so one missed/late heartbeat
+              // doesn't falsely flip the device offline.
               const secondsSinceLastSeen = device.lastSeen
                 ? (Date.now() - new Date(device.lastSeen).getTime()) / 1000
                 : Infinity
-              if (secondsSinceLastSeen < 35) {
+              if (secondsSinceLastSeen < 60) {
                 ws.send(JSON.stringify({
                   type: 'device-online',
                   deviceId: subscribeDeviceId,

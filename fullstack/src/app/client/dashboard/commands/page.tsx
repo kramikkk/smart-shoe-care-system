@@ -127,10 +127,11 @@ export default function CommandsPage() {
         try {
           const msg = JSON.parse(event.data)
           if (msg.type === 'serial-command') return // filter echo-back
-          if (msg.type === 'device-online') {
+          // Any live message from the device signals it's ready
+          if (['device-online', 'firmware-log', 'sensor-data', 'distance-data'].includes(msg.type)) {
             setIsDeviceReady(true)
-          } else if (msg.type === 'firmware-log') {
-            setIsDeviceReady(true)
+          }
+          if (msg.type === 'firmware-log') {
             const text: string = msg.message || ''
             // Parse stepper position from INFO wsLog: "S1 pos=4800 spd=400 IDLE"
             const s1Steps = text.match(/\bS1\s+pos=(-?\d+)/)
