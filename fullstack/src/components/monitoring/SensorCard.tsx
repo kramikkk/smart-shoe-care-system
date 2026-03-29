@@ -49,48 +49,46 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
   }
 
   if (id === 'atomizerLevel') {
-    // Convert distance to liters
-    // Container: 21cm height, 5.3L usable max (7–21cm = 14cm usable range)
-    // Firmware sends 0 = FULL (within 7cm dead zone), 7–21cm = usable range
-    // Map: 0 or 7cm → 5.3L (full), 21cm → 0L (empty)
-    const MIN_DIST = 7   // cm — sensor dead zone (firmware clamps ≤7 to 0)
-    const MAX_DIST = 21  // cm — container height (empty)
-    const TANK_L = 5.3
-    const liters = sensorData.atomizerDistance === 0
-      ? TANK_L  // FULL: liquid within dead zone
-      : ((MAX_DIST - Math.min(Math.max(sensorData.atomizerDistance, MIN_DIST), MAX_DIST)) / (MAX_DIST - MIN_DIST)) * TANK_L
-    displayValue = `${liters.toFixed(1)}L`
-    displayPercentage = (liters / TANK_L) * 100
-    // Status: Critical (<20%), Warning (20-40%), Normal (>40%)
-    if (displayPercentage < 20) {
-      displayStatus = 'Critical'
-    } else if (displayPercentage < 40) {
-      displayStatus = 'Warning'
+    if (sensorData.atomizerDistance === -1 || sensorData.atomizerDistance > 21) {
+      displayValue = 'Invalid'
+      displayStatus = 'Invalid'
+      displayPercentage = 0
     } else {
-      displayStatus = 'Normal'
+      const MIN_DIST = 8   // cm — container full (5.0L)
+      const MAX_DIST = 21  // cm — container empty
+      const TANK_L = 5.0
+      const liters = Math.round(((MAX_DIST - Math.min(Math.max(sensorData.atomizerDistance, MIN_DIST), MAX_DIST)) / (MAX_DIST - MIN_DIST)) * TANK_L * 10) / 10
+      displayValue = `${liters.toFixed(1)}L`
+      displayPercentage = (liters / TANK_L) * 100
+      if (displayPercentage < 20) {
+        displayStatus = 'Critical'
+      } else if (displayPercentage < 40) {
+        displayStatus = 'Warning'
+      } else {
+        displayStatus = 'Normal'
+      }
     }
   }
 
   if (id === 'foamLevel') {
-    // Convert distance to liters
-    // Container: 21cm height, 5.3L usable max (7–21cm = 14cm usable range)
-    // Firmware sends 0 = FULL (within 7cm dead zone), 7–21cm = usable range
-    // Map: 0 or 7cm → 5.3L (full), 21cm → 0L (empty)
-    const MIN_DIST = 7   // cm — sensor dead zone (firmware clamps ≤7 to 0)
-    const MAX_DIST = 21  // cm — container height (empty)
-    const TANK_L = 5.3
-    const liters = sensorData.foamDistance === 0
-      ? TANK_L  // FULL: liquid within dead zone
-      : ((MAX_DIST - Math.min(Math.max(sensorData.foamDistance, MIN_DIST), MAX_DIST)) / (MAX_DIST - MIN_DIST)) * TANK_L
-    displayValue = `${liters.toFixed(1)}L`
-    displayPercentage = (liters / TANK_L) * 100
-    // Status: Critical (<20%), Warning (20-40%), Normal (>40%)
-    if (displayPercentage < 20) {
-      displayStatus = 'Critical'
-    } else if (displayPercentage < 40) {
-      displayStatus = 'Warning'
+    if (sensorData.foamDistance === -1 || sensorData.foamDistance > 21) {
+      displayValue = 'Invalid'
+      displayStatus = 'Invalid'
+      displayPercentage = 0
     } else {
-      displayStatus = 'Normal'
+      const MIN_DIST = 8   // cm — container full (5.0L)
+      const MAX_DIST = 21  // cm — container empty
+      const TANK_L = 5.0
+      const liters = Math.round(((MAX_DIST - Math.min(Math.max(sensorData.foamDistance, MIN_DIST), MAX_DIST)) / (MAX_DIST - MIN_DIST)) * TANK_L * 10) / 10
+      displayValue = `${liters.toFixed(1)}L`
+      displayPercentage = (liters / TANK_L) * 100
+      if (displayPercentage < 20) {
+        displayStatus = 'Critical'
+      } else if (displayPercentage < 40) {
+        displayStatus = 'Warning'
+      } else {
+        displayStatus = 'Normal'
+      }
     }
   }
 
@@ -129,6 +127,8 @@ const SensorCard = ({ id }: { id: keyof typeof SensorData }) => {
         return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800"
       case "high":
         return "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
+      case "invalid":
+        return "bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800/40 dark:text-gray-400 dark:border-gray-700"
       default:
         return ""
     }

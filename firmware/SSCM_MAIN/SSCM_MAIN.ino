@@ -2162,9 +2162,9 @@ static unsigned long ultrasonicMedian(uint8_t trigPin, uint8_t echoPin) {
   unsigned long samples[5];
   for (int i = 0; i < 5; i++) {
     digitalWrite(trigPin, LOW);
-    delayMicroseconds(5);
+    delayMicroseconds(2);
     digitalWrite(trigPin, HIGH);
-    delayMicroseconds(50);
+    delayMicroseconds(20); // Spec requires >20µs; 25µs adds margin
     digitalWrite(trigPin, LOW);
     samples[i] = pulseIn(echoPin, HIGH, 40000);
     if (i < 4)
@@ -2189,33 +2189,26 @@ bool readAtomizerLevel() {
       ultrasonicMedian(ATOMIZER_TRIG_PIN, ATOMIZER_ECHO_PIN);
 
   if (duration == 0) {
-    // No echo = liquid within 7cm dead zone = container FULL
 #if SSCM_DEBUG
-    Serial.println("[Atomizer] FULL (within dead zone)");
+    Serial.println("[Atomizer] Invalid (no echo)");
 #endif
-    currentAtomizerDistance = 0;
+    currentAtomizerDistance = -1;
     return true;
   }
 
   // Datasheet formula: distance = (duration × 348 m/s) / 2
   // 348 m/s = 0.0174 cm/µs  (one-way)
-  float distance = duration * 0.0174f;
+  int distance = (int)(duration * 0.0174f);
 
-  if (distance > 21.0f) {
+  if (distance > 21) {
 #if SSCM_DEBUG
-    Serial.println("[Atomizer] Out of range: " + String(distance, 1) + " cm");
+    Serial.println("[Atomizer] Invalid (out of range): " + String(distance) + " cm");
 #endif
-    currentAtomizerDistance = 21; // Treat as empty
+    currentAtomizerDistance = -1;
     return true;
   }
 
-  int d = (int)roundf(distance);
-  if (d <= 7) {
-    // Within dead zone or near-full — clamp to FULL
-    currentAtomizerDistance = 0;
-  } else {
-    currentAtomizerDistance = d;
-  }
+  currentAtomizerDistance = distance;
   return true;
 }
 
@@ -2227,33 +2220,26 @@ bool readFoamLevel() {
   unsigned long duration = ultrasonicMedian(FOAM_TRIG_PIN, FOAM_ECHO_PIN);
 
   if (duration == 0) {
-    // No echo = liquid within 7cm dead zone = container FULL
 #if SSCM_DEBUG
-    Serial.println("[Foam] FULL (within dead zone)");
+    Serial.println("[Foam] Invalid (no echo)");
 #endif
-    currentFoamDistance = 0;
+    currentFoamDistance = -1;
     return true;
   }
 
   // Datasheet formula: distance = (duration × 348 m/s) / 2
   // 348 m/s = 0.0174 cm/µs  (one-way)
-  float distance = duration * 0.0174f;
+  int distance = (int)(duration * 0.0174f);
 
-  if (distance > 21.0f) {
+  if (distance > 21) {
 #if SSCM_DEBUG
-    Serial.println("[Foam] Out of range: " + String(distance, 1) + " cm");
+    Serial.println("[Foam] Invalid (out of range): " + String(distance) + " cm");
 #endif
-    currentFoamDistance = 21; // Treat as empty
+    currentFoamDistance = -1;
     return true;
   }
 
-  int d = (int)roundf(distance);
-  if (d <= 7) {
-    // Within dead zone or near-full — clamp to FULL
-    currentFoamDistance = 0;
-  } else {
-    currentFoamDistance = d;
-  }
+  currentFoamDistance = distance;
   return true;
 }
 
@@ -3947,8 +3933,9 @@ void loop() {
       // Log combined reading
       if (atomizerSuccess || foamSuccess) {
 #if SSCM_DEBUG
-        Serial.println("[Level] Atomizer: " + String(currentAtomizerDistance) +
-                       " cm | Foam: " + String(currentFoamDistance) + " cm");
+        Serial.println(
+            "[Level] Atomizer: " + String(currentAtomizerDistance) +
+            " cm | Foam: " + String(currentFoamDistance) + " cm");
 #endif
       }
 

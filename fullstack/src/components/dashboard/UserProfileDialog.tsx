@@ -165,7 +165,7 @@ export function UserProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="sm:max-w-md border-white/5 bg-zinc-950/90 backdrop-blur-xl">
+      <DialogContent className="sm:max-w-md bg-white/5 border border-white/10 backdrop-blur-[24px] [-webkit-backdrop-filter:blur(24px)]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold tracking-tight">Profile</DialogTitle>
           <DialogDescription className="text-muted-foreground">

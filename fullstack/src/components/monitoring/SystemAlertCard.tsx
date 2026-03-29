@@ -20,12 +20,11 @@ type Alert = {
   description: string
 }
 
-const MIN_DIST = 7   // cm — sensor dead zone (firmware clamps ≤7 to 0)
-const MAX_DIST = 21  // cm — container height (empty)
-const TANK_MAX_LITERS = 5.3
+const MIN_DIST = 8   // cm — container full (5.0L)
+const MAX_DIST = 21  // cm — container empty
+const TANK_MAX_LITERS = 5.0
 
 function distanceToPercent(distance: number): number {
-  if (distance === 0) return 100  // FULL: liquid within dead zone
   const d = Math.min(Math.max(distance, MIN_DIST), MAX_DIST)
   return ((MAX_DIST - d) / (MAX_DIST - MIN_DIST)) * 100
 }
@@ -56,9 +55,16 @@ function deriveAlerts(sensorData: ReturnType<typeof useSensorData>['sensorData']
     })
   }
 
-  const atomizerPct = distanceToPercent(sensorData.atomizerDistance)
-  const atomizerL = distanceToLiters(sensorData.atomizerDistance)
-  if (sensorData.atomizerDistance > 0) {
+  if (sensorData.atomizerDistance === -1 || sensorData.atomizerDistance > 21) {
+    alerts.push({
+      id: 'atomizer-invalid',
+      severity: 'warning',
+      title: 'Atomizer Sensor Invalid',
+      description: 'Atomizer level sensor returned an invalid reading. Check sensor connection.',
+    })
+  } else {
+    const atomizerPct = distanceToPercent(sensorData.atomizerDistance)
+    const atomizerL = distanceToLiters(sensorData.atomizerDistance)
     if (atomizerPct < 20) {
       alerts.push({
         id: 'atomizer-critical',
@@ -76,9 +82,16 @@ function deriveAlerts(sensorData: ReturnType<typeof useSensorData>['sensorData']
     }
   }
 
-  const foamPct = distanceToPercent(sensorData.foamDistance)
-  const foamL = distanceToLiters(sensorData.foamDistance)
-  if (sensorData.foamDistance > 0) {
+  if (sensorData.foamDistance === -1 || sensorData.foamDistance > 21) {
+    alerts.push({
+      id: 'foam-invalid',
+      severity: 'warning',
+      title: 'Foam Sensor Invalid',
+      description: 'Foam level sensor returned an invalid reading. Check sensor connection.',
+    })
+  } else {
+    const foamPct = distanceToPercent(sensorData.foamDistance)
+    const foamL = distanceToLiters(sensorData.foamDistance)
     if (foamPct < 20) {
       alerts.push({
         id: 'foam-critical',
