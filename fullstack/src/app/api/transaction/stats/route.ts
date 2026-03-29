@@ -111,13 +111,10 @@ export async function GET(req: NextRequest) {
         },
       },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching transaction stats:', error)
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Failed to fetch transaction stats',
-      },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

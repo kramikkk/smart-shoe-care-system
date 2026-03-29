@@ -96,13 +96,10 @@ export async function GET(req: NextRequest) {
         days,
       },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching chart data:', error)
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Failed to fetch chart data',
-      },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

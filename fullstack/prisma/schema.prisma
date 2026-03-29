@@ -74,17 +74,18 @@ model Verification {
 }
 
 model Transaction {
-  id            String   @id @default(cuid())
-  dateTime      DateTime @default(now())
-  paymentMethod String
-  serviceType   String
-  shoeType      String
-  careType      String
-  amount        Float
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  deviceId      String?
-  device        Device?  @relation(fields: [deviceId], references: [deviceId], onDelete: SetNull)
+  id                String   @id @default(cuid())
+  dateTime          DateTime @default(now())
+  paymentMethod     String
+  serviceType       String
+  shoeType          String
+  careType          String
+  amount            Float
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deviceId          String?
+  paymongoPaymentId String?  @unique
+  device            Device?  @relation(fields: [deviceId], references: [deviceId], onDelete: SetNull)
 
   @@index([dateTime])
   @@index([paymentMethod])

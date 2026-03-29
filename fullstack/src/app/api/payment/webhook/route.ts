@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/prisma'
+import { Prisma } from '@/generated/prisma'
 import { broadcastPaymentSuccess } from '@/lib/websocket'
 
 /**
@@ -16,7 +17,6 @@ function verifyWebhookSignature(rawBody: string, signatureHeader: string): boole
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET
   if (!webhookSecret) return false
 
-  // Parse the header into parts
   const parts: Record<string, string> = {}
   for (const part of signatureHeader.split(',')) {
     const idx = part.indexOf('=')
@@ -24,7 +24,6 @@ function verifyWebhookSignature(rawBody: string, signatureHeader: string): boole
   }
 
   const timestamp = parts['t']
-  // Use `li` for live mode, fall back to `te` for test mode
   const receivedSig = parts['li'] || parts['te']
 
   if (!timestamp || !receivedSig) return false
@@ -58,6 +57,7 @@ export async function POST(request: NextRequest) {
 
     const eventType = body.data.attributes.type
     const paymentData = body.data.attributes.data.attributes
+    const paymentId: string | undefined = body.data.attributes.data.id
 
     if (eventType === 'payment.paid') {
       const metadata = paymentData.metadata as Record<string, string> | undefined
@@ -67,39 +67,35 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true })
       }
 
-      const { deviceId, shoeType, careType, serviceType, amount, paymentMethod } = metadata
-
-      // Idempotency guard — PayMongo retries within seconds on timeout.
-      // Use device+amount+service+shoe+care within 60 s to avoid dropping legitimate
-      // back-to-back payments while still catching webhook retries.
-      const parsedAmount = parseFloat(amount || '0')
-      const recentDuplicate = await prisma.transaction.findFirst({
-        where: {
-          deviceId,
-          amount: { gte: parsedAmount - 0.001, lte: parsedAmount + 0.001 },
-          serviceType: serviceType || 'Package',
-          shoeType: shoeType || '',
-          careType: careType || '',
-          paymentMethod: 'Online',
-          dateTime: { gte: new Date(Date.now() - 60 * 1000) },
-        },
-      })
-      if (recentDuplicate) {
-        console.log(`[Webhook] Duplicate payment.paid ignored — existing tx: ${recentDuplicate.id}`)
+      if (!paymentId) {
+        console.error('[Webhook] payment.paid missing paymentId — skipping')
         return NextResponse.json({ received: true })
       }
 
-      const transaction = await prisma.transaction.create({
-        data: {
-          dateTime: new Date(),
-          paymentMethod: paymentMethod || 'Online',
-          serviceType: serviceType || 'Package',
-          shoeType,
-          careType,
-          amount: parsedAmount,
-          deviceId,
-        },
-      })
+      const { deviceId, shoeType, careType, serviceType, amount, paymentMethod } = metadata
+      const parsedAmount = parseFloat(amount || '0')
+
+      let transaction
+      try {
+        transaction = await prisma.transaction.create({
+          data: {
+            dateTime: new Date(),
+            paymentMethod: paymentMethod || 'Online',
+            serviceType: serviceType || 'Package',
+            shoeType,
+            careType,
+            amount: parsedAmount,
+            deviceId,
+            paymongoPaymentId: paymentId,
+          },
+        })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          console.log(`[Webhook] Duplicate payment.paid ignored — paymentId: ${paymentId}`)
+          return NextResponse.json({ received: true })
+        }
+        throw error
+      }
 
       broadcastPaymentSuccess(deviceId, transaction.id, transaction.amount)
       console.log(`[Webhook] payment.paid processed — tx: ${transaction.id}, device: ${deviceId}, amount: ₱${transaction.amount}`)

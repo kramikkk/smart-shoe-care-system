@@ -83,13 +83,10 @@ export async function GET(req: NextRequest) {
         revenue: transactions.reduce((sum, tx) => sum + tx.amount, 0),
       },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching distribution:', error)
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Failed to fetch distribution',
-      },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }
