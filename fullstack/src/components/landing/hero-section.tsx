@@ -47,7 +47,7 @@ export default function HeroSection() {
                     }
                 })
 
-                gsap.set(imageWrapperRef.current, { scale: 1, opacity: 1 })
+                gsap.set(imageWrapperRef.current, { scale: 1.08, opacity: 1 })
                 gsap.set([introText1Ref.current, introText2Ref.current], { opacity: 0, y: 150, scale: 0.5 })
                 gsap.set(contentRef.current, { opacity: 0, y: 100 })
                 gsap.set(startTextRef.current, { opacity: 1, y: 0, scale: 1 })
@@ -68,7 +68,7 @@ export default function HeroSection() {
                     .to(".parallax-bg-4", { y: 300, z: 800, opacity: 0.3, duration: d(3), ease: "none" }, `-=${d(2)}`)
                     .to(introText2Ref.current, { opacity: 0, y: -250, z: 1000, scale: 1.1, duration: d(1.5), ease: "power4.in" }, "+=0.3")
 
-                tl.to(imageWrapperRef.current, { scale: 1, duration: d(5), ease: "expo.inOut" })
+                tl.to(imageWrapperRef.current, { scale: 1, duration: d(25), ease: "none" }, 0)
                     .to(".hero-dim-overlay", { opacity: 0.6, duration: d(4), ease: "power2.inOut" }, `-=${d(4)}`)
                     .to(contentRef.current, { opacity: 1, y: 0, scale: 1, duration: d(3), ease: "power4.out" }, `-=${d(2)}`)
             }, containerRef)

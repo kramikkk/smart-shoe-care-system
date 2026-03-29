@@ -64,7 +64,7 @@ export default function ShoeTypes() {
       {/* Sticky viewport — stays fixed while the section scrolls */}
       <div className="sticky top-0 h-screen flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="relative container mx-auto px-6 max-w-6xl pt-8 pb-3 md:pt-16 md:pb-6 flex-shrink-0 text-center">
+        <div className="relative container mx-auto px-6 max-w-7xl pt-8 pb-3 md:pt-16 md:pb-6 flex-shrink-0 text-center">
           <motion.span
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -86,7 +86,7 @@ export default function ShoeTypes() {
         </div>
 
         {/* Card stage — cards are absolutely stacked here */}
-        <div className="relative flex-1 container mx-auto px-6 max-w-6xl">
+        <div className="relative flex-1 container mx-auto px-6 max-w-7xl">
           {shoeTypes.map((shoe, index) => (
             <ShoeCard
               key={index}

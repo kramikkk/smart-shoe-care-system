@@ -79,7 +79,7 @@ export default function Features() {
             <div className="absolute top-1/4 left-0 w-96 h-96 bg-primary/5 blur-[100px] rounded-full pointer-events-none" />
             <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-primary/5 blur-[100px] rounded-full pointer-events-none" />
 
-            <div className="container mx-auto px-6 relative z-10">
+            <div className="container mx-auto px-6 max-w-7xl relative z-10">
                 <div className="max-w-3xl mb-10 sm:mb-16 md:mb-20">
                     <motion.span 
                         initial={{ opacity: 0, y: 20 }}

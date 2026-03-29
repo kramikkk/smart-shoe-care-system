@@ -308,7 +308,7 @@ export default function AdminDashboardPage() {
                     Full Name
                   </label>
                   <Input
-                    placeholder="John Doe"
+                    placeholder="Enter full name"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     className="bg-transparent border-white/10 h-10 rounded-sm"
@@ -321,7 +321,7 @@ export default function AdminDashboardPage() {
                   </label>
                   <Input
                     type="email"
-                    placeholder="client@example.com"
+                    placeholder="Enter email address"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                     className="bg-transparent border-white/10 h-10 rounded-sm"
@@ -334,7 +334,7 @@ export default function AdminDashboardPage() {
                   </label>
                   <Input
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="Enter password"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className="bg-transparent border-white/10 h-10 rounded-sm"

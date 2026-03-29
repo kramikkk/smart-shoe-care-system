@@ -21,7 +21,7 @@ const techLogos = [
 export default function LogoCloud() {
     return (
         <section className="py-20 bg-background border-y border-white/5 overflow-hidden">
-            <div className="container mx-auto px-6 mb-12 text-center">
+            <div className="container mx-auto px-6 max-w-7xl mb-12 text-center">
                 <span className="text-muted-foreground/50 text-xs sm:text-sm uppercase tracking-[0.5em]">Powered by industry leading technology</span>
             </div>
             

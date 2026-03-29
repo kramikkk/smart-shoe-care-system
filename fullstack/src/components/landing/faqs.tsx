@@ -65,7 +65,7 @@ export default function FAQs() {
              {/* Decorative background */}
              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-primary/[0.02] blur-[150px] rounded-full pointer-events-none" />
 
-            <div className="container mx-auto px-6 relative z-10">
+            <div className="container mx-auto px-6 max-w-7xl relative z-10">
                 <div className="faq-container max-w-3xl mx-auto">
                     <div className="text-center mb-10 sm:mb-16">
                         <motion.div 

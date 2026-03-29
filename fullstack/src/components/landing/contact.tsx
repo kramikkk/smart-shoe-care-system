@@ -58,7 +58,7 @@ export default function Contact() {
 
     return (
         <section ref={sectionRef} id="contact" className="bg-background py-16 sm:py-24 md:py-32 relative overflow-hidden border-t border-white/5">
-            <div className="container mx-auto px-6 relative z-10">
+            <div className="container mx-auto px-6 max-w-7xl relative z-10">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16 items-start">
                     <div className="contact-content max-w-xl">
                         <motion.span
