@@ -4,10 +4,10 @@
  *
  * Cleaning state machine (cleaningPhase):
  *   0 — Idle / not cleaning
- *   1 — Pump ON; top brush descends (0→480 steps) and side brush advances to cleaning depth simultaneously
- *   2 — Top brush reversing (0→480 steps) with pump still ON; waiting for top to reach park position
- *   3 — Top at park (480 steps); pump OFF; waiting for side to reach its cleaning depth
- *   4 — Brush active; direction follows servo angle: 0–60°=CCW, 60–120°=CW, 120–180°=CCW
+ *   1 — Side brush advances to cleaning depth; top brush and pump wait
+ *   2 — Side at depth; pump ON; top brush descends (480→0 steps)
+ *   3 — Top at 0; pump OFF; top brush returns to park (0→480 steps)
+ *   4 — Brush active; direction follows servo angle: 0–60°=CCW, 60–180°=CW
  *        Servo sweeps 0→180 over the remaining service time; service ends by timer.
  */
 
@@ -186,19 +186,13 @@ void startService(String shoeType, String service, String care,
   allRelaysOff(); // Guarantee all actuators are off before enabling service-specific ones
 
   if (service == "cleaning") {
-    // Phase 1: pump on immediately while both linear axes start moving simultaneously.
-    //   - Stepper 2 (side brush) advances to cleaning depth.
-    //   - Stepper 1 (top brush) descends from park (480 steps) to 0.
-    //   The top brush immediately reverses to 480 once it reaches 0 (phase 2 in handleService).
-    //   The pump stays on through phases 1 and 2; it cuts off when the top returns to park.
+    // Phase 1: side brush advances to cleaning depth first; top brush and pump wait.
+    // Once side reaches depth (phase 1 complete), pump turns ON and top brush descends (phase 2).
     cleaningPhase = 1;
     long s2 = cleaningSideTargetSteps(care, customCleaningDistanceMm);
     cleaningSideDepthSteps = s2; // Save preset depth for servo-angle pull-back in handleService()
-    LOG("[SERVICE] Cleaning — pump ON; side→" + String(s2) +
-        " steps + top 480→0→480 simultaneously (top reverses at 0, no side wait); then brush+servo");
-    setRelay(5, true);      // Diaphragm pump ON — spray nozzle active during approach
+    LOG("[SERVICE] Cleaning — side advancing to " + String(s2) + " steps; top + pump wait for side");
     stepper2MoveTo(s2);     // Side brush advances to cleaning depth
-    stepper1MoveTo(0);      // Top brush descends to bottom of stroke
     rgbBlue();
 
   } else if (service == "drying") {
@@ -265,11 +259,8 @@ void stopService(String reason) {
 
   rgbOff();
 
-  cleaningPhase            = 0;
-  brushInStartPause        = false;
-  brushTopRepeatTriggered  = false;
-  brushTopRepeatDescending = false;
-  brushTopRepeatAscending  = false;
+  cleaningPhase     = 0;
+  brushInStartPause = false;
 
   String endedShoe = currentShoeType;
   String endedCare = currentCareType;
@@ -418,40 +409,39 @@ void handleService() {
   if (currentServiceType == "cleaning" && cleaningPhase > 0) {
 
     if (cleaningPhase == 1) {
-      if (!stepper1Moving) {
-        // Top brush reached 0 — pump OFF immediately, then reverse back to park.
-        LOG("[CLEANING] Top at 0 — pump OFF; reversing 0→480 steps");
-        setRelay(5, false); // Diaphragm pump OFF
+      if (!stepper2Moving) {
+        // Side brush reached depth — now pump ON and top brush descends.
+        LOG("[CLEANING] Side at depth — pump ON; top descending 480→0");
+        setRelay(5, true); // Diaphragm pump ON
         cleaningPhase = 2;
-        stepper1MoveTo(CLEANING_MAX_POSITION); // Reverse: return top brush to park
+        stepper1MoveTo(0); // Top brush descends to bottom of stroke
         saveServiceCheckpoint();
       }
 
     } else if (cleaningPhase == 2) {
       if (!stepper1Moving) {
-        // Top brush returned to park — side brush may still be advancing; phase 3 waits for it.
-        LOG("[CLEANING] Top at 480 steps — waiting for side to reach depth");
+        // Top brush reached 0 — pump OFF, reverse back to park.
+        LOG("[CLEANING] Top at 0 — pump OFF; reversing 0→480 steps");
+        setRelay(5, false); // Diaphragm pump OFF
         cleaningPhase = 3;
+        stepper1MoveTo(CLEANING_MAX_POSITION); // Return top brush to park
         saveServiceCheckpoint();
       }
 
     } else if (cleaningPhase == 3) {
-      if (!stepper2Moving) {
-        // Side brush reached depth — start motors and begin the 10s hold at 0° before sweeping.
+      if (!stepper1Moving) {
+        // Top brush returned to park — start motors and begin the 10s hold at 0° before sweeping.
         LOG("[CLEANING] Side at depth — holding 0° for " + String(BRUSH_EDGE_PAUSE_MS / 1000) + "s then sweep");
         cleaningPhase           = 4;
         brushLastMotorDir       = 0;
         brushInStartPause       = true;
         brushStartPauseTime     = millis();
-        brushTopRepeatTriggered  = false;
-        brushTopRepeatDescending = false;
-        brushTopRepeatAscending  = false;
         saveServiceCheckpoint();
       }
 
     } else if (cleaningPhase == 4) {
-      // Motor direction follows servo angle: 0–60°=CCW, 60–120°=CW, 120–180°=CCW
-      int desiredDir = (currentLeftPosition >= 60 && currentLeftPosition <= 120) ? 1 : -1;
+      // Motor direction follows servo angle: 0–60°=CCW, 60–180°=CW
+      int desiredDir = (currentLeftPosition >= 60) ? 1 : -1;
       if (desiredDir != brushLastMotorDir) {
         brushLastMotorDir = desiredDir;
         setMotorsOppositeSpeed(brushMotorSpeed * desiredDir);
@@ -466,27 +456,6 @@ void handleService() {
         startBrushSweep();
       }
 
-      // At 170°: trigger a repeat top-brush pass (pump ON descent, pump OFF ascent).
-      if (!brushInStartPause && !brushTopRepeatTriggered && currentLeftPosition >= 170) {
-        brushTopRepeatTriggered  = true;
-        brushTopRepeatDescending = true;
-        setRelay(5, true); // Pump ON
-        stepper1MoveTo(0); // Descend to bottom of stroke
-        LOG("[CLEANING] 170° — top repeat descent (pump ON)");
-      }
-
-      if (brushTopRepeatDescending && !stepper1Moving) {
-        brushTopRepeatDescending = false;
-        brushTopRepeatAscending  = true;
-        setRelay(5, false); // Pump OFF
-        stepper1MoveTo(CLEANING_MAX_POSITION); // Return to park
-        LOG("[CLEANING] Top repeat at 0 — pump OFF; ascending");
-      }
-
-      if (brushTopRepeatAscending && !stepper1Moving) {
-        brushTopRepeatAscending = false;
-        LOG("[CLEANING] Top repeat complete");
-      }
       // Service ends by timer (handled above); servo naturally holds at 180° for remaining ~10s.
     }
 

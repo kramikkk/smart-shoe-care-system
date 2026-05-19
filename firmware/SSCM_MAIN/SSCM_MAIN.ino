@@ -248,9 +248,6 @@ int brushLastMotorDir  = 0;             // Last applied direction: 1=CW, -1=CCW,
 const unsigned long BRUSH_EDGE_PAUSE_MS = 10000; // Hold duration at 0° and 180° endpoints
 bool brushInStartPause            = false; // true while waiting the 10s hold at 0° before sweep
 unsigned long brushStartPauseTime = 0;    // millis() when the 0° hold began
-bool brushTopRepeatTriggered  = false;    // becomes true when servo first reaches 170° in phase 4
-bool brushTopRepeatDescending = false;    // top brush going down for repeat pass (pump ON)
-bool brushTopRepeatAscending  = false;    // top brush going back up after repeat (pump OFF)
 
 /* ===================== DHT11 SENSOR ===================== */
 #define DHT_PIN 9
