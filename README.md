@@ -1,3 +1,5 @@
+![Smart Shoe Care Machine](docs/sscm-cover-photo.jpeg)
+
 # Smart Shoe Care System
 
 An IoT automated shoe-care kiosk with real-time AI shoe classification, a Next.js web dashboard, and an Android kiosk launcher app.
