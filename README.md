@@ -2,6 +2,8 @@
 
 # Smart Shoe Care System
 
+This project was developed as a thesis.
+
 An IoT automated shoe-care kiosk with real-time AI shoe classification, a Next.js web dashboard, and an Android kiosk launcher app.
 
 Customers insert a shoe into the machine, tap through a touchscreen UI to select a service (cleaning, drying, or sterilization), pay via coin/bill acceptor or QR code, and the machine runs the service autonomously. The ESP32-CAM captures an image of the shoe and the Gemini API classifies shoe type and condition in real time.
